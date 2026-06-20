@@ -1,7 +1,7 @@
 name: main-service
 
 x-main-service-image: &main-service-image
-  image: main-service-app:0.1.0-ms-002
+  image: main-service-app:0.1.0-ms-003
   build:
     context: .
     dockerfile: Dockerfile
@@ -34,6 +34,25 @@ services:
       retries: 20
       start_period: 5s
 
+  tenant-auth-jwks-fixture:
+    <<: *main-service-image
+    command: ["npm", "run", "start:jwks-fixture"]
+    environment:
+      RUNTIME_ROLE: api
+      LOCAL_JWKS_FIXTURE_PORT: 3080
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3080/health/live').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
   migrate:
     <<: *main-service-image
     command: ["npm", "run", "migrate:deploy"]
@@ -46,12 +65,15 @@ services:
     command: ["npm", "run", "start:api"]
     environment:
       RUNTIME_ROLE: api
+      TENANT_AUTH_JWKS_URL: http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json
     ports:
       - "${API_HOST_PORT:-3000}:3000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      tenant-auth-jwks-fixture:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully

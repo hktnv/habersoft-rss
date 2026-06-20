@@ -29,15 +29,22 @@ docker compose down -v
 
 - `postgres`: PostgreSQL 17.9 local kalici veri servisi.
 - `redis`: Redis 8.8 local yeniden kurulabilir runtime servisi.
+- `tenant-auth-jwks-fixture`: Local-only deterministik olmayan, ephemeral RS256 public JWKS fixture servisi. Host portu yayimlamaz; yalnizca Compose agi icinden kullanilir.
 - `migrate`: PostgreSQL saglikli olduktan sonra `prisma migrate deploy` calistiran sonlu gorev.
-- `main-service-api`: NestJS HTTP API process'i. Bu milestone'da yalnizca health endpoint'lerini sunar.
-- `main-service-worker`: HTTP listener acmayan Nest application context. Config, PostgreSQL ve Redis baglantilarini bootstrap eder; BullMQ consumer, cleanup scheduler veya business job calistirmaz.
+- `main-service-api`: NestJS HTTP API process'i. Health endpoint'lerini ve tenant auth/JWKS lifecycle'ini baslatir.
+- `main-service-worker`: HTTP listener acmayan Nest application context. Config, PostgreSQL ve Redis baglantilarini bootstrap eder; tenant auth/JWKS lifecycle'i, BullMQ consumer, cleanup scheduler veya business job calistirmaz.
 
 ## Sabit Image Surumleri
 
 - Application image base: `node:24.17.0-bookworm-slim`
 - PostgreSQL: `postgres:17.9-bookworm`
 - Redis: `redis:8.8.0-trixie`
+
+## Tenant Auth Local Fixture
+
+Local Compose varsayilaninda API, `TENANT_AUTH_JWKS_URL=http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json` adresini kullanir. Fixture servis her container baslangicinda ephemeral RSA keypair olusturur ve yalnizca public JWKS yayimlar. Private key dosyaya yazilmaz, host portu acilmaz ve gercek auth-service bagimliligi olusturmaz.
+
+Production ortaminda fixture veya `http://` JWKS URL'i kabul edilmez. Gercek uretim JWKS adresi `https://` olmalidir ve local fixture hostname'ine isaret edemez.
 
 ## Migration
 
@@ -66,7 +73,7 @@ Invoke-WebRequest http://localhost:3000/health/live
 Invoke-WebRequest http://localhost:3000/health/ready
 ```
 
-`/health/live` yalnizca API process'inin HTTP istegine cevap verdigini gosterir. `/health/ready` PostgreSQL ve Redis erisilebilir oldugunda `200`, aksi halde secret veya low-level hata detayi sizdirmadan `503` doner.
+`/health/live` yalnizca API process'inin HTTP istegine cevap verdigini gosterir ve dis bagimlilik kontrolu yapmaz. `/health/ready` PostgreSQL, Redis ve tenant auth JWKS cache hazir oldugunda `200`, aksi halde secret veya low-level hata detayi sizdirmadan `503` doner.
 
 ## Kalite Komutlari
 
@@ -75,6 +82,7 @@ Bu komutlar container toolchain'i ile calistirilir:
 ```powershell
 docker compose run --rm main-service-api npm run lint
 docker compose run --rm main-service-api npm run typecheck
+docker compose run --rm main-service-api npm run test:auth
 docker compose run --rm main-service-api npm test
 docker compose run --rm main-service-api npm run test:db
 docker compose run --rm main-service-api npm run test:all
@@ -85,7 +93,7 @@ docker compose run --rm main-service-api npm run build
 
 ## Smoke Test
 
-MS-001 icin calistirilan smoke adimlari:
+MS-003 icin calistirilan smoke adimlari:
 
 ```powershell
 docker compose config
@@ -95,10 +103,11 @@ docker compose ps
 Invoke-WebRequest http://localhost:3000/health/live
 Invoke-WebRequest http://localhost:3000/health/ready
 docker compose port main-service-worker 3000
+docker compose logs main-service-worker
 docker compose down
 ```
 
-Worker servisinde public HTTP portu yayimlanmaz. `docker compose port main-service-worker 3000` port bulunmadigini gostermelidir.
+Worker servisinde public HTTP portu yayimlanmaz. `docker compose port main-service-worker 3000` port bulunmadigini gostermelidir. Worker log'larinda JWKS refresh veya tenant auth lifecycle baslangici beklenmez.
 
 ## Worker Scheduler Durumu
 

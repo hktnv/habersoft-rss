@@ -7,8 +7,16 @@ const validEnv = {
   API_BIND_HOST: "0.0.0.0",
   API_PORT: "3000",
   DATABASE_URL: "postgresql://main_service:password@postgres:5432/main_service?schema=public",
-  REDIS_URL: "redis://redis:6379/0"
+  REDIS_URL: "redis://redis:6379/0",
+  TENANT_AUTH_JWKS_URL: "http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json"
 };
+
+function omitTenantAuth(env: typeof validEnv): Record<string, string | undefined> {
+  return {
+    ...env,
+    TENANT_AUTH_JWKS_URL: undefined
+  };
+}
 
 describe("loadRuntimeConfig", () => {
   it("fails when required values are missing", () => {
@@ -50,7 +58,41 @@ describe("loadRuntimeConfig", () => {
       },
       redis: {
         url: validEnv.REDIS_URL
+      },
+      tenantAuth: {
+        jwksUrl: validEnv.TENANT_AUTH_JWKS_URL,
+        issuer: "https://auth.habersoft.com",
+        audience: "rss.habersoft.com",
+        requiredScope: "services:access",
+        algorithm: "RS256",
+        clockToleranceSeconds: 30,
+        refreshIntervalMs: 300000,
+        httpTimeoutMs: 2000,
+        maxResponseBytes: 65536
       }
     });
+  });
+
+  it("requires tenant auth JWKS configuration for the API role", () => {
+    expect(() => loadRuntimeConfig(omitTenantAuth(validEnv), "api")).toThrow(ConfigValidationError);
+  });
+
+  it("does not require tenant auth JWKS configuration for the worker role", () => {
+    const config = loadRuntimeConfig({ ...omitTenantAuth(validEnv), RUNTIME_ROLE: "worker" }, "worker");
+
+    expect(config.tenantAuth).toBeUndefined();
+  });
+
+  it("rejects local or non-HTTPS JWKS URLs in production", () => {
+    expect(() =>
+      loadRuntimeConfig(
+        {
+          ...validEnv,
+          APP_ENV: "production",
+          TENANT_AUTH_JWKS_URL: "http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json"
+        },
+        "api"
+      )
+    ).toThrow(ConfigValidationError);
   });
 });

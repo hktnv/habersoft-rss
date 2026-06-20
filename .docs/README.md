@@ -7,7 +7,7 @@
 - Canonical repository remote: `canonical remote pending`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
-- Uygulama surumu/durum: `0.1.0-ms-002` / `Geciste`
+- Uygulama surumu/durum: `0.1.0-ms-003` / `Geciste`
 
 Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application repository siniridir. Merkezi master ve DEV alt dokumanlar bu repository'ye kopyalanmaz.
 
@@ -16,15 +16,17 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | Belge | Sorumluluk |
 |---|---|
 | [README.md](README.md) | Repository-local PROD dokumantasyon girisi, envanter ve uyum kaydi. |
-| [local-development.md](local-development.md) | MS-001 icin gercek yerel container gelistirme, calistirma ve dogrulama komutlari. |
+| [local-development.md](local-development.md) | Gercek yerel container gelistirme, calistirma, local JWKS fixture ve dogrulama komutlari. |
 | [database-schema.md](database-schema.md) | MS-002 canonical PostgreSQL business schema, migration ve DB test gercegi. |
+| [tenant-authentication.md](tenant-authentication.md) | MS-003 tenant RS256 JWT/JWKS dogrulama altyapisi, readiness ve sinirlar. |
 
 ## Okuma Sirasi
 
 1. [README.md](README.md)
 2. [local-development.md](local-development.md)
-3. [database-schema.md](database-schema.md)
-4. Repository kok [README.md](../README.md)
+3. [tenant-authentication.md](tenant-authentication.md)
+4. [database-schema.md](database-schema.md)
+5. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
@@ -32,14 +34,14 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 
 - Uygulama kimligi: `main-service`
 - Repository: `canonical remote pending`
-- Uygulama surumu: `0.1.0-ms-002`
+- Uygulama surumu: `0.1.0-ms-003`
 - Master kaynak: `../../.md/master/`
 - Master baseline: `rss-habersoft-master-v10`
 - Master agac ozeti SHA-256: `1673e90d7c7596e13053c7669044a08a09b4a9b70fd9c54c8c5c0e59f8aed192`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
 - Uyum durumu: `Geciste`
 
-`Geciste` durumu bilincli kullanilmistir. MS-002 canonical PostgreSQL business schema migration temelini olusturur; Agent API, Tenant API, JWT dogrulama, cleanup scheduler ve job runner davranislari henuz uygulanmamistir.
+`Geciste` durumu bilincli kullanilmistir. MS-003 API process'i icin tenant JWT/JWKS dogrulama altyapisini ve readiness entegrasyonunu olusturur; gercek Tenant API endpoint'i, Agent API, cleanup scheduler ve job runner davranislari henuz uygulanmamistir.
 
 ## Sabit Runtime ve Altyapi Surumleri
 
@@ -48,6 +50,7 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 - NestJS: `11.1.27`
 - Prisma CLI ve Client: `6.19.3`
 - Redis client: `ioredis 5.11.1`
+- JOSE/JWT library: `jose 6.2.3`
 - PostgreSQL image: `postgres:17.9-bookworm`
 - Redis image: `redis:8.8.0-trixie`
 

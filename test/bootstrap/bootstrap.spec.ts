@@ -9,7 +9,8 @@ const baseEnv = {
   API_BIND_HOST: "0.0.0.0",
   API_PORT: "3000",
   DATABASE_URL: "postgresql://main_service:password@postgres:5432/main_service?schema=public",
-  REDIS_URL: "redis://redis:6379/0"
+  REDIS_URL: "redis://redis:6379/0",
+  TENANT_AUTH_JWKS_URL: "http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json"
 };
 
 describe("bootstrap boundaries", () => {

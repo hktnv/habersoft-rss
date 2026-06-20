@@ -1,8 +1,8 @@
 {
   "name": "main-service",
-  "version": "0.1.0-ms-002",
+  "version": "0.1.0-ms-003",
   "private": true,
-  "description": "rss.habersoft.com main-service canonical schema foundation",
+  "description": "rss.habersoft.com main-service tenant auth foundation",
   "license": "UNLICENSED",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -13,10 +13,12 @@
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
     "start:api": "node dist/main-api.js",
+    "start:jwks-fixture": "node dist/main-local-jwks-fixture.js",
     "start:worker": "node dist/main-worker.js",
-    "test": "jest --runInBand --testPathIgnorePatterns test/database",
-    "test:all": "jest --runInBand",
-    "test:db": "jest --runInBand test/database",
+    "test:auth": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-auth",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --testPathIgnorePatterns test/database",
+    "test:all": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
+    "test:db": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/database",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -25,6 +27,7 @@
     "@nestjs/platform-fastify": "11.1.27",
     "@prisma/client": "6.19.3",
     "ioredis": "5.11.1",
+    "jose": "6.2.3",
     "prisma": "6.19.3",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"

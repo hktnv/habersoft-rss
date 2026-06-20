@@ -2,14 +2,28 @@ import { ServiceUnavailableException } from "@nestjs/common";
 import { HealthController } from "../../src/health/health.controller";
 import { HealthService } from "../../src/health/health.service";
 import type { DependencyState } from "../../src/persistence/postgres.service";
+import type { TenantAuthReadinessReport } from "../../src/tenant-auth/tenant-auth.types";
 
-function controllerWith(postgres: DependencyState, redis: DependencyState): HealthController {
+function controllerWith(
+  postgres: DependencyState,
+  redis: DependencyState,
+  tenantAuth: DependencyState = "up"
+): HealthController {
+  const tenantAuthReport: TenantAuthReadinessReport = {
+    status: tenantAuth,
+    keyCount: tenantAuth === "up" ? 1 : 0,
+    lastSuccessfulRefreshAt: tenantAuth === "up" ? new Date("2026-06-20T00:00:00.000Z") : null,
+    lastFailureReason: tenantAuth === "up" ? null : "jwks_unavailable"
+  };
   const health = new HealthService(
     {
       check: () => Promise.resolve(postgres)
     },
     {
       check: () => Promise.resolve(redis)
+    },
+    {
+      readiness: () => tenantAuthReport
     }
   );
 
@@ -30,7 +44,8 @@ describe("HealthController", () => {
       status: "ready",
       dependencies: {
         postgres: "up",
-        redis: "up"
+        redis: "up",
+        tenantAuth: "up"
       }
     });
   });
@@ -43,6 +58,12 @@ describe("HealthController", () => {
 
   it("returns 503 when Redis is unavailable", async () => {
     const controller = controllerWith("up", "down");
+
+    await expect(controller.ready()).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it("returns 503 when tenant auth keys are unavailable", async () => {
+    const controller = controllerWith("up", "up", "down");
 
     await expect(controller.ready()).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
@@ -60,6 +81,7 @@ describe("HealthController", () => {
 
       expect(serialized).toContain("postgres");
       expect(serialized).toContain("redis");
+      expect(serialized).toContain("tenantAuth");
       expect(serialized).not.toContain("postgresql://");
       expect(serialized).not.toContain("redis://");
       expect(serialized).not.toContain("password");

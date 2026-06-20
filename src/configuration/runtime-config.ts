@@ -16,6 +16,19 @@ export type RuntimeConfig = {
   readonly redis: {
     readonly url: string;
   };
+  readonly tenantAuth?: TenantAuthConfig;
+};
+
+export type TenantAuthConfig = {
+  readonly jwksUrl: string;
+  readonly issuer: "https://auth.habersoft.com";
+  readonly audience: "rss.habersoft.com";
+  readonly requiredScope: "services:access";
+  readonly algorithm: "RS256";
+  readonly clockToleranceSeconds: 30;
+  readonly refreshIntervalMs: 300000;
+  readonly httpTimeoutMs: 2000;
+  readonly maxResponseBytes: 65536;
 };
 
 export class ConfigValidationError extends Error {
@@ -44,6 +57,8 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
   const apiPort = requirePort(env.API_PORT, "API_PORT", issues);
   const databaseUrl = requireUrl(env.DATABASE_URL, "DATABASE_URL", ["postgresql:"], issues);
   const redisUrl = requireUrl(env.REDIS_URL, "REDIS_URL", ["redis:", "rediss:"], issues);
+  const tenantAuth =
+    expectedRole === "api" ? requireTenantAuthConfig(env.TENANT_AUTH_JWKS_URL, environment, issues) : undefined;
 
   if (role !== undefined && role !== expectedRole) {
     issues.push(`RUNTIME_ROLE must be ${expectedRole}`);
@@ -66,7 +81,46 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
     },
     redis: {
       url: redisUrl
+    },
+    ...(tenantAuth === undefined ? {} : { tenantAuth })
+  };
+}
+
+function requireTenantAuthConfig(
+  value: string | undefined,
+  environment: AppEnvironment | undefined,
+  issues: string[]
+): TenantAuthConfig {
+  const jwksUrl = requireUrl(value, "TENANT_AUTH_JWKS_URL", ["https:", "http:"], issues);
+
+  if (jwksUrl !== "") {
+    try {
+      const parsed = new URL(jwksUrl);
+      const production = environment === "production";
+      const localHostnames = new Set(["localhost", "127.0.0.1", "::1", "tenant-auth-jwks-fixture"]);
+
+      if (production && parsed.protocol !== "https:") {
+        issues.push("TENANT_AUTH_JWKS_URL must use HTTPS in production");
+      }
+
+      if (production && localHostnames.has(parsed.hostname)) {
+        issues.push("TENANT_AUTH_JWKS_URL must not target a local fixture in production");
+      }
+    } catch {
+      // requireUrl already records the malformed URL issue.
     }
+  }
+
+  return {
+    jwksUrl,
+    issuer: "https://auth.habersoft.com",
+    audience: "rss.habersoft.com",
+    requiredScope: "services:access",
+    algorithm: "RS256",
+    clockToleranceSeconds: 30,
+    refreshIntervalMs: 300000,
+    httpTimeoutMs: 2000,
+    maxResponseBytes: 65536
   };
 }
 
