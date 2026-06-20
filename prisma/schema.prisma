@@ -1,0 +1,121 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Feed {
+  id              BigInt    @id @default(autoincrement()) @db.BigInt
+  url             String    @unique @db.Text
+  title           String?   @db.Text
+  active          Boolean?
+  subscriberCount Int       @default(0) @map("subscriber_count")
+  etag            String?   @db.Text
+  lastModified    String?   @map("last_modified") @db.Text
+  lastCheckedAt   DateTime? @map("last_checked_at") @db.Timestamptz(6)
+  lastNewEntryAt  DateTime? @map("last_new_entry_at") @db.Timestamptz(6)
+  lastHttpStatus  Int?      @map("last_http_status") @db.SmallInt
+  errorCount      Int?      @map("error_count")
+  nextCheckAt     DateTime? @map("next_check_at") @db.Timestamptz(6)
+  createdAt       DateTime? @map("created_at") @db.Timestamptz(6)
+
+  entries   Entry[]
+  siteFeeds SiteFeed[]
+
+  @@map("feeds")
+}
+
+model Entry {
+  id                          BigInt    @id @default(autoincrement()) @db.BigInt
+  feedId                      BigInt    @map("feed_id") @db.BigInt
+  guid                        String    @db.Text
+  url                         String    @db.Text
+  title                       String    @db.Text
+  summary                     String?   @db.Text
+  images                      Json?     @db.JsonB
+  videos                      Json?     @db.JsonB
+  tags                        Json?     @db.JsonB
+  author                      String?   @db.Text
+  meta                        Json?     @db.JsonB
+  publishedAt                 DateTime? @map("published_at") @db.Timestamptz(6)
+  firstSeenAt                 DateTime  @map("first_seen_at") @db.Timestamptz(6)
+  effectiveAt                 DateTime  @default(dbgenerated("COALESCE(published_at, first_seen_at)")) @map("effective_at") @db.Timestamptz(6)
+  detailExtractionStatus      String    @map("detail_extraction_status") @db.Text
+  detailExtractionErrorCode   String?   @map("detail_extraction_error_code") @db.Text
+  detailExtractionAttemptedAt DateTime? @map("detail_extraction_attempted_at") @db.Timestamptz(6)
+  detailExtractionFinalizedAt DateTime  @map("detail_extraction_finalized_at") @db.Timestamptz(6)
+  hasDetail                   Boolean   @default(false) @map("has_detail")
+  createdAt                   DateTime? @map("created_at") @db.Timestamptz(6)
+
+  feed         Feed          @relation(fields: [feedId], references: [id], onDelete: NoAction, map: "entries_feed_id_fkey")
+  entryDetails EntryDetail[]
+
+  @@unique([feedId, guid], map: "entries_feed_id_guid_key")
+  @@unique([id, feedId], map: "entries_id_feed_id_unique")
+  @@index([feedId, effectiveAt(sort: Desc), id(sort: Desc)], map: "entries_feed_effective")
+  @@index([createdAt], map: "entries_created")
+  @@map("entries")
+}
+
+model EntryDetail {
+  entryId      BigInt    @id @map("entry_id") @db.BigInt
+  feedId       BigInt    @map("feed_id") @db.BigInt
+  effectiveAt  DateTime  @map("effective_at") @db.Timestamptz(6)
+  detail       String    @db.Text
+  detailLength Int?      @map("detail_length")
+  createdAt    DateTime? @map("created_at") @db.Timestamptz(6)
+
+  entry Entry @relation(fields: [entryId, feedId], references: [id, feedId], onDelete: Cascade, map: "entry_details_entry_feed_match_fk")
+
+  @@index([createdAt], map: "entry_details_created")
+  @@index([feedId, effectiveAt(sort: Desc), entryId(sort: Desc)], map: "entry_details_feed_effective")
+  @@map("entry_details")
+}
+
+model SiteFeed {
+  siteClientId String   @map("site_client_id") @db.Text
+  feedId       BigInt   @map("feed_id") @db.BigInt
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  feed Feed @relation(fields: [feedId], references: [id], onDelete: Restrict, map: "site_feeds_feed_id_fkey")
+
+  @@id([siteClientId, feedId], map: "site_feeds_pkey")
+  @@index([feedId], map: "site_feeds_feed_id")
+  @@map("site_feeds")
+}
+
+model AgentFeedCheckEvent {
+  checkId               String    @id @map("check_id") @db.Text
+  feedId                BigInt?   @map("feed_id") @db.BigInt
+  checkedAt             DateTime? @map("checked_at") @db.Timestamptz(6)
+  httpStatus            Int?      @map("http_status") @db.SmallInt
+  outcome               String    @db.Text
+  entriesSubmittedCount Int       @default(0) @map("entries_submitted_count")
+  entriesSavedCount     Int       @default(0) @map("entries_saved_count")
+  errorCode             String?   @map("error_code") @db.Text
+  tierAttempted         Int       @map("tier_attempted") @db.SmallInt
+  responseEtag          String?   @map("response_etag") @db.Text
+  responseLastModified  String?   @map("response_last_modified") @db.Text
+  feedTitle             String?   @map("feed_title") @db.Text
+  createdAt             DateTime? @map("created_at") @db.Timestamptz(6)
+
+  @@index([createdAt], map: "agent_feed_check_events_created")
+  @@map("agent_feed_check_events")
+}
+
+model AgentRuntimeStatus {
+  agentId                  String   @id @map("agent_id") @db.Text
+  status                   String   @db.Text
+  lastHeartbeatSentAt      DateTime @map("last_heartbeat_sent_at") @db.Timestamptz(6)
+  lastHeartbeatReceivedAt  DateTime @map("last_heartbeat_received_at") @db.Timestamptz(6)
+  feedsProcessed           Int      @map("feeds_processed")
+  errorsCount              Int      @map("errors_count")
+  staleCheckResultsDropped Int      @map("stale_check_results_dropped")
+  staleEntriesDropped      Int      @map("stale_entries_dropped")
+  updatedAt                DateTime @map("updated_at") @db.Timestamptz(6)
+
+  @@map("agent_runtime_status")
+}

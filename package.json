@@ -1,0 +1,50 @@
+{
+  "name": "main-service",
+  "version": "0.1.0-ms-002",
+  "private": true,
+  "description": "rss.habersoft.com main-service canonical schema foundation",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:status": "prisma migrate status",
+    "prisma:format": "prisma format --schema prisma/schema.prisma",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate --schema prisma/schema.prisma",
+    "start:api": "node dist/main-api.js",
+    "start:worker": "node dist/main-worker.js",
+    "test": "jest --runInBand --testPathIgnorePatterns test/database",
+    "test:all": "jest --runInBand",
+    "test:db": "jest --runInBand test/database",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.1.27",
+    "@nestjs/core": "11.1.27",
+    "@nestjs/platform-fastify": "11.1.27",
+    "@prisma/client": "6.19.3",
+    "ioredis": "5.11.1",
+    "prisma": "6.19.3",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "@nestjs/testing": "11.1.27",
+    "@types/jest": "30.0.0",
+    "@types/node": "24.10.1",
+    "eslint": "9.39.4",
+    "jest": "30.4.2",
+    "ts-jest": "29.4.11",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.50.0"
+  },
+  "engines": {
+    "node": "24.17.0",
+    "npm": "11"
+  },
+  "overrides": {
+    "multer": "2.2.0"
+  }
+}

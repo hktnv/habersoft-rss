@@ -1,0 +1,2 @@
+-- MS-001 intentionally creates no business tables.
+-- Prisma migration history is established for future versioned migrations.
