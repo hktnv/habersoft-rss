@@ -2,7 +2,7 @@
 
 ## Kapsam
 
-MS-003, API process'i icin tenant JWT/JWKS dogrulama altyapisini ekler. MS-005 itibariyla mevcut Tenant API feed rotalarinda bu guard rate-limit guard'indan once calisir. Bu dokuman uygulanmis repository gercegini kaydeder; merkezi master veya DEV dokumanlarinin yerine gecmez.
+MS-003, API process'i icin tenant JWT/JWKS dogrulama altyapisini ekler. MS-006 itibariyla mevcut Tenant API feed rotalarinda ve `GET /api/entries` rotasinda bu guard rate-limit guard'indan once calisir. Bu dokuman uygulanmis repository gercegini kaydeder; merkezi master veya DEV dokumanlarinin yerine gecmez.
 
 Bu authentication katmani Agent API endpoint'i, token minting, auth-service introspection, scheduler veya cleanup davranisi eklemez.
 

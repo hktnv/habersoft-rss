@@ -2,13 +2,14 @@
 
 ## Kapsam
 
-MS-005, mevcut Tenant API feed rotalarina tenant basina Redis rate limiting uygular:
+MS-005, mevcut Tenant API feed rotalarina tenant basina Redis rate limiting uygular. MS-006 ile ayni tenant bucket'i entry listeleme rotasi tarafindan da kullanilir:
 
 - `POST /api/feeds`
 - `GET /api/feeds`
 - `DELETE /api/feeds/{feed_id}`
+- `GET /api/entries`
 
-Yeni business endpoint, Agent API endpoint'i, scheduler/job runner, cleanup veya database migration eklenmez.
+Entry detail endpoint'i, Agent API endpoint'i, scheduler/job runner, cleanup veya database migration eklenmez.
 
 ## Kimlik ve Guard Sirasi
 
@@ -24,7 +25,7 @@ Guard sirasi:
 
 ## Kota Politikasi
 
-Tum kapsamdaki Tenant API feed rotalari ayni tenant genisligindeki kovayi paylasir. Global, IP, route, method, token veya jti bazli kota yoktur.
+Tum kapsamdaki Tenant API feed rotalari ve entry listeleme rotasi ayni tenant genisligindeki kovayi paylasir. Global, IP, route, method, token veya jti bazli kota yoktur.
 
 Local varsayilan:
 
