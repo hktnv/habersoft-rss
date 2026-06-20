@@ -35,4 +35,8 @@ export class PostgresService implements OnModuleInit, OnModuleDestroy {
       return "down";
     }
   }
+
+  public database(): PrismaClient {
+    return this.client;
+  }
 }

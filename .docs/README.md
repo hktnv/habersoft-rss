@@ -7,7 +7,7 @@
 - Canonical repository remote: `canonical remote pending`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
-- Uygulama surumu/durum: `0.1.0-ms-003` / `Geciste`
+- Uygulama surumu/durum: `0.1.0-ms-004` / `Geciste`
 
 Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application repository siniridir. Merkezi master ve DEV alt dokumanlar bu repository'ye kopyalanmaz.
 
@@ -19,14 +19,16 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [local-development.md](local-development.md) | Gercek yerel container gelistirme, calistirma, local JWKS fixture ve dogrulama komutlari. |
 | [database-schema.md](database-schema.md) | MS-002 canonical PostgreSQL business schema, migration ve DB test gercegi. |
 | [tenant-authentication.md](tenant-authentication.md) | MS-003 tenant RS256 JWT/JWKS dogrulama altyapisi, readiness ve sinirlar. |
+| [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md) | MS-004 tenant feed abonelik endpoint'leri, tenant izolasyonu, transaction ve sinirlar. |
 
 ## Okuma Sirasi
 
 1. [README.md](README.md)
 2. [local-development.md](local-development.md)
 3. [tenant-authentication.md](tenant-authentication.md)
-4. [database-schema.md](database-schema.md)
-5. Repository kok [README.md](../README.md)
+4. [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md)
+5. [database-schema.md](database-schema.md)
+6. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
@@ -34,14 +36,14 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 
 - Uygulama kimligi: `main-service`
 - Repository: `canonical remote pending`
-- Uygulama surumu: `0.1.0-ms-003`
+- Uygulama surumu: `0.1.0-ms-004`
 - Master kaynak: `../../.md/master/`
 - Master baseline: `rss-habersoft-master-v10`
 - Master agac ozeti SHA-256: `1673e90d7c7596e13053c7669044a08a09b4a9b70fd9c54c8c5c0e59f8aed192`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
 - Uyum durumu: `Geciste`
 
-`Geciste` durumu bilincli kullanilmistir. MS-003 API process'i icin tenant JWT/JWKS dogrulama altyapisini ve readiness entegrasyonunu olusturur; gercek Tenant API endpoint'i, Agent API, cleanup scheduler ve job runner davranislari henuz uygulanmamistir.
+`Geciste` durumu bilincli kullanilmistir. MS-004 API process'i icin tenant feed abonelik endpoint'lerini tenant JWT/JWKS dogrulama altyapisina baglar; tenant entry endpoint'leri, Agent API, cleanup scheduler, rate limiting ve job runner davranislari henuz uygulanmamistir.
 
 ## Sabit Runtime ve Altyapi Surumleri
 
