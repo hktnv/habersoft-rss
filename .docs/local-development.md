@@ -159,12 +159,8 @@ Success response:
 
 ```json
 {
-  "ok": true,
-  "check_id": "01K8Z3ABCD0000000000000001",
-  "feed_id": "35",
-  "entries_submitted_count": 2,
-  "entries_saved_count": 1,
-  "replay": false
+  "saved": 1,
+  "idempotent_replay": false
 }
 ```
 
@@ -172,9 +168,9 @@ Success response:
 
 `checked_at` server saatinden en fazla `60` saniye ileride ve en fazla `900` saniye eski olabilir. Bu kontrol idempotent replay lookup'undan once yapilir.
 
-Idempotency `agent_feed_check_events.check_id` uzerindedir. Ayni `check_id` ayni feed ve `entries_found` outcome ile tekrar gelirse yeni write yapilmaz, kayitli `entries_saved_count` ile `replay: true` doner. Ayni `check_id` farkli feed/outcome ile gelirse `422 CHECK_ID_PAYLOAD_MISMATCH` doner.
+Idempotency `agent_feed_check_events.check_id` uzerindedir. Ayni `check_id` ayni feed ve `entries_found` outcome ile tekrar gelirse yeni write yapilmaz, kayitli saved count ile `idempotent_replay: true` doner. Ayni `check_id` farkli feed/outcome ile gelirse `422 CHECK_ID_PAYLOAD_MISMATCH` doner.
 
-Duplicate entry'ler hata degildir; `(feed_id, guid)` unique constraint'i ile skip edilir ve `entries_saved_count` icinde sayilmaz. Feed state yalniz mevcut `last_checked_at` null veya request `checked_at` degerinden eski/esit ise guncellenir; boylece eski request feed state'i geriye alamaz.
+Duplicate entry'ler hata degildir; `(feed_id, guid)` unique constraint'i ile skip edilir ve `saved` icinde sayilmaz. Feed state yalniz mevcut `last_checked_at` null veya request `checked_at` degerinden eski/esit ise guncellenir; boylece eski request feed state'i geriye alamaz.
 
 ## Migration
 

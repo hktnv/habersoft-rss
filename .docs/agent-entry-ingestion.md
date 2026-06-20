@@ -50,15 +50,15 @@ Key validation rules:
 - `checked_at`: timezone-aware ISO instant.
 - `tier_attempted`: `1` or `2`.
 - `entries`: array length `1..100`.
-- `guid`: string, trim-stable, code-point length `1..1024`.
+- `guid`: string, trim-stable, code-point length `1..2048`.
 - `url`: absolute `http` or `https` URL, trim-stable, max `2048` code points.
 - `title`: required string, trim-stable, `1..500` code points.
-- `summary`: nullable string, max `5000` code points.
+- `summary`: nullable string, max `2000` code points.
 - `images`: nullable array of at most `20` absolute `http` or `https` URLs.
 - `videos`: nullable array of at most `5` absolute `http` or `https` URLs.
-- `tags`: nullable array of at most `50` strings.
-- `author`: nullable string, max `500` code points.
-- `meta`: nullable object with at most `50` top-level keys.
+- `tags`: nullable array of at most `20` strings, each max `50` code points.
+- `author`: nullable string, max `200` code points.
+- `meta`: nullable object with at most `50` top-level string values, each max `500` code points.
 - `detail_extraction`: required object.
 
 `detail_extraction.status` values are `ok`, `timeout`, `playwright_failed`,
@@ -76,12 +76,8 @@ Success returns `200`:
 
 ```json
 {
-  "ok": true,
-  "check_id": "01K8Z3ABCD0000000000000001",
-  "feed_id": "35",
-  "entries_submitted_count": 2,
-  "entries_saved_count": 1,
-  "replay": false
+  "saved": 1,
+  "idempotent_replay": false
 }
 ```
 
@@ -95,7 +91,7 @@ Malformed JSON returns `400`. Body over the route limit returns `413`.
 
 `agent_feed_check_events.check_id` is the idempotency key. If an existing event
 has the same feed and `entries_found` outcome, the endpoint returns the stored
-`entries_saved_count` with `replay: true` and performs no new writes.
+saved count with `idempotent_replay: true` and performs no new writes.
 
 If the same `check_id` is already associated with another feed or outcome, the
 endpoint returns `422 CHECK_ID_PAYLOAD_MISMATCH`.
@@ -105,7 +101,7 @@ The `checked_at` time window is validated before replay lookup.
 ## Persistence
 
 New entries are inserted with `ON CONFLICT (feed_id, guid) DO NOTHING`. Duplicate
-entries are not errors and are not counted in `entries_saved_count`.
+entries are not errors and are not counted in `saved`.
 
 For inserted entries:
 

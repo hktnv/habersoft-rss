@@ -30,7 +30,7 @@ export class RecordAgentEntriesUseCase {
       receivedAt
     });
 
-    return toAgentEntriesResponse(request, result);
+    return toAgentEntriesResponse(result);
   }
 
   private assertCheckedAtWithinWindow(checkedAt: Date, receivedAt: Date): void {

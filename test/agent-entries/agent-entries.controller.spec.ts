@@ -23,12 +23,8 @@ describe("AgentEntriesController", () => {
   beforeEach(async () => {
     execute = jest.fn<ReturnType<RecordAgentEntriesUseCase["execute"]>, Parameters<RecordAgentEntriesUseCase["execute"]>>()
       .mockResolvedValue({
-        ok: true,
-        check_id: "01K8Z3ABCD0000000000000001",
-        feed_id: "35",
-        entries_submitted_count: 1,
-        entries_saved_count: 1,
-        replay: false
+        saved: 1,
+        idempotent_replay: false
       });
 
     const moduleRef = await Test.createTestingModule({
@@ -53,12 +49,8 @@ describe("AgentEntriesController", () => {
 
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.payload)).toEqual({
-      ok: true,
-      check_id: "01K8Z3ABCD0000000000000001",
-      feed_id: "35",
-      entries_submitted_count: 1,
-      entries_saved_count: 1,
-      replay: false
+      saved: 1,
+      idempotent_replay: false
     });
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({ feedId: 35n }));
   });

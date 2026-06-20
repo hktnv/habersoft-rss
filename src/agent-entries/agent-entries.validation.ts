@@ -55,9 +55,9 @@ export function validateAgentEntriesRequest(body: unknown, query: unknown): Vali
   const feedId = validateFeedId(body.feed_id);
   const checkedAt = validateInstant(body.checked_at);
   const tierAttempted = validateTierAttempted(body.tier_attempted);
-  const feedTitle = validateOptionalText(body.feed_title, 500, false);
-  const responseEtag = validateOptionalText(body.response_etag, 1024, false);
-  const responseLastModified = validateOptionalText(body.response_last_modified, 1024, false);
+  const feedTitle = validateOptionalText(body.feed_title, 300, false);
+  const responseEtag = validateRequiredNullableText(body.response_etag, 1024, false);
+  const responseLastModified = validateRequiredNullableText(body.response_last_modified, 256, false);
   const entries = validateEntries(body.entries);
 
   if (
@@ -114,14 +114,14 @@ function validateEntry(value: unknown): AgentEntryInput | undefined {
     return undefined;
   }
 
-  const guid = validateText(value.guid, 1024, false);
+  const guid = validateText(value.guid, 2048, false);
   const url = validateHttpUrl(value.url, 2048);
   const title = validateText(value.title, 500, false);
-  const summary = validateOptionalText(value.summary, 5000, true);
+  const summary = validateOptionalText(value.summary, 2000, true);
   const images = validateOptionalUrlArray(value.images, 20);
   const videos = validateOptionalUrlArray(value.videos, 5);
-  const tags = validateOptionalTextArray(value.tags, 50, 500);
-  const author = validateOptionalText(value.author, 500, true);
+  const tags = validateOptionalTextArray(value.tags, 20, 50);
+  const author = validateOptionalText(value.author, 200, true);
   const meta = validateOptionalMeta(value.meta);
   const publishedAt = validateOptionalInstant(value.published_at);
   const detailExtraction = validateDetailExtraction(value.detail_extraction);
@@ -242,6 +242,12 @@ function validateOptionalMeta(value: unknown): Record<string, unknown> | null | 
     return undefined;
   }
 
+  for (const item of Object.values(value)) {
+    if (typeof item !== "string" || Array.from(item).length > 500) {
+      return undefined;
+    }
+  }
+
   return value;
 }
 
@@ -299,6 +305,22 @@ function validateOptionalText(
   allowEmpty: boolean
 ): string | null | undefined {
   if (value === undefined || value === null) {
+    return null;
+  }
+
+  return validateText(value, maxCodePoints, allowEmpty);
+}
+
+function validateRequiredNullableText(
+  value: unknown,
+  maxCodePoints: number,
+  allowEmpty: boolean
+): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
     return null;
   }
 

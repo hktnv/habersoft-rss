@@ -101,13 +101,9 @@ describe("agent entry ingestion with PostgreSQL", () => {
     const response = await postEntries(payload({ checkId: checkId(1), checkedAt, entryNames: ["ok", "timeout"] }));
 
     expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.payload)).toMatchObject({
-      ok: true,
-      check_id: checkId(1),
-      feed_id: feed.id.toString(10),
-      entries_submitted_count: 2,
-      entries_saved_count: 2,
-      replay: false
+    expect(JSON.parse(response.payload)).toEqual({
+      saved: 2,
+      idempotent_replay: false
     });
 
     const entries = await entryRows(["ok", "timeout"]);
@@ -159,7 +155,7 @@ describe("agent entry ingestion with PostgreSQL", () => {
 
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
-    expect(JSON.parse(second.payload)).toMatchObject({ entries_saved_count: 1, replay: true });
+    expect(JSON.parse(second.payload)).toEqual({ saved: 1, idempotent_replay: true });
     await expect(eventCount(checkId(2))).resolves.toBe(1);
     await expect(entryRows(["replay"])).resolves.toHaveLength(1);
   });
@@ -169,7 +165,7 @@ describe("agent entry ingestion with PostgreSQL", () => {
     const response = await postEntries(payload({ checkId: checkId(3), checkedAt, entryNames: ["replay"] }));
 
     expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.payload)).toMatchObject({ entries_submitted_count: 1, entries_saved_count: 0 });
+    expect(JSON.parse(response.payload)).toEqual({ saved: 0, idempotent_replay: false });
     expect((await eventRow(checkId(3)))?.entries_saved_count).toBe(0);
   });
 
@@ -192,7 +188,7 @@ describe("agent entry ingestion with PostgreSQL", () => {
     const after = await feedState();
 
     expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.payload)).toMatchObject({ entries_saved_count: 1 });
+    expect(JSON.parse(response.payload)).toEqual({ saved: 1, idempotent_replay: false });
     expect(after).toEqual(before);
   });
 
