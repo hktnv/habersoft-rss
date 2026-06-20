@@ -7,7 +7,7 @@
 - Canonical repository remote: `https://github.com/hktnv/habersoft-rss`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
-- Uygulama surumu/durum: `0.1.0-ms-005` / `Geciste`
+- Uygulama surumu/durum: `0.1.0-ms-006` / `Geciste`
 
 Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application repository siniridir. Merkezi master ve DEV alt dokumanlar bu repository'ye kopyalanmaz.
 
@@ -21,6 +21,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [tenant-authentication.md](tenant-authentication.md) | MS-003 tenant RS256 JWT/JWKS dogrulama altyapisi, readiness ve sinirlar. |
 | [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md) | MS-004 tenant feed abonelik endpoint'leri, tenant izolasyonu, transaction ve sinirlar. |
 | [tenant-rate-limiting.md](tenant-rate-limiting.md) | MS-005 Tenant API feed rotalarinda tenant basina Redis rate limiting davranisi ve sinirlari. |
+| [tenant-entry-listing.md](tenant-entry-listing.md) | MS-006 Tenant entry listeleme API route, pagination, visibility, query/projection ve test gercegi. |
 
 ## Okuma Sirasi
 
@@ -29,8 +30,9 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 3. [tenant-authentication.md](tenant-authentication.md)
 4. [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md)
 5. [tenant-rate-limiting.md](tenant-rate-limiting.md)
-6. [database-schema.md](database-schema.md)
-7. Repository kok [README.md](../README.md)
+6. [tenant-entry-listing.md](tenant-entry-listing.md)
+7. [database-schema.md](database-schema.md)
+8. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
@@ -38,14 +40,14 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 
 - Uygulama kimligi: `main-service`
 - Repository: `https://github.com/hktnv/habersoft-rss`
-- Uygulama surumu: `0.1.0-ms-005`
+- Uygulama surumu: `0.1.0-ms-006`
 - Master kaynak: `../../.md/master/`
 - Master baseline: `rss-habersoft-master-v10`
 - Master agac ozeti SHA-256: `1673e90d7c7596e13053c7669044a08a09b4a9b70fd9c54c8c5c0e59f8aed192`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
 - Uyum durumu: `Geciste`
 
-`Geciste` durumu bilincli kullanilmistir. MS-005 mevcut Tenant API feed endpoint'lerini tenant JWT/JWKS dogrulama altyapisindan sonra tenant basina Redis rate limiting davranisina baglar; tenant entry endpoint'leri, Agent API, cleanup scheduler ve job runner davranislari henuz uygulanmamistir.
+`Geciste` durumu bilincli kullanilmistir. MS-006 mevcut Tenant API guvenlik zinciri uzerinden `GET /api/entries` hafif liste endpoint'ini ekler; tenant entry detail endpoint'i, Agent API, cleanup scheduler ve job runner davranislari henuz uygulanmamistir.
 
 ## Sabit Runtime ve Altyapi Surumleri
 

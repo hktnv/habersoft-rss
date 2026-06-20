@@ -1,6 +1,6 @@
 {
   "name": "main-service",
-  "version": "0.1.0-ms-005",
+  "version": "0.1.0-ms-006",
   "private": true,
   "description": "rss.habersoft.com main-service tenant feed subscription API foundation",
   "license": "UNLICENSED",
@@ -16,6 +16,7 @@
     "start:jwks-fixture": "node dist/main-local-jwks-fixture.js",
     "start:worker": "node dist/main-worker.js",
     "test:auth": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-auth",
+    "test:tenant-entries": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-entries test/database/tenant-entries.integration.spec.ts",
     "test:rate-limit": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-rate-limit",
     "test:tenant-feeds": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-feeds",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --testPathIgnorePatterns test/database",
