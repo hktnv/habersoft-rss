@@ -14,7 +14,8 @@ const baseEnv = {
   TENANT_RATE_LIMIT_MAX_REQUESTS: "60",
   TENANT_RATE_LIMIT_WINDOW_SECONDS: "60",
   TENANT_RATE_LIMIT_REDIS_PREFIX: "tenant_rate_limit:local",
-  TENANT_RATE_LIMIT_KEY_SECRET: "replace_with_local_only_rate_limit_key_secret_32"
+  TENANT_RATE_LIMIT_KEY_SECRET: "replace_with_local_only_rate_limit_key_secret_32",
+  AGENT_KEY: "test_only_agent_key_at_least_32_bytes"
 };
 
 describe("bootstrap boundaries", () => {
@@ -60,6 +61,33 @@ describe("bootstrap boundaries", () => {
 
     await expect(startApi({}, { create })).rejects.toBeInstanceOf(ConfigValidationError);
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("API fails fast before Nest bootstrap when agent key config is missing", async () => {
+    const create = jest.fn();
+
+    await expect(startApi({ ...baseEnv, RUNTIME_ROLE: "api", AGENT_KEY: undefined }, { create })).rejects.toBeInstanceOf(
+      ConfigValidationError
+    );
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("worker does not require agent key config", async () => {
+    const assertInfrastructureReady = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
+    const app = {
+      enableShutdownHooks: jest.fn(),
+      get: jest.fn().mockImplementation((token: unknown) => {
+        if (token === WorkerBootstrapService) {
+          return { assertInfrastructureReady };
+        }
+        throw new Error("Unexpected provider");
+      })
+    };
+    const createApplicationContext = jest.fn().mockResolvedValue(app);
+
+    await startWorker({ ...baseEnv, RUNTIME_ROLE: "worker", AGENT_KEY: undefined }, { createApplicationContext });
+
+    expect(createApplicationContext).toHaveBeenCalledTimes(1);
   });
 
   it("worker fails fast before Nest bootstrap when config is missing", async () => {

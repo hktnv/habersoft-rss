@@ -18,6 +18,7 @@ export type RuntimeConfig = {
   };
   readonly tenantAuth?: TenantAuthConfig;
   readonly tenantRateLimit?: TenantRateLimitConfig;
+  readonly agentAuth?: AgentAuthConfig;
 };
 
 export type TenantAuthConfig = {
@@ -39,6 +40,10 @@ export type TenantRateLimitConfig = {
   readonly keySecret: string;
 };
 
+export type AgentAuthConfig = {
+  readonly key: string;
+};
+
 export class ConfigValidationError extends Error {
   public readonly issues: readonly string[];
 
@@ -54,6 +59,7 @@ type RawEnvironment = Record<string, string | undefined>;
 const appEnvironments = new Set<AppEnvironment>(["local", "test", "production"]);
 const logLevels = new Set<LogLevel>(["debug", "info", "warn", "error"]);
 const runtimeRoles = new Set<RuntimeRole>(["api", "worker"]);
+export const localAgentKeyPlaceholder = "replace_with_local_only_agent_key_at_least_32_bytes";
 
 export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole): RuntimeConfig {
   const issues: string[] = [];
@@ -80,6 +86,8 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
           issues
         )
       : undefined;
+  const agentAuth =
+    expectedRole === "api" ? requireAgentAuthConfig(env.AGENT_KEY, environment, issues) : undefined;
 
   if (role !== undefined && role !== expectedRole) {
     issues.push(`RUNTIME_ROLE must be ${expectedRole}`);
@@ -104,7 +112,8 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
       url: redisUrl
     },
     ...(tenantAuth === undefined ? {} : { tenantAuth }),
-    ...(tenantRateLimit === undefined ? {} : { tenantRateLimit })
+    ...(tenantRateLimit === undefined ? {} : { tenantRateLimit }),
+    ...(agentAuth === undefined ? {} : { agentAuth })
   };
 }
 
@@ -181,6 +190,48 @@ function requireTenantRateLimitConfig(
     redisPrefix,
     keySecret
   };
+}
+
+function requireAgentAuthConfig(
+  value: string | undefined,
+  environment: AppEnvironment | undefined,
+  issues: string[]
+): AgentAuthConfig {
+  const key = requireText(value, "AGENT_KEY", issues);
+
+  if (key !== "") {
+    if (key.trim() !== key) {
+      issues.push("AGENT_KEY must not include leading or trailing whitespace");
+    }
+
+    if (Buffer.byteLength(key, "utf8") < 32) {
+      issues.push("AGENT_KEY must be at least 32 UTF-8 bytes");
+    }
+
+    if (containsAsciiControlCharacter(key)) {
+      issues.push("AGENT_KEY must not contain ASCII control characters");
+    }
+
+    if (
+      environment === "production" &&
+      (key === localAgentKeyPlaceholder || key.includes("replace_with") || key.includes("local_only"))
+    ) {
+      issues.push("AGENT_KEY must be explicit in production");
+    }
+  }
+
+  return { key };
+}
+
+function containsAsciiControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && ((codePoint >= 0 && codePoint <= 31) || codePoint === 127)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function requireText(value: string | undefined, name: string, issues: string[]): string {

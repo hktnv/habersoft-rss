@@ -1,4 +1,5 @@
 import { DynamicModule, Module } from "@nestjs/common";
+import { AgentAuthModule } from "./agent-auth/agent-auth.module";
 import { RuntimeConfig } from "./configuration/runtime-config";
 import { RuntimeConfigModule } from "./configuration/runtime-config.module";
 import { HealthModule } from "./health/health.module";
@@ -14,6 +15,7 @@ export class ApiModule {
       module: ApiModule,
       imports: [
         RuntimeConfigModule.register(config),
+        AgentAuthModule,
         TenantAuthModule,
         HealthModule,
         TenantFeedsModule,
