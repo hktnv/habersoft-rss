@@ -55,7 +55,7 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 - Uygulama surumu: `0.1.0-ms-012`
 - Master kaynak: `../../.md/master/`
 - Master baseline: `rss-habersoft-master-v11`
-- Master agac ozeti SHA-256: `0ccd0f57a92196dae2be3684b2ba6f693af1787b753cd378d43de0b46ef94c8b`
+- Master agac ozeti SHA-256: `be0d25d5523e185b23cf720a34bca777667a64b832ab31fad2d1bf9741687f32`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
 - Uyum durumu: `Geciste`
 
