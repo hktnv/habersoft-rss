@@ -31,6 +31,10 @@ describe("Agent auth API boundary", () => {
         check: jest.fn().mockResolvedValue("up"),
         database: jest.fn().mockReturnValue({
           feed: {
+            findMany: jest.fn().mockResolvedValue([]),
+            findUnique: jest.fn().mockResolvedValue({ id: 1n })
+          },
+          entry: {
             findMany: jest.fn().mockResolvedValue([])
           }
         })
@@ -67,6 +71,20 @@ describe("Agent auth API boundary", () => {
     });
   });
 
+  it("exposes new-GUID filtering as an authenticated production agent route", async () => {
+    const response = await fastify.inject({
+      method: "POST",
+      url: "/agent/feeds/1/new-guids",
+      headers: {
+        "X-Agent-Key": runtimeConfig.agentAuth?.key
+      },
+      payload: { guids: ["guid-1"] }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.payload)).toEqual({ new: ["guid-1"] });
+  });
+
   it("keeps health endpoints unauthenticated", async () => {
     const response = await fastify.inject({
       method: "GET",
@@ -86,5 +104,23 @@ describe("Agent auth API boundary", () => {
     });
 
     expect(response.statusCode).toBe(401);
+  });
+
+  it("does not expose future agent write endpoints", async () => {
+    const entries = await fastify.inject({
+      method: "POST",
+      url: "/agent/entries",
+      headers: { "X-Agent-Key": runtimeConfig.agentAuth?.key },
+      payload: {}
+    });
+    const feedCheckResults = await fastify.inject({
+      method: "POST",
+      url: "/agent/feed-check-results",
+      headers: { "X-Agent-Key": runtimeConfig.agentAuth?.key },
+      payload: {}
+    });
+
+    expect(entries.statusCode).toBe(404);
+    expect(feedCheckResults.statusCode).toBe(404);
   });
 });
