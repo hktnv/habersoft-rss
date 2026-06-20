@@ -9,7 +9,8 @@ describe("Agent heartbeat worker boundary", () => {
       role: "worker" as const,
       tenantAuth: undefined,
       tenantRateLimit: undefined,
-      agentAuth: undefined
+      agentAuth: undefined,
+      agentEntries: undefined
     };
     const moduleDefinition = WorkerModule.register(workerConfig);
 

@@ -1,9 +1,9 @@
-import { AgentNewGuidsModule } from "../../src/agent-new-guids/agent-new-guids.module";
+import { AgentEntriesModule } from "../../src/agent-entries/agent-entries.module";
 import { WorkerModule } from "../../src/worker.module";
 import { runtimeConfig } from "../tenant-auth/tenant-auth-test-helpers";
 
-describe("Agent new GUIDs worker boundary", () => {
-  it("does not import the new-GUID module into the worker graph", () => {
+describe("Agent entries worker boundary", () => {
+  it("does not import the entries ingestion module into the worker graph", () => {
     const workerConfig = {
       ...runtimeConfig,
       role: "worker" as const,
@@ -14,6 +14,6 @@ describe("Agent new GUIDs worker boundary", () => {
     };
     const moduleDefinition = WorkerModule.register(workerConfig);
 
-    expect(moduleDefinition.imports).not.toContain(AgentNewGuidsModule);
+    expect(moduleDefinition.imports).not.toContain(AgentEntriesModule);
   });
 });
