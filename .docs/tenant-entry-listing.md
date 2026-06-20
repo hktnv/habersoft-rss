@@ -85,7 +85,7 @@ Troubleshooting icin once query validation sonucunu, tenantin `site_feeds` abone
 
 ## Bilincli Disarida Birakilanlar
 
-- `GET /api/entries/{id}/detail`
+- Entry detail response'una liste endpoint'i uzerinden detail tasimak
 - Date, feed, tag, author veya search filtreleri
 - Cursor/keyset pagination
 - Total count veya response envelope

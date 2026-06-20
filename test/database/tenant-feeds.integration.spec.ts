@@ -4,6 +4,7 @@ import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import type { FastifyInstance } from "fastify";
 import { RuntimeConfigModule } from "../../src/configuration/runtime-config.module";
+import { loadJoseRuntime } from "../../src/tenant-auth/jose-runtime";
 import { JwksHttpClient } from "../../src/tenant-auth/jwks-http.client";
 import { TenantAuthModule } from "../../src/tenant-auth/tenant-auth.module";
 import { TenantFeedsModule } from "../../src/tenant-feeds/tenant-feeds.module";
@@ -44,6 +45,7 @@ describe("tenant feed subscriptions with PostgreSQL", () => {
   let database: PrismaClient;
 
   beforeAll(async () => {
+    await loadJoseRuntime();
     database = new PrismaClient({ datasourceUrl: requireDatabaseUrl() });
     await cleanup();
 

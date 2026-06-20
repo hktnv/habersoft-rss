@@ -1,6 +1,6 @@
 {
   "name": "main-service",
-  "version": "0.1.0-ms-006",
+  "version": "0.1.0-ms-007",
   "private": true,
   "description": "rss.habersoft.com main-service tenant feed subscription API foundation",
   "license": "UNLICENSED",
@@ -17,11 +17,16 @@
     "start:worker": "node dist/main-worker.js",
     "test:auth": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-auth",
     "test:tenant-entries": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-entries test/database/tenant-entries.integration.spec.ts",
+    "test:tenant-entry-detail": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-entry-detail test/database/tenant-entry-detail.integration.spec.ts",
     "test:rate-limit": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-rate-limit",
     "test:tenant-feeds": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-feeds",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --testPathIgnorePatterns test/database",
     "test:all": "npm test && npm run test:db",
-    "test:db": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/database",
+    "test:db": "npm run test:db:tenant-feeds && npm run test:db:schema && npm run test:db:tenant-entries && npm run test:db:tenant-entry-detail",
+    "test:db:schema": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/schema.integration.spec.ts",
+    "test:db:tenant-entries": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/tenant-entries.integration.spec.ts",
+    "test:db:tenant-entry-detail": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/tenant-entry-detail.integration.spec.ts",
+    "test:db:tenant-feeds": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/tenant-feeds.integration.spec.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

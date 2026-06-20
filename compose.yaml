@@ -1,7 +1,7 @@
 name: main-service
 
 x-main-service-image: &main-service-image
-  image: main-service-app:0.1.0-ms-006
+  image: main-service-app:0.1.0-ms-007
   build:
     context: .
     dockerfile: Dockerfile
