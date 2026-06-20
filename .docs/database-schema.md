@@ -40,6 +40,8 @@ Bu ozelliklerde migration SQL ile `schema.prisma` arasinda yorum farki olursa ca
 
 `feeds_due` index'i `next_check_at ASC, id ASC` key order'una ve `active = true AND subscriber_count > 0` predicate'ine sahiptir. MS-010 `GET /agent/feeds/due` read-only sorgusu bu index ile uyumlu olarak `next_check_at <= captured server now` filtresi, canonical order ve `limit + 1` bounded read kullanir.
 
+`entries_feed_id_guid_key` unique constraint'i `(feed_id, guid)` identity ve future Agent entry ingestion write idempotency siniridir. MS-011 `POST /agent/feeds/{feed_id}/new-guids` endpoint'i bu identity uzerinden target feed'deki existing GUID set'ini read-only filtreler; yeni schema, index veya migration eklemez.
+
 ## Dogrulama
 
 Container toolchain ile:

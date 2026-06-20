@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { ApiModule } from "../../src/api.module";
 import { AgentDueFeedsReader } from "../../src/agent-due-feeds/agent-due-feeds.reader";
 import { AgentHeartbeatRepository } from "../../src/agent-heartbeat/agent-heartbeat.repository";
+import { AgentNewGuidsReader } from "../../src/agent-new-guids/agent-new-guids.reader";
 import { PostgresService } from "../../src/persistence/postgres.service";
 import { RedisService } from "../../src/redis/redis.service";
 import { JwksCacheService } from "../../src/tenant-auth/jwks-cache.service";
@@ -36,6 +37,8 @@ describe("Agent heartbeat API route boundary", () => {
       .useValue({ upsert: jest.fn().mockResolvedValue(undefined) })
       .overrideProvider(AgentDueFeedsReader)
       .useValue({ listDueFeeds: jest.fn().mockResolvedValue([]) })
+      .overrideProvider(AgentNewGuidsReader)
+      .useValue({ readExistingGuids: jest.fn().mockResolvedValue({ existingGuids: [] }) })
       .compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -49,7 +52,7 @@ describe("Agent heartbeat API route boundary", () => {
     app = undefined;
   });
 
-  it("exposes only heartbeat and due-feed among production agent routes", async () => {
+  it("exposes only heartbeat, due-feed, and new-GUID filtering among production agent routes", async () => {
     const success = await fastify.inject({
       method: "POST",
       url: "/agent/heartbeat",
@@ -68,6 +71,12 @@ describe("Agent heartbeat API route boundary", () => {
       url: "/agent/feeds/due?limit=1",
       headers: { "X-Agent-Key": runtimeConfig.agentAuth?.key }
     });
+    const newGuids = await fastify.inject({
+      method: "POST",
+      url: "/agent/feeds/1/new-guids",
+      headers: { "X-Agent-Key": runtimeConfig.agentAuth?.key },
+      payload: { guids: ["guid-1"] }
+    });
     const entries = await fastify.inject({
       method: "POST",
       url: "/agent/entries",
@@ -83,6 +92,8 @@ describe("Agent heartbeat API route boundary", () => {
 
     expect(success.statusCode).toBe(200);
     expect(due.statusCode).toBe(200);
+    expect(newGuids.statusCode).toBe(200);
+    expect(JSON.parse(newGuids.payload)).toEqual({ new: ["guid-1"] });
     expect(entries.statusCode).toBe(404);
     expect(results.statusCode).toBe(404);
   });
