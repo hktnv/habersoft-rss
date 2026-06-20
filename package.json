@@ -1,8 +1,8 @@
 {
   "name": "main-service",
-  "version": "0.1.0-ms-003",
+  "version": "0.1.0-ms-004",
   "private": true,
-  "description": "rss.habersoft.com main-service tenant auth foundation",
+  "description": "rss.habersoft.com main-service tenant feed subscription API foundation",
   "license": "UNLICENSED",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -16,8 +16,9 @@
     "start:jwks-fixture": "node dist/main-local-jwks-fixture.js",
     "start:worker": "node dist/main-worker.js",
     "test:auth": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-auth",
+    "test:tenant-feeds": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-feeds",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --testPathIgnorePatterns test/database",
-    "test:all": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
+    "test:all": "npm test && npm run test:db",
     "test:db": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/database",
     "typecheck": "tsc --noEmit"
   },

@@ -31,7 +31,7 @@ docker compose down -v
 - `redis`: Redis 8.8 local yeniden kurulabilir runtime servisi.
 - `tenant-auth-jwks-fixture`: Local-only deterministik olmayan, ephemeral RS256 public JWKS fixture servisi. Host portu yayimlamaz; yalnizca Compose agi icinden kullanilir.
 - `migrate`: PostgreSQL saglikli olduktan sonra `prisma migrate deploy` calistiran sonlu gorev.
-- `main-service-api`: NestJS HTTP API process'i. Health endpoint'lerini ve tenant auth/JWKS lifecycle'ini baslatir.
+- `main-service-api`: NestJS HTTP API process'i. Health endpoint'lerini, tenant auth/JWKS lifecycle'ini ve tenant feed abonelik endpoint'lerini baslatir.
 - `main-service-worker`: HTTP listener acmayan Nest application context. Config, PostgreSQL ve Redis baglantilarini bootstrap eder; tenant auth/JWKS lifecycle'i, BullMQ consumer, cleanup scheduler veya business job calistirmaz.
 
 ## Sabit Image Surumleri
@@ -83,17 +83,18 @@ Bu komutlar container toolchain'i ile calistirilir:
 docker compose run --rm main-service-api npm run lint
 docker compose run --rm main-service-api npm run typecheck
 docker compose run --rm main-service-api npm run test:auth
+docker compose run --rm main-service-api npm run test:tenant-feeds
 docker compose run --rm main-service-api npm test
 docker compose run --rm main-service-api npm run test:db
 docker compose run --rm main-service-api npm run test:all
 docker compose run --rm main-service-api npm run build
 ```
 
-`npm run test:db`, Compose PostgreSQL servisi uzerinde izole gecici bir database olusturur, migration'lari bastan uygular, ikinci deploy'un no-op oldugunu dogrular, katalog/constraint/index kontrollerini calistirir ve gecici database'i siler.
+`npm run test:tenant-feeds`, feed abonelik request dogrulama, use-case, controller ve worker modul siniri testlerini calistirir. `npm run test:db`, Compose PostgreSQL servisi uzerinde izole gecici bir database olusturur, migration'lari bastan uygular, ikinci deploy'un no-op oldugunu dogrular, katalog/constraint/index kontrollerini ve MS-004 PostgreSQL entegrasyon senaryolarini calistirir.
 
 ## Smoke Test
 
-MS-003 icin calistirilan smoke adimlari:
+MS-004 icin calistirilan smoke adimlari:
 
 ```powershell
 docker compose config

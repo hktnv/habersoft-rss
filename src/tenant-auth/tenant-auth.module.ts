@@ -23,6 +23,6 @@ import { TenantJwtVerifier } from "./tenant-jwt.verifier";
       useExisting: JwksCacheService
     }
   ],
-  exports: [TenantJwtAuthGuard, TENANT_AUTH_READINESS]
+  exports: [AuthorizationHeaderParser, TenantJwtVerifier, TenantJwtAuthGuard, TENANT_AUTH_READINESS]
 })
 export class TenantAuthModule {}
