@@ -2,9 +2,9 @@
 
 ## Kapsam
 
-MS-003, yalnizca API process'i icin tenant JWT/JWKS dogrulama altyapisini ekler. Bu dokuman uygulanmis repository gercegini kaydeder; merkezi master veya DEV dokumanlarinin yerine gecmez.
+MS-003, API process'i icin tenant JWT/JWKS dogrulama altyapisini ekler. MS-005 itibariyla mevcut Tenant API feed rotalarinda bu guard rate-limit guard'indan once calisir. Bu dokuman uygulanmis repository gercegini kaydeder; merkezi master veya DEV dokumanlarinin yerine gecmez.
 
-Bu milestone gercek Tenant API endpoint'i, Agent API endpoint'i, rate limiting, token minting, auth-service introspection, scheduler veya cleanup davranisi eklemez.
+Bu authentication katmani Agent API endpoint'i, token minting, auth-service introspection, scheduler veya cleanup davranisi eklemez.
 
 ## JWT Dogrulama Kurallari
 
@@ -50,6 +50,8 @@ JWKS fetch altyapisi bounded HTTP timeout ve response size limiti kullanir. Fixt
 - JWKS altyapisi token hakkinda karar veremeyecek durumdaysa: `503`.
 
 Tenant auth hatalari public agent hata kodu katalogunu kullanmaz ve response body icinde token, secret, JWKS URL credential'i veya low-level altyapi detayi dondurmez.
+
+Tenant auth hatalari 401/403/503 olarak rate-limit guard'indan once sonlanir ve tenant rate-limit kotasi tuketmez.
 
 ## Health
 

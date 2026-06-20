@@ -1,7 +1,7 @@
 name: main-service
 
 x-main-service-image: &main-service-image
-  image: main-service-app:0.1.0-ms-004
+  image: main-service-app:0.1.0-ms-005
   build:
     context: .
     dockerfile: Dockerfile
@@ -66,6 +66,10 @@ services:
     environment:
       RUNTIME_ROLE: api
       TENANT_AUTH_JWKS_URL: http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json
+      TENANT_RATE_LIMIT_MAX_REQUESTS: ${TENANT_RATE_LIMIT_MAX_REQUESTS:-60}
+      TENANT_RATE_LIMIT_WINDOW_SECONDS: ${TENANT_RATE_LIMIT_WINDOW_SECONDS:-60}
+      TENANT_RATE_LIMIT_REDIS_PREFIX: ${TENANT_RATE_LIMIT_REDIS_PREFIX:-tenant_rate_limit:local}
+      TENANT_RATE_LIMIT_KEY_SECRET: ${TENANT_RATE_LIMIT_KEY_SECRET:-replace_with_local_only_rate_limit_key_secret_32}
     ports:
       - "${API_HOST_PORT:-3000}:3000"
     depends_on:

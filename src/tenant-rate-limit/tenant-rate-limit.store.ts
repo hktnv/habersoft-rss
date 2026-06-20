@@ -1,0 +1,1 @@
+export const TENANT_RATE_LIMIT_STORE = Symbol("TENANT_RATE_LIMIT_STORE");

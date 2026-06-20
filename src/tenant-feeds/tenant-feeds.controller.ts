@@ -18,6 +18,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { TENANT_PRINCIPAL_REQUEST_KEY } from "../tenant-auth/tenant-auth.constants";
 import type { TenantAuthenticatedRequest, TenantPrincipal } from "../tenant-auth/tenant-auth.types";
 import { TenantJwtAuthGuard } from "../tenant-auth/tenant-jwt-auth.guard";
+import { TenantRateLimitGuard } from "../tenant-rate-limit/tenant-rate-limit.guard";
 import { ListTenantFeedsUseCase } from "./list-tenant-feeds.use-case";
 import { SubscribeFeedUseCase } from "./subscribe-feed.use-case";
 import {
@@ -53,7 +54,7 @@ type ListFeedResponse = {
 };
 
 @Controller("api/feeds")
-@UseGuards(TenantJwtAuthGuard)
+@UseGuards(TenantJwtAuthGuard, TenantRateLimitGuard)
 export class TenantFeedsController {
   public constructor(
     private readonly subscribeFeed: SubscribeFeedUseCase,

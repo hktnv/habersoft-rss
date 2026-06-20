@@ -17,6 +17,7 @@ export type RuntimeConfig = {
     readonly url: string;
   };
   readonly tenantAuth?: TenantAuthConfig;
+  readonly tenantRateLimit?: TenantRateLimitConfig;
 };
 
 export type TenantAuthConfig = {
@@ -29,6 +30,13 @@ export type TenantAuthConfig = {
   readonly refreshIntervalMs: 300000;
   readonly httpTimeoutMs: 2000;
   readonly maxResponseBytes: 65536;
+};
+
+export type TenantRateLimitConfig = {
+  readonly maxRequests: number;
+  readonly windowSeconds: number;
+  readonly redisPrefix: string;
+  readonly keySecret: string;
 };
 
 export class ConfigValidationError extends Error {
@@ -59,6 +67,19 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
   const redisUrl = requireUrl(env.REDIS_URL, "REDIS_URL", ["redis:", "rediss:"], issues);
   const tenantAuth =
     expectedRole === "api" ? requireTenantAuthConfig(env.TENANT_AUTH_JWKS_URL, environment, issues) : undefined;
+  const tenantRateLimit =
+    expectedRole === "api"
+      ? requireTenantRateLimitConfig(
+          {
+            maxRequests: env.TENANT_RATE_LIMIT_MAX_REQUESTS,
+            windowSeconds: env.TENANT_RATE_LIMIT_WINDOW_SECONDS,
+            redisPrefix: env.TENANT_RATE_LIMIT_REDIS_PREFIX,
+            keySecret: env.TENANT_RATE_LIMIT_KEY_SECRET
+          },
+          environment,
+          issues
+        )
+      : undefined;
 
   if (role !== undefined && role !== expectedRole) {
     issues.push(`RUNTIME_ROLE must be ${expectedRole}`);
@@ -82,7 +103,8 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
     redis: {
       url: redisUrl
     },
-    ...(tenantAuth === undefined ? {} : { tenantAuth })
+    ...(tenantAuth === undefined ? {} : { tenantAuth }),
+    ...(tenantRateLimit === undefined ? {} : { tenantRateLimit })
   };
 }
 
@@ -124,6 +146,43 @@ function requireTenantAuthConfig(
   };
 }
 
+function requireTenantRateLimitConfig(
+  values: {
+    readonly maxRequests: string | undefined;
+    readonly windowSeconds: string | undefined;
+    readonly redisPrefix: string | undefined;
+    readonly keySecret: string | undefined;
+  },
+  environment: AppEnvironment | undefined,
+  issues: string[]
+): TenantRateLimitConfig {
+  const maxRequests = requirePositiveInteger(values.maxRequests, "TENANT_RATE_LIMIT_MAX_REQUESTS", issues);
+  const windowSeconds = requirePositiveInteger(values.windowSeconds, "TENANT_RATE_LIMIT_WINDOW_SECONDS", issues);
+  const redisPrefix = requireText(values.redisPrefix, "TENANT_RATE_LIMIT_REDIS_PREFIX", issues);
+  const keySecret = requireText(values.keySecret, "TENANT_RATE_LIMIT_KEY_SECRET", issues);
+
+  if (redisPrefix !== "" && !/^[a-z0-9:_-]+$/u.test(redisPrefix)) {
+    issues.push("TENANT_RATE_LIMIT_REDIS_PREFIX may contain only lowercase letters, digits, colon, underscore, and hyphen");
+  }
+
+  if (environment === "production") {
+    if (keySecret.length < 32) {
+      issues.push("TENANT_RATE_LIMIT_KEY_SECRET must be at least 32 characters in production");
+    }
+
+    if (keySecret.includes("replace_with") || keySecret.includes("local_only")) {
+      issues.push("TENANT_RATE_LIMIT_KEY_SECRET must be explicit in production");
+    }
+  }
+
+  return {
+    maxRequests,
+    windowSeconds,
+    redisPrefix,
+    keySecret
+  };
+}
+
 function requireText(value: string | undefined, name: string, issues: string[]): string {
   if (value === undefined || value.trim() === "") {
     issues.push(`${name} is required`);
@@ -158,6 +217,18 @@ function requirePort(value: string | undefined, name: string, issues: string[]):
   }
 
   return port;
+}
+
+function requirePositiveInteger(value: string | undefined, name: string, issues: string[]): number {
+  const text = requireText(value, name, issues);
+  const parsed = Number(text);
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    issues.push(`${name} must be a positive integer`);
+    return 0;
+  }
+
+  return parsed;
 }
 
 function requireUrl(

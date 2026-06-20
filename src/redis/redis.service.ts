@@ -33,4 +33,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return "down";
     }
   }
+
+  public command(): Pick<Redis, "call"> {
+    return this.client;
+  }
 }
