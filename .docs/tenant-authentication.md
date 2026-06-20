@@ -4,7 +4,9 @@
 
 MS-003, API process'i icin tenant JWT/JWKS dogrulama altyapisini ekler. MS-007 itibariyla mevcut Tenant API feed rotalarinda, `GET /api/entries` ve `GET /api/entries/{id}/detail` rotalarinda bu guard rate-limit guard'indan once calisir. Bu dokuman uygulanmis repository gercegini kaydeder; merkezi master veya DEV dokumanlarinin yerine gecmez.
 
-Bu authentication katmani Agent API endpoint'i, token minting, auth-service introspection, scheduler veya cleanup davranisi eklemez.
+Bu authentication katmani Agent API endpoint'i, Agent API key credential'i, token minting, auth-service introspection, scheduler veya cleanup davranisi eklemez.
+
+Agent auth MS-008 itibariyla ayri `X-Agent-Key` altyapisidir. Tenant JWT `Authorization: Bearer` yalniz tenant route'lari icindir; Agent key tenant route'larini acmaz ve tenant token Agent route'larini acmaz.
 
 ## JWT Dogrulama Kurallari
 

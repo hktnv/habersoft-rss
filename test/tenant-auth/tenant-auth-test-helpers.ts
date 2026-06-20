@@ -1,7 +1,12 @@
 import { createSign, generateKeyPairSync } from "node:crypto";
 import type { KeyObject } from "node:crypto";
 import type { JWK, JWTPayload } from "jose";
-import type { RuntimeConfig, TenantAuthConfig, TenantRateLimitConfig } from "../../src/configuration/runtime-config";
+import type {
+  AgentAuthConfig,
+  RuntimeConfig,
+  TenantAuthConfig,
+  TenantRateLimitConfig
+} from "../../src/configuration/runtime-config";
 
 export const tenantAuthConfig: TenantAuthConfig = {
   jwksUrl: "http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json",
@@ -22,6 +27,10 @@ export const tenantRateLimitConfig: TenantRateLimitConfig = {
   keySecret: "test_only_tenant_rate_limit_key_secret_32"
 };
 
+export const agentAuthConfig: AgentAuthConfig = {
+  key: "test_only_agent_key_at_least_32_bytes"
+};
+
 export const runtimeConfig: RuntimeConfig = {
   role: "api",
   environment: "test",
@@ -37,7 +46,8 @@ export const runtimeConfig: RuntimeConfig = {
     url: "redis://redis:6379/0"
   },
   tenantAuth: tenantAuthConfig,
-  tenantRateLimit: tenantRateLimitConfig
+  tenantRateLimit: tenantRateLimitConfig,
+  agentAuth: agentAuthConfig
 };
 
 export type TestKeyPair = {

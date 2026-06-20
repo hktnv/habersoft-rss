@@ -1,4 +1,8 @@
-import { ConfigValidationError, loadRuntimeConfig } from "../../src/configuration/runtime-config";
+import {
+  ConfigValidationError,
+  loadRuntimeConfig,
+  localAgentKeyPlaceholder
+} from "../../src/configuration/runtime-config";
 
 const validEnv = {
   APP_ENV: "local",
@@ -12,7 +16,8 @@ const validEnv = {
   TENANT_RATE_LIMIT_MAX_REQUESTS: "60",
   TENANT_RATE_LIMIT_WINDOW_SECONDS: "60",
   TENANT_RATE_LIMIT_REDIS_PREFIX: "tenant_rate_limit:local",
-  TENANT_RATE_LIMIT_KEY_SECRET: "replace_with_local_only_rate_limit_key_secret_32"
+  TENANT_RATE_LIMIT_KEY_SECRET: "replace_with_local_only_rate_limit_key_secret_32",
+  AGENT_KEY: localAgentKeyPlaceholder
 };
 
 function omitTenantAuth(env: typeof validEnv): Record<string, string | undefined> {
@@ -79,6 +84,9 @@ describe("loadRuntimeConfig", () => {
         windowSeconds: 60,
         redisPrefix: "tenant_rate_limit:local",
         keySecret: "replace_with_local_only_rate_limit_key_secret_32"
+      },
+      agentAuth: {
+        key: localAgentKeyPlaceholder
       }
     });
   });
@@ -92,6 +100,7 @@ describe("loadRuntimeConfig", () => {
 
     expect(config.tenantAuth).toBeUndefined();
     expect(config.tenantRateLimit).toBeUndefined();
+    expect(config.agentAuth).toBeUndefined();
   });
 
   it("rejects local or non-HTTPS JWKS URLs in production", () => {
@@ -140,6 +149,55 @@ describe("loadRuntimeConfig", () => {
           APP_ENV: "production",
           TENANT_AUTH_JWKS_URL: "https://auth.habersoft.com/.well-known/jwks.json",
           TENANT_RATE_LIMIT_KEY_SECRET: "replace_with_local_only_rate_limit_key_secret_32"
+        },
+        "api"
+      )
+    ).toThrow(ConfigValidationError);
+  });
+
+  it("requires agent auth configuration for the API role", () => {
+    expect(() => loadRuntimeConfig({ ...validEnv, AGENT_KEY: undefined }, "api")).toThrow(
+      ConfigValidationError
+    );
+  });
+
+  it("rejects invalid agent keys without echoing the value", () => {
+    const secretWithControl = "test_only_agent_key_at_least_32_bytes\n";
+
+    try {
+      loadRuntimeConfig({ ...validEnv, AGENT_KEY: secretWithControl }, "api");
+      throw new Error("Expected loadRuntimeConfig to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigValidationError);
+      expect((error as Error).message).toContain("AGENT_KEY");
+      expect((error as Error).message).not.toContain(secretWithControl);
+    }
+  });
+
+  it("rejects short or whitespace-padded agent keys", () => {
+    expect(() => loadRuntimeConfig({ ...validEnv, AGENT_KEY: "too-short" }, "api")).toThrow(
+      ConfigValidationError
+    );
+    expect(() =>
+      loadRuntimeConfig({ ...validEnv, AGENT_KEY: " test_only_agent_key_at_least_32_bytes " }, "api")
+    ).toThrow(ConfigValidationError);
+  });
+
+  it("accepts agent keys that are at least 32 UTF-8 bytes", () => {
+    const config = loadRuntimeConfig({ ...validEnv, AGENT_KEY: "ç".repeat(16) }, "api");
+
+    expect(config.agentAuth).toEqual({ key: "ç".repeat(16) });
+  });
+
+  it("rejects local agent key placeholders in production", () => {
+    expect(() =>
+      loadRuntimeConfig(
+        {
+          ...validEnv,
+          APP_ENV: "production",
+          TENANT_AUTH_JWKS_URL: "https://auth.habersoft.com/.well-known/jwks.json",
+          TENANT_RATE_LIMIT_KEY_SECRET: "production_rate_limit_key_secret_32",
+          AGENT_KEY: localAgentKeyPlaceholder
         },
         "api"
       )
