@@ -258,7 +258,7 @@ describeIntegration("tenant entry listing with PostgreSQL and Redis", () => {
     expect(limited.headers["retry-after"]).toBeDefined();
   }, 60_000);
 
-  it("does not create a detail route", async () => {
+  it("keeps the entry listing module from creating a detail route", async () => {
     const response = await fastify.inject({
       method: "GET",
       url: "/api/entries/1/detail",
