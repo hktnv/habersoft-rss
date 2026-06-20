@@ -10,7 +10,11 @@ const baseEnv = {
   API_PORT: "3000",
   DATABASE_URL: "postgresql://main_service:password@postgres:5432/main_service?schema=public",
   REDIS_URL: "redis://redis:6379/0",
-  TENANT_AUTH_JWKS_URL: "http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json"
+  TENANT_AUTH_JWKS_URL: "http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json",
+  TENANT_RATE_LIMIT_MAX_REQUESTS: "60",
+  TENANT_RATE_LIMIT_WINDOW_SECONDS: "60",
+  TENANT_RATE_LIMIT_REDIS_PREFIX: "tenant_rate_limit:local",
+  TENANT_RATE_LIMIT_KEY_SECRET: "replace_with_local_only_rate_limit_key_secret_32"
 };
 
 describe("bootstrap boundaries", () => {

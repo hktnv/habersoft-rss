@@ -1,7 +1,7 @@
 import { createSign, generateKeyPairSync } from "node:crypto";
 import type { KeyObject } from "node:crypto";
 import type { JWK, JWTPayload } from "jose";
-import type { RuntimeConfig, TenantAuthConfig } from "../../src/configuration/runtime-config";
+import type { RuntimeConfig, TenantAuthConfig, TenantRateLimitConfig } from "../../src/configuration/runtime-config";
 
 export const tenantAuthConfig: TenantAuthConfig = {
   jwksUrl: "http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json",
@@ -13,6 +13,13 @@ export const tenantAuthConfig: TenantAuthConfig = {
   refreshIntervalMs: 300000,
   httpTimeoutMs: 2000,
   maxResponseBytes: 65536
+};
+
+export const tenantRateLimitConfig: TenantRateLimitConfig = {
+  maxRequests: 60,
+  windowSeconds: 60,
+  redisPrefix: "tenant_rate_limit:test",
+  keySecret: "test_only_tenant_rate_limit_key_secret_32"
 };
 
 export const runtimeConfig: RuntimeConfig = {
@@ -29,7 +36,8 @@ export const runtimeConfig: RuntimeConfig = {
   redis: {
     url: "redis://redis:6379/0"
   },
-  tenantAuth: tenantAuthConfig
+  tenantAuth: tenantAuthConfig,
+  tenantRateLimit: tenantRateLimitConfig
 };
 
 export type TestKeyPair = {

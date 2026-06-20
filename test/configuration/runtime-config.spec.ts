@@ -8,7 +8,11 @@ const validEnv = {
   API_PORT: "3000",
   DATABASE_URL: "postgresql://main_service:password@postgres:5432/main_service?schema=public",
   REDIS_URL: "redis://redis:6379/0",
-  TENANT_AUTH_JWKS_URL: "http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json"
+  TENANT_AUTH_JWKS_URL: "http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json",
+  TENANT_RATE_LIMIT_MAX_REQUESTS: "60",
+  TENANT_RATE_LIMIT_WINDOW_SECONDS: "60",
+  TENANT_RATE_LIMIT_REDIS_PREFIX: "tenant_rate_limit:local",
+  TENANT_RATE_LIMIT_KEY_SECRET: "replace_with_local_only_rate_limit_key_secret_32"
 };
 
 function omitTenantAuth(env: typeof validEnv): Record<string, string | undefined> {
@@ -69,6 +73,12 @@ describe("loadRuntimeConfig", () => {
         refreshIntervalMs: 300000,
         httpTimeoutMs: 2000,
         maxResponseBytes: 65536
+      },
+      tenantRateLimit: {
+        maxRequests: 60,
+        windowSeconds: 60,
+        redisPrefix: "tenant_rate_limit:local",
+        keySecret: "replace_with_local_only_rate_limit_key_secret_32"
       }
     });
   });
@@ -81,6 +91,7 @@ describe("loadRuntimeConfig", () => {
     const config = loadRuntimeConfig({ ...omitTenantAuth(validEnv), RUNTIME_ROLE: "worker" }, "worker");
 
     expect(config.tenantAuth).toBeUndefined();
+    expect(config.tenantRateLimit).toBeUndefined();
   });
 
   it("rejects local or non-HTTPS JWKS URLs in production", () => {
@@ -90,6 +101,45 @@ describe("loadRuntimeConfig", () => {
           ...validEnv,
           APP_ENV: "production",
           TENANT_AUTH_JWKS_URL: "http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json"
+        },
+        "api"
+      )
+    ).toThrow(ConfigValidationError);
+  });
+
+  it("requires tenant rate-limit configuration for the API role", () => {
+    expect(() =>
+      loadRuntimeConfig(
+        {
+          ...validEnv,
+          TENANT_RATE_LIMIT_MAX_REQUESTS: undefined
+        },
+        "api"
+      )
+    ).toThrow(ConfigValidationError);
+  });
+
+  it("rejects invalid tenant rate-limit values", () => {
+    expect(() =>
+      loadRuntimeConfig(
+        {
+          ...validEnv,
+          TENANT_RATE_LIMIT_MAX_REQUESTS: "0",
+          TENANT_RATE_LIMIT_REDIS_PREFIX: "Tenant Rate Limit"
+        },
+        "api"
+      )
+    ).toThrow(ConfigValidationError);
+  });
+
+  it("rejects local tenant rate-limit secrets in production", () => {
+    expect(() =>
+      loadRuntimeConfig(
+        {
+          ...validEnv,
+          APP_ENV: "production",
+          TENANT_AUTH_JWKS_URL: "https://auth.habersoft.com/.well-known/jwks.json",
+          TENANT_RATE_LIMIT_KEY_SECRET: "replace_with_local_only_rate_limit_key_secret_32"
         },
         "api"
       )

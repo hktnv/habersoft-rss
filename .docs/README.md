@@ -4,10 +4,10 @@
 
 - Uygulama kimligi: `main-service`
 - Repository yolu: `C:\Users\EVO-MRDM\Desktop\habersoft-auth\rss-habersoft-com\main-service`
-- Canonical repository remote: `canonical remote pending`
+- Canonical repository remote: `https://github.com/hktnv/habersoft-rss`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
-- Uygulama surumu/durum: `0.1.0-ms-004` / `Geciste`
+- Uygulama surumu/durum: `0.1.0-ms-005` / `Geciste`
 
 Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application repository siniridir. Merkezi master ve DEV alt dokumanlar bu repository'ye kopyalanmaz.
 
@@ -20,6 +20,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [database-schema.md](database-schema.md) | MS-002 canonical PostgreSQL business schema, migration ve DB test gercegi. |
 | [tenant-authentication.md](tenant-authentication.md) | MS-003 tenant RS256 JWT/JWKS dogrulama altyapisi, readiness ve sinirlar. |
 | [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md) | MS-004 tenant feed abonelik endpoint'leri, tenant izolasyonu, transaction ve sinirlar. |
+| [tenant-rate-limiting.md](tenant-rate-limiting.md) | MS-005 Tenant API feed rotalarinda tenant basina Redis rate limiting davranisi ve sinirlari. |
 
 ## Okuma Sirasi
 
@@ -27,23 +28,24 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 2. [local-development.md](local-development.md)
 3. [tenant-authentication.md](tenant-authentication.md)
 4. [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md)
-5. [database-schema.md](database-schema.md)
-6. Repository kok [README.md](../README.md)
+5. [tenant-rate-limiting.md](tenant-rate-limiting.md)
+6. [database-schema.md](database-schema.md)
+7. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
 Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../../.md/master/00-POLYREPO-DEV-VE-PROD-DOKUMANTASYON-SOZLESMESI.md) ile uyumlu olacak sekilde yalnizca uygulanmis repository gercegini aciklar. Sistem capindaki master sozlesmeleri degistirmez.
 
 - Uygulama kimligi: `main-service`
-- Repository: `canonical remote pending`
-- Uygulama surumu: `0.1.0-ms-004`
+- Repository: `https://github.com/hktnv/habersoft-rss`
+- Uygulama surumu: `0.1.0-ms-005`
 - Master kaynak: `../../.md/master/`
 - Master baseline: `rss-habersoft-master-v10`
 - Master agac ozeti SHA-256: `1673e90d7c7596e13053c7669044a08a09b4a9b70fd9c54c8c5c0e59f8aed192`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
 - Uyum durumu: `Geciste`
 
-`Geciste` durumu bilincli kullanilmistir. MS-004 API process'i icin tenant feed abonelik endpoint'lerini tenant JWT/JWKS dogrulama altyapisina baglar; tenant entry endpoint'leri, Agent API, cleanup scheduler, rate limiting ve job runner davranislari henuz uygulanmamistir.
+`Geciste` durumu bilincli kullanilmistir. MS-005 mevcut Tenant API feed endpoint'lerini tenant JWT/JWKS dogrulama altyapisindan sonra tenant basina Redis rate limiting davranisina baglar; tenant entry endpoint'leri, Agent API, cleanup scheduler ve job runner davranislari henuz uygulanmamistir.
 
 ## Sabit Runtime ve Altyapi Surumleri
 

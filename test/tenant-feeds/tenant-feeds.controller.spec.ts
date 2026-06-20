@@ -11,6 +11,9 @@ import type { TenantJwtVerificationResult } from "../../src/tenant-auth/tenant-a
 import { TenantJwtAuthGuard } from "../../src/tenant-auth/tenant-jwt-auth.guard";
 import { TenantJwtVerifier } from "../../src/tenant-auth/tenant-jwt.verifier";
 import { createTenantPrincipal } from "../../src/tenant-auth/tenant-principal";
+import { TenantRateLimitGuard } from "../../src/tenant-rate-limit/tenant-rate-limit.guard";
+import { TenantRateLimitService } from "../../src/tenant-rate-limit/tenant-rate-limit.service";
+import type { TenantRateLimitConsumeResult } from "../../src/tenant-rate-limit/tenant-rate-limit.types";
 
 describe("TenantFeedsController", () => {
   let app: NestFastifyApplication | undefined;
@@ -18,6 +21,8 @@ describe("TenantFeedsController", () => {
   let subscribeFeed: jest.Mocked<Pick<SubscribeFeedUseCase, "execute">>;
   let listTenantFeeds: jest.Mocked<Pick<ListTenantFeedsUseCase, "execute">>;
   let unsubscribeFeed: jest.Mocked<Pick<UnsubscribeFeedUseCase, "execute">>;
+  let verify: jest.Mock<Promise<TenantJwtVerificationResult>, [string]>;
+  let consumeRateLimit: jest.Mock<Promise<TenantRateLimitConsumeResult>, [string]>;
 
   beforeEach(async () => {
     subscribeFeed = {
@@ -30,21 +35,29 @@ describe("TenantFeedsController", () => {
       execute: jest.fn()
     };
 
-    const verify = jest.fn<Promise<TenantJwtVerificationResult>, [string]>().mockResolvedValue({
+    verify = jest.fn<Promise<TenantJwtVerificationResult>, [string]>().mockResolvedValue({
       ok: true,
       principal: createTenantPrincipal({
         subject: "site-a",
         scopes: ["services:access"]
       })
     });
+    consumeRateLimit = jest.fn<Promise<TenantRateLimitConsumeResult>, [string]>().mockResolvedValue({
+      outcome: "allowed"
+    });
     const moduleRef = await Test.createTestingModule({
       controllers: [TenantFeedsController],
       providers: [
         AuthorizationHeaderParser,
         TenantJwtAuthGuard,
+        TenantRateLimitGuard,
         {
           provide: TenantJwtVerifier,
           useValue: { verify }
+        },
+        {
+          provide: TenantRateLimitService,
+          useValue: { consume: consumeRateLimit }
         },
         {
           provide: SubscribeFeedUseCase,
@@ -146,6 +159,7 @@ describe("TenantFeedsController", () => {
 
     expect(response.statusCode).toBe(422);
     expect(JSON.parse(response.payload)).toMatchObject({ error_code: "VALIDATION_FAILED" });
+    expect(consumeRateLimit).toHaveBeenCalledTimes(1);
     expect(subscribeFeed.execute).not.toHaveBeenCalled();
   });
 
@@ -214,5 +228,59 @@ describe("TenantFeedsController", () => {
     expect(response.payload).toBe("");
     expect(invalidResponse.statusCode).toBe(422);
     expect(unsubscribeFeed.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not consume quota when tenant auth rejects the request", async () => {
+    verify.mockResolvedValueOnce({
+      ok: false,
+      outcome: "unauthenticated",
+      reason: "jwt_signature_or_claims_invalid"
+    });
+
+    const response = await fastify.inject({
+      method: "GET",
+      url: "/api/feeds",
+      headers: { authorization: "Bearer token" }
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(consumeRateLimit).not.toHaveBeenCalled();
+    expect(listTenantFeeds.execute).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits with 429 and Retry-After without public rate-limit headers", async () => {
+    consumeRateLimit.mockResolvedValueOnce({
+      outcome: "limited",
+      retryAfterSeconds: 7
+    });
+
+    const response = await fastify.inject({
+      method: "POST",
+      url: "/api/feeds",
+      headers: { authorization: "Bearer token" },
+      payload: { url: "https://example.test/rss.xml" }
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.headers["retry-after"]).toBe("7");
+    expect(response.headers["x-ratelimit-limit"]).toBeUndefined();
+    expect(response.headers["ratelimit-limit"]).toBeUndefined();
+    expect(JSON.parse(response.payload)).not.toHaveProperty("error_code");
+    expect(subscribeFeed.execute).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits with 503 when rate-limit infrastructure is unavailable", async () => {
+    consumeRateLimit.mockResolvedValueOnce({
+      outcome: "unavailable"
+    });
+
+    const response = await fastify.inject({
+      method: "DELETE",
+      url: "/api/feeds/1",
+      headers: { authorization: "Bearer token" }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(unsubscribeFeed.execute).not.toHaveBeenCalled();
   });
 });

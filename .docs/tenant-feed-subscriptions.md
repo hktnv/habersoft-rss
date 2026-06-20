@@ -8,7 +8,7 @@ MS-004, Tenant API icin yalnizca feed abonelik dikey dilimini uygular:
 - `GET /api/feeds`
 - `DELETE /api/feeds/{feed_id}`
 
-Butun endpoint'ler mevcut `TenantJwtAuthGuard` ile korunur. Tenant kimligi yalnizca dogrulanmis `TenantPrincipal.siteClientId` alanindan alinir.
+Butun endpoint'ler once `TenantJwtAuthGuard`, sonra tenant rate-limit guard'i ile korunur. Tenant kimligi yalnizca dogrulanmis `TenantPrincipal.siteClientId` alanindan alinir.
 
 ## Public Contract
 
@@ -61,6 +61,8 @@ Validation hatalari `422` ve `{ "error_code": "VALIDATION_FAILED" }` ile doner. 
 - `GET` ve `DELETE` query parametresi kabul etmez.
 - `feed_id` strict pozitif PostgreSQL bigint decimal string olmak zorundadir.
 
+Auth basarili olduktan sonra olusan validation hatalari tenant kotasini tuketir.
+
 ## Transaction ve Concurrency
 
 Abonelik ekleme ve silme PostgreSQL transaction icinde calisir. Feed satiri yoksa olusturulur; mevcut pasif feed abonelige acilmaz. `site_feeds` iliskisi `ON CONFLICT DO NOTHING` ile idempotent eklenir.
@@ -83,7 +85,6 @@ MS-004 sunlari uygulamaz:
 - Agent API endpoint'leri,
 - scheduler/job runner,
 - cleanup,
-- rate limiting,
 - admin/frontend,
 - schema migration,
 - server-side feed URL network request, DNS, RSS parse veya MIME check.
