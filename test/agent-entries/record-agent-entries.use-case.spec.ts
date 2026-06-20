@@ -22,12 +22,8 @@ describe("RecordAgentEntriesUseCase", () => {
     const useCase = new RecordAgentEntriesUseCase(writer, { now: () => now }, runtimeConfig);
 
     await expect(useCase.execute(request({ checkedAt: new Date("2026-06-20T10:09:00Z") }))).resolves.toEqual({
-      ok: true,
-      check_id: "01K8Z3ABCD0000000000000001",
-      feed_id: "35",
-      entries_submitted_count: 1,
-      entries_saved_count: 1,
-      replay: false
+      saved: 1,
+      idempotent_replay: false
     });
     expect(writer.record).toHaveBeenCalledWith(expect.objectContaining({ receivedAt: now }));
   });

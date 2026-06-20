@@ -87,6 +87,53 @@ describe("validateAgentEntriesRequest", () => {
       });
     }
   });
+
+  it("uses the canonical entry field limits from the active server contract", () => {
+    const valid = {
+      ...validEntry(),
+      guid: "g".repeat(2048),
+      summary: "s".repeat(2000),
+      tags: ["t".repeat(50)],
+      author: "a".repeat(200),
+      meta: { value: "m".repeat(500) }
+    };
+    expect(validateAgentEntriesRequest({ ...validPayload(), entries: [valid] }, {}).ok).toBe(true);
+
+    for (const entry of [
+      { ...validEntry(), guid: "g".repeat(2049) },
+      { ...validEntry(), summary: "s".repeat(2001) },
+      { ...validEntry(), tags: Array.from({ length: 21 }, (_, index) => `tag-${index}`) },
+      { ...validEntry(), tags: ["t".repeat(51)] },
+      { ...validEntry(), author: "a".repeat(201) },
+      { ...validEntry(), meta: { value: "m".repeat(501) } },
+      { ...validEntry(), meta: { value: 1 } }
+    ]) {
+      expect(validateAgentEntriesRequest({ ...validPayload(), entries: [entry] }, {})).toEqual({
+        ok: false,
+        errorCode: "VALIDATION_FAILED"
+      });
+    }
+  });
+
+  it("requires RSS 200 validator fields and applies canonical validator/title limits", () => {
+    for (const payload of [
+      (() => {
+        const value = validPayload();
+        delete value.response_etag;
+        return value;
+      })(),
+      (() => {
+        const value = validPayload();
+        delete value.response_last_modified;
+        return value;
+      })(),
+      { ...validPayload(), response_etag: "e".repeat(1025) },
+      { ...validPayload(), response_last_modified: "m".repeat(257) },
+      { ...validPayload(), feed_title: "f".repeat(301) }
+    ]) {
+      expect(validateAgentEntriesRequest(payload, {})).toEqual({ ok: false, errorCode: "VALIDATION_FAILED" });
+    }
+  });
 });
 
 function validPayload(): Record<string, unknown> {

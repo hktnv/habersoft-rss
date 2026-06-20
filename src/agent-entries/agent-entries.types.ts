@@ -50,12 +50,8 @@ export type AgentEntriesWriteResult = {
 };
 
 export type AgentEntriesResponse = {
-  readonly ok: true;
-  readonly check_id: string;
-  readonly feed_id: string;
-  readonly entries_submitted_count: number;
-  readonly entries_saved_count: number;
-  readonly replay: boolean;
+  readonly saved: number;
+  readonly idempotent_replay: boolean;
 };
 
 export type AgentEntriesValidationErrorCode =
