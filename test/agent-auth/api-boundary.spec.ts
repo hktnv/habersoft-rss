@@ -43,7 +43,7 @@ describe("Agent auth API boundary", () => {
     app = undefined;
   });
 
-  it("does not expose production agent routes in MS-008", async () => {
+  it("keeps deferred production agent routes closed after heartbeat", async () => {
     const response = await fastify.inject({
       method: "GET",
       url: "/agent/feeds/due",
