@@ -1,0 +1,2 @@
+export const SERVER_MAX_DUE_LIMIT = 500;
+export const FEED_POLL_INTERVAL_SECONDS = 900;

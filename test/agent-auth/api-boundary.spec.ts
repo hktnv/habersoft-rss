@@ -27,7 +27,14 @@ describe("Agent auth API boundary", () => {
         getKey: jest.fn()
       })
       .overrideProvider(PostgresService)
-      .useValue({ check: jest.fn().mockResolvedValue("up"), database: jest.fn().mockReturnValue({}) })
+      .useValue({
+        check: jest.fn().mockResolvedValue("up"),
+        database: jest.fn().mockReturnValue({
+          feed: {
+            findMany: jest.fn().mockResolvedValue([])
+          }
+        })
+      })
       .overrideProvider(RedisService)
       .useValue({ check: jest.fn().mockResolvedValue("up") })
       .compile();
@@ -43,16 +50,21 @@ describe("Agent auth API boundary", () => {
     app = undefined;
   });
 
-  it("keeps deferred production agent routes closed after heartbeat", async () => {
+  it("exposes due feeds as an authenticated production agent route", async () => {
     const response = await fastify.inject({
       method: "GET",
-      url: "/agent/feeds/due",
+      url: "/agent/feeds/due?limit=1",
       headers: {
         "X-Agent-Key": runtimeConfig.agentAuth?.key
       }
     });
 
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.payload)).toEqual({
+      feeds: [],
+      feed_poll_interval_seconds: 900,
+      has_more_due: false
+    });
   });
 
   it("keeps health endpoints unauthenticated", async () => {
