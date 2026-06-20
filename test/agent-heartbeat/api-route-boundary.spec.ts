@@ -52,7 +52,7 @@ describe("Agent heartbeat API route boundary", () => {
     app = undefined;
   });
 
-  it("exposes only heartbeat, due-feed, and new-GUID filtering among production agent routes", async () => {
+  it("exposes heartbeat, due-feed, new-GUID filtering, and entries among production agent routes", async () => {
     const success = await fastify.inject({
       method: "POST",
       url: "/agent/heartbeat",
@@ -94,7 +94,8 @@ describe("Agent heartbeat API route boundary", () => {
     expect(due.statusCode).toBe(200);
     expect(newGuids.statusCode).toBe(200);
     expect(JSON.parse(newGuids.payload)).toEqual({ new: ["guid-1"] });
-    expect(entries.statusCode).toBe(404);
+    expect(entries.statusCode).toBe(422);
+    expect(JSON.parse(entries.payload)).toMatchObject({ error_code: "VALIDATION_FAILED" });
     expect(results.statusCode).toBe(404);
   });
 

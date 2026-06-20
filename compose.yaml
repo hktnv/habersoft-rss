@@ -1,7 +1,7 @@
 name: main-service
 
 x-main-service-image: &main-service-image
-  image: main-service-app:0.1.0-ms-011
+  image: main-service-app:0.1.0-ms-012
   build:
     context: .
     dockerfile: Dockerfile
@@ -76,6 +76,8 @@ services:
       TENANT_RATE_LIMIT_REDIS_PREFIX: ${TENANT_RATE_LIMIT_REDIS_PREFIX:-tenant_rate_limit:local}
       TENANT_RATE_LIMIT_KEY_SECRET: ${TENANT_RATE_LIMIT_KEY_SECRET:-replace_with_local_only_rate_limit_key_secret_32}
       AGENT_KEY: ${AGENT_KEY:-replace_with_local_only_agent_key_at_least_32_bytes}
+      CHECKED_AT_MAX_FUTURE_SKEW_SECONDS: ${CHECKED_AT_MAX_FUTURE_SKEW_SECONDS:-60}
+      CHECKED_AT_MAX_AGE_SECONDS: ${CHECKED_AT_MAX_AGE_SECONDS:-900}
     ports:
       - "${API_HOST_PORT:-3000}:3000"
     depends_on:

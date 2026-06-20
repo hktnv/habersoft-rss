@@ -90,7 +90,7 @@ Selected fields minimum tutulur: feed varligi icin `id`, entry filter icin `guid
 
 Ayni request entry insert edilmeden once tekrar edilirse ayni `new` listesi donebilir. Future `/agent/entries` hattindan sonra kismen insert edilmis GUID'ler response'tan duser ve ordered subset doner. Concurrent requests ayni absent GUID'i ayni anda `new` gorebilir.
 
-Nihai write idempotency bu endpoint'te degildir. Otorite future `POST /agent/entries` hattindaki:
+Nihai write idempotency bu endpoint'te degildir. Otorite MS-012 `POST /agent/entries` hattindaki:
 
 ```text
 UNIQUE (feed_id, guid)

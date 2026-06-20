@@ -1,6 +1,6 @@
 {
   "name": "main-service",
-  "version": "0.1.0-ms-011",
+  "version": "0.1.0-ms-012",
   "private": true,
   "description": "rss.habersoft.com main-service tenant feed subscription API foundation",
   "license": "UNLICENSED",
@@ -19,6 +19,7 @@
     "test:agent-auth": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/agent-auth",
     "test:agent-due-feeds": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/agent-due-feeds test/database/agent-due-feeds.integration.spec.ts",
     "test:agent-heartbeat": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/agent-heartbeat",
+    "test:agent-entries": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/agent-entries test/database/agent-entries.integration.spec.ts",
     "test:agent-new-guids": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/agent-new-guids test/database/agent-new-guids.integration.spec.ts",
     "test:tenant-entries": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-entries test/database/tenant-entries.integration.spec.ts",
     "test:tenant-entry-detail": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-entry-detail test/database/tenant-entry-detail.integration.spec.ts",
@@ -26,7 +27,7 @@
     "test:tenant-feeds": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-feeds",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --testPathIgnorePatterns test/database",
     "test:all": "npm test && npm run test:db",
-    "test:db": "npm run test:db:tenant-feeds && npm run test:db:schema && npm run test:db:tenant-entries && npm run test:db:tenant-entry-detail && npm run test:db:agent-heartbeat && npm run test:db:agent-due-feeds && npm run test:db:agent-new-guids",
+    "test:db": "npm run test:db:tenant-feeds && npm run test:db:schema && npm run test:db:tenant-entries && npm run test:db:tenant-entry-detail && npm run test:db:agent-heartbeat && npm run test:db:agent-due-feeds && npm run test:db:agent-new-guids && npm run test:db:agent-entries",
     "test:db:schema": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/schema.integration.spec.ts",
     "test:db:tenant-entries": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/tenant-entries.integration.spec.ts",
     "test:db:tenant-entry-detail": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/tenant-entry-detail.integration.spec.ts",
@@ -34,6 +35,7 @@
     "test:db:agent-heartbeat": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/agent-heartbeat.integration.spec.ts",
     "test:db:agent-due-feeds": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/agent-due-feeds.integration.spec.ts",
     "test:db:agent-new-guids": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/agent-new-guids.integration.spec.ts",
+    "test:db:agent-entries": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/agent-entries.integration.spec.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

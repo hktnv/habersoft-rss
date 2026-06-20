@@ -17,7 +17,9 @@ const validEnv = {
   TENANT_RATE_LIMIT_WINDOW_SECONDS: "60",
   TENANT_RATE_LIMIT_REDIS_PREFIX: "tenant_rate_limit:local",
   TENANT_RATE_LIMIT_KEY_SECRET: "replace_with_local_only_rate_limit_key_secret_32",
-  AGENT_KEY: localAgentKeyPlaceholder
+  AGENT_KEY: localAgentKeyPlaceholder,
+  CHECKED_AT_MAX_FUTURE_SKEW_SECONDS: "60",
+  CHECKED_AT_MAX_AGE_SECONDS: "900"
 };
 
 function omitTenantAuth(env: typeof validEnv): Record<string, string | undefined> {
@@ -87,6 +89,10 @@ describe("loadRuntimeConfig", () => {
       },
       agentAuth: {
         key: localAgentKeyPlaceholder
+      },
+      agentEntries: {
+        checkedAtMaxFutureSkewSeconds: 60,
+        checkedAtMaxAgeSeconds: 900
       }
     });
   });
@@ -101,6 +107,7 @@ describe("loadRuntimeConfig", () => {
     expect(config.tenantAuth).toBeUndefined();
     expect(config.tenantRateLimit).toBeUndefined();
     expect(config.agentAuth).toBeUndefined();
+    expect(config.agentEntries).toBeUndefined();
   });
 
   it("rejects local or non-HTTPS JWKS URLs in production", () => {
@@ -159,6 +166,24 @@ describe("loadRuntimeConfig", () => {
     expect(() => loadRuntimeConfig({ ...validEnv, AGENT_KEY: undefined }, "api")).toThrow(
       ConfigValidationError
     );
+  });
+
+  it("requires checked_at window configuration for the API role", () => {
+    expect(() =>
+      loadRuntimeConfig({ ...validEnv, CHECKED_AT_MAX_AGE_SECONDS: undefined }, "api")
+    ).toThrow(ConfigValidationError);
+  });
+
+  it("rejects invalid checked_at window values", () => {
+    expect(() =>
+      loadRuntimeConfig(
+        {
+          ...validEnv,
+          CHECKED_AT_MAX_FUTURE_SKEW_SECONDS: "0"
+        },
+        "api"
+      )
+    ).toThrow(ConfigValidationError);
   });
 
   it("rejects invalid agent keys without echoing the value", () => {

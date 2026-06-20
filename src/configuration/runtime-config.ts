@@ -19,6 +19,7 @@ export type RuntimeConfig = {
   readonly tenantAuth?: TenantAuthConfig;
   readonly tenantRateLimit?: TenantRateLimitConfig;
   readonly agentAuth?: AgentAuthConfig;
+  readonly agentEntries?: AgentEntriesConfig;
 };
 
 export type TenantAuthConfig = {
@@ -42,6 +43,11 @@ export type TenantRateLimitConfig = {
 
 export type AgentAuthConfig = {
   readonly key: string;
+};
+
+export type AgentEntriesConfig = {
+  readonly checkedAtMaxFutureSkewSeconds: number;
+  readonly checkedAtMaxAgeSeconds: number;
 };
 
 export class ConfigValidationError extends Error {
@@ -88,6 +94,16 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
       : undefined;
   const agentAuth =
     expectedRole === "api" ? requireAgentAuthConfig(env.AGENT_KEY, environment, issues) : undefined;
+  const agentEntries =
+    expectedRole === "api"
+      ? requireAgentEntriesConfig(
+          {
+            checkedAtMaxFutureSkewSeconds: env.CHECKED_AT_MAX_FUTURE_SKEW_SECONDS,
+            checkedAtMaxAgeSeconds: env.CHECKED_AT_MAX_AGE_SECONDS
+          },
+          issues
+        )
+      : undefined;
 
   if (role !== undefined && role !== expectedRole) {
     issues.push(`RUNTIME_ROLE must be ${expectedRole}`);
@@ -113,7 +129,8 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
     },
     ...(tenantAuth === undefined ? {} : { tenantAuth }),
     ...(tenantRateLimit === undefined ? {} : { tenantRateLimit }),
-    ...(agentAuth === undefined ? {} : { agentAuth })
+    ...(agentAuth === undefined ? {} : { agentAuth }),
+    ...(agentEntries === undefined ? {} : { agentEntries })
   };
 }
 
@@ -221,6 +238,23 @@ function requireAgentAuthConfig(
   }
 
   return { key };
+}
+
+function requireAgentEntriesConfig(
+  values: {
+    readonly checkedAtMaxFutureSkewSeconds: string | undefined;
+    readonly checkedAtMaxAgeSeconds: string | undefined;
+  },
+  issues: string[]
+): AgentEntriesConfig {
+  return {
+    checkedAtMaxFutureSkewSeconds: requirePositiveInteger(
+      values.checkedAtMaxFutureSkewSeconds,
+      "CHECKED_AT_MAX_FUTURE_SKEW_SECONDS",
+      issues
+    ),
+    checkedAtMaxAgeSeconds: requirePositiveInteger(values.checkedAtMaxAgeSeconds, "CHECKED_AT_MAX_AGE_SECONDS", issues)
+  };
 }
 
 function containsAsciiControlCharacter(value: string): boolean {

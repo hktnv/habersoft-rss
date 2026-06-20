@@ -3,6 +3,7 @@ import type { KeyObject } from "node:crypto";
 import type { JWK, JWTPayload } from "jose";
 import type {
   AgentAuthConfig,
+  AgentEntriesConfig,
   RuntimeConfig,
   TenantAuthConfig,
   TenantRateLimitConfig
@@ -31,6 +32,11 @@ export const agentAuthConfig: AgentAuthConfig = {
   key: "test_only_agent_key_at_least_32_bytes"
 };
 
+export const agentEntriesConfig: AgentEntriesConfig = {
+  checkedAtMaxFutureSkewSeconds: 60,
+  checkedAtMaxAgeSeconds: 900
+};
+
 export const runtimeConfig: RuntimeConfig = {
   role: "api",
   environment: "test",
@@ -47,7 +53,8 @@ export const runtimeConfig: RuntimeConfig = {
   },
   tenantAuth: tenantAuthConfig,
   tenantRateLimit: tenantRateLimitConfig,
-  agentAuth: agentAuthConfig
+  agentAuth: agentAuthConfig,
+  agentEntries: agentEntriesConfig
 };
 
 export type TestKeyPair = {

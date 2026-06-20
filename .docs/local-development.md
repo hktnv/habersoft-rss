@@ -31,7 +31,7 @@ docker compose down -v
 - `redis`: Redis 8.8 local yeniden kurulabilir runtime servisi.
 - `tenant-auth-jwks-fixture`: Local-only deterministik olmayan, ephemeral RS256 public JWKS fixture servisi. Host portu yayimlamaz; yalnizca Compose agi icinden kullanilir.
 - `migrate`: PostgreSQL saglikli olduktan sonra `prisma migrate deploy` calistiran sonlu gorev.
-- `main-service-api`: NestJS HTTP API process'i. Health endpoint'lerini, tenant auth/JWKS lifecycle'ini, tenant feed abonelik endpoint'lerini, tenant entry listeleme/detail endpoint'lerini, API-only tenant rate limiting guard'ini, Agent `X-Agent-Key` auth provider'larini, `POST /agent/heartbeat`, `GET /agent/feeds/due` ve `POST /agent/feeds/{feed_id}/new-guids` route'larini baslatir.
+- `main-service-api`: NestJS HTTP API process'i. Health endpoint'lerini, tenant auth/JWKS lifecycle'ini, tenant feed abonelik endpoint'lerini, tenant entry listeleme/detail endpoint'lerini, API-only tenant rate limiting guard'ini, Agent `X-Agent-Key` auth provider'larini, `POST /agent/heartbeat`, `GET /agent/feeds/due`, `POST /agent/feeds/{feed_id}/new-guids` ve `POST /agent/entries` route'larini baslatir.
 - `main-service-worker`: HTTP listener acmayan Nest application context. Config, PostgreSQL ve Redis baglantilarini bootstrap eder; tenant auth/JWKS lifecycle'i, Agent auth provider'lari, BullMQ consumer, cleanup scheduler veya business job calistirmaz.
 
 ## Sabit Image Surumleri
@@ -69,7 +69,18 @@ AGENT_KEY=replace_with_local_only_agent_key_at_least_32_bytes
 
 Worker, migrate ve local JWKS fixture container'lari `AGENT_KEY` almaz. Production ortaminda bu placeholder, bos/whitespace degerler, 32 UTF-8 byte altindaki degerler, leading/trailing whitespace ve ASCII control character iceren degerler reddedilir.
 
-MS-011 itibariyla `X-Agent-Key` ile korunan production Agent route'lari `POST /agent/heartbeat`, `GET /agent/feeds/due` ve `POST /agent/feeds/{feed_id}/new-guids` route'laridir. Agent key Tenant API rotalarini acmaz.
+MS-012 itibariyla `X-Agent-Key` ile korunan production Agent route'lari `POST /agent/heartbeat`, `GET /agent/feeds/due`, `POST /agent/feeds/{feed_id}/new-guids` ve `POST /agent/entries` route'laridir. Agent key Tenant API rotalarini acmaz.
+
+## Agent Entry Ingestion Local Ayarlari
+
+Local Compose varsayilani yalniz `main-service-api` container'ina `checked_at` kabul penceresi verir:
+
+```text
+CHECKED_AT_MAX_FUTURE_SKEW_SECONDS=60
+CHECKED_AT_MAX_AGE_SECONDS=900
+```
+
+Worker, migrate ve local JWKS fixture container'lari bu ayarlari almaz.
 
 ## Agent Heartbeat
 
@@ -138,7 +149,32 @@ Success response:
 
 Unknown feed all-new sayilmaz ve authenticated request icin `422` dondurur. Duplicate input first occurrence order ile tekillestirilir. Response request first-occurrence order'ini korur ve yalniz target feed'de absent olan GUID'leri icerir. `new: []` normal `200` success sonucudur.
 
-Reader feed varligini ve existing target-feed GUID set'ini iki bounded Prisma read ile okur. Per-GUID query, count query, insert/update/delete/upsert, reservation, claim, lease, lock, Redis/BullMQ veya scheduler mutation yoktur. Future `POST /agent/entries` hattindaki `(feed_id, guid)` unique constraint ve `ON CONFLICT DO NOTHING` final write idempotency otoritesidir.
+Reader feed varligini ve existing target-feed GUID set'ini iki bounded Prisma read ile okur. Per-GUID query, count query, insert/update/delete/upsert, reservation, claim, lease, lock, Redis/BullMQ veya scheduler mutation yoktur. `POST /agent/entries` hattindaki `(feed_id, guid)` unique constraint ve `ON CONFLICT DO NOTHING` final write idempotency otoritesidir.
+
+## Agent Entry Ingestion
+
+`POST /agent/entries`, authenticated Agent icin yeni entry payload'larini kabul eder ve event ledger, yeni `entries`, basarili detail icin `entry_details` ve feed success state'ini tek PostgreSQL transaction icinde yazar.
+
+Success response:
+
+```json
+{
+  "ok": true,
+  "check_id": "01K8Z3ABCD0000000000000001",
+  "feed_id": "35",
+  "entries_submitted_count": 2,
+  "entries_saved_count": 1,
+  "replay": false
+}
+```
+
+`check_id` uppercase ULID, `feed_id` decimal string bigint, `checked_at` timezone-aware ISO instant ve `entries` array length `1..100` olmalidir. Entry body unknown alan kabul etmez; `guid`, `url`, required `title`, optional content alanlari, `detail` ve required `detail_extraction` strict dogrulanir.
+
+`checked_at` server saatinden en fazla `60` saniye ileride ve en fazla `900` saniye eski olabilir. Bu kontrol idempotent replay lookup'undan once yapilir.
+
+Idempotency `agent_feed_check_events.check_id` uzerindedir. Ayni `check_id` ayni feed ve `entries_found` outcome ile tekrar gelirse yeni write yapilmaz, kayitli `entries_saved_count` ile `replay: true` doner. Ayni `check_id` farkli feed/outcome ile gelirse `422 CHECK_ID_PAYLOAD_MISMATCH` doner.
+
+Duplicate entry'ler hata degildir; `(feed_id, guid)` unique constraint'i ile skip edilir ve `entries_saved_count` icinde sayilmaz. Feed state yalniz mevcut `last_checked_at` null veya request `checked_at` degerinden eski/esit ise guncellenir; boylece eski request feed state'i geriye alamaz.
 
 ## Migration
 
@@ -180,8 +216,10 @@ docker compose run --rm main-service-api npm run test:auth
 docker compose run --rm main-service-api npm run test:agent-auth
 docker compose run --rm main-service-api npm run test:agent-due-feeds
 docker compose run --rm main-service-api npm run test:agent-heartbeat
+docker compose run --rm main-service-api npm run test:agent-entries
 docker compose run --rm main-service-api npm run test:agent-new-guids
 docker compose run --rm main-service-api npm run test:db:agent-heartbeat
+docker compose run --rm main-service-api npm run test:db:agent-entries
 docker compose run --rm main-service-api npm run test:rate-limit
 docker compose run --rm main-service-api npm run test:tenant-entries
 docker compose run --rm main-service-api npm run test:tenant-entry-detail
@@ -192,11 +230,11 @@ docker compose run --rm main-service-api npm run test:all
 docker compose run --rm main-service-api npm run build
 ```
 
-`npm run test:agent-auth`, Agent key config, header parser, digest verification, principal, guard ve worker boundary kontrollerini calistirir. `npm run test:agent-due-feeds`, due-feed validation, mapper, use-case, HTTP route/auth precedence, worker boundary ve Compose PostgreSQL eligibility/order/limit/no-mutation senaryolarini calistirir. `npm run test:agent-heartbeat`, heartbeat validation, use-case, HTTP route/auth/validation precedence, route inventory ve worker boundary senaryolarini calistirir. `npm run test:agent-new-guids`, new-GUID validation, mapper, use-case, HTTP route/auth precedence, worker boundary ve Compose PostgreSQL filter/no-mutation/query-count/query-plan senaryolarini calistirir. `npm run test:db:agent-heartbeat`, Compose PostgreSQL uzerinde heartbeat current-state/no-side-effect senaryolarini calistirir. `npm run test:rate-limit`, tenant rate-limit config, HMAC key turetimi, Redis reply parsing, guard/servis davranisi, worker siniri ve Compose icinde Redis entegrasyon senaryolarini calistirir. `npm run test:tenant-entries`, entry listeleme query validation, DTO mapping, controller/rate-limit davranisi ve Compose icinde PostgreSQL/Redis entegrasyon senaryolarini calistirir. `npm run test:tenant-entry-detail`, entry detail id/query validation, DTO mapping, controller/rate-limit davranisi, worker siniri ve Compose icinde PostgreSQL/Redis detail/null/404/invariant senaryolarini calistirir. `npm run test:tenant-feeds`, feed abonelik request dogrulama, use-case ve controller testlerini calistirir. `npm run test:db`, Compose PostgreSQL servisi uzerinde izole gecici bir database olusturur, migration'lari bastan uygular, ikinci deploy'un no-op oldugunu dogrular, katalog/constraint/index kontrollerini ve MS-004/MS-006/MS-007/MS-009/MS-010/MS-011 PostgreSQL entegrasyon senaryolarini calistirir.
+`npm run test:agent-auth`, Agent key config, header parser, digest verification, principal, guard ve worker boundary kontrollerini calistirir. `npm run test:agent-due-feeds`, due-feed validation, mapper, use-case, HTTP route/auth precedence, worker boundary ve Compose PostgreSQL eligibility/order/limit/no-mutation senaryolarini calistirir. `npm run test:agent-heartbeat`, heartbeat validation, use-case, HTTP route/auth/validation precedence, route inventory ve worker boundary senaryolarini calistirir. `npm run test:agent-new-guids`, new-GUID validation, mapper, use-case, HTTP route/auth precedence, worker boundary ve Compose PostgreSQL filter/no-mutation/query-count/query-plan senaryolarini calistirir. `npm run test:agent-entries`, entry ingestion validation, phase policy, use-case, HTTP route/auth precedence, worker boundary ve Compose PostgreSQL transaction/replay/feed-state senaryolarini calistirir. `npm run test:db:agent-heartbeat`, Compose PostgreSQL uzerinde heartbeat current-state/no-side-effect senaryolarini calistirir. `npm run test:db:agent-entries`, Compose PostgreSQL uzerinde entry ingestion event/entry/detail/feed-state/replay/rollback senaryolarini calistirir. `npm run test:rate-limit`, tenant rate-limit config, HMAC key turetimi, Redis reply parsing, guard/servis davranisi, worker siniri ve Compose icinde Redis entegrasyon senaryolarini calistirir. `npm run test:tenant-entries`, entry listeleme query validation, DTO mapping, controller/rate-limit davranisi ve Compose icinde PostgreSQL/Redis entegrasyon senaryolarini calistirir. `npm run test:tenant-entry-detail`, entry detail id/query validation, DTO mapping, controller/rate-limit davranisi, worker siniri ve Compose icinde PostgreSQL/Redis detail/null/404/invariant senaryolarini calistirir. `npm run test:tenant-feeds`, feed abonelik request dogrulama, use-case ve controller testlerini calistirir. `npm run test:db`, Compose PostgreSQL servisi uzerinde izole gecici bir database olusturur, migration'lari bastan uygular, ikinci deploy'un no-op oldugunu dogrular, katalog/constraint/index kontrollerini ve MS-004/MS-006/MS-007/MS-009/MS-010/MS-011/MS-012 PostgreSQL entegrasyon senaryolarini calistirir.
 
 ## Smoke Test
 
-MS-011 icin calistirilan smoke adimlari:
+MS-012 icin calistirilan smoke adimlari:
 
 ```powershell
 docker compose config
@@ -207,20 +245,23 @@ Invoke-WebRequest http://localhost:3000/health/live
 Invoke-WebRequest http://localhost:3000/health/ready
 Invoke-WebRequest http://localhost:3000/agent/feeds/due?limit=1
 Invoke-WebRequest http://localhost:3000/agent/feeds/1/new-guids
+Invoke-WebRequest http://localhost:3000/agent/entries
 docker compose port main-service-worker 3000
 docker compose logs main-service-worker
 docker compose run --rm main-service-api npm run test:agent-auth
 docker compose run --rm main-service-api npm run test:agent-due-feeds
 docker compose run --rm main-service-api npm run test:agent-heartbeat
+docker compose run --rm main-service-api npm run test:agent-entries
 docker compose run --rm main-service-api npm run test:agent-new-guids
 docker compose run --rm main-service-api npm run test:db:agent-heartbeat
+docker compose run --rm main-service-api npm run test:db:agent-entries
 docker compose run --rm main-service-api npm run test:rate-limit
 docker compose run --rm main-service-api npm run test:tenant-entries
 docker compose run --rm main-service-api npm run test:tenant-entry-detail
 docker compose down
 ```
 
-Worker servisinde public HTTP portu yayimlanmaz. `docker compose port main-service-worker 3000` port bulunmadigini gostermelidir. Missing Agent key ile `/agent/feeds/due?limit=1` ve `/agent/feeds/1/new-guids` `401` donmelidir. Worker log'larinda JWKS refresh, tenant auth lifecycle, Agent auth lifecycle, Agent heartbeat module, Agent due-feeds module, Agent new-GUID module, tenant rate-limit capability check, tenant entry list module veya tenant entry detail module baslangici beklenmez.
+Worker servisinde public HTTP portu yayimlanmaz. `docker compose port main-service-worker 3000` port bulunmadigini gostermelidir. Missing Agent key ile `/agent/feeds/due?limit=1`, `/agent/feeds/1/new-guids` ve `/agent/entries` `401` donmelidir. Worker log'larinda JWKS refresh, tenant auth lifecycle, Agent auth lifecycle, Agent heartbeat module, Agent due-feeds module, Agent new-GUID module, Agent entries module, tenant rate-limit capability check, tenant entry list module veya tenant entry detail module baslangici beklenmez.
 
 ## Worker Scheduler Durumu
 
