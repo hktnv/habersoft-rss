@@ -1,5 +1,6 @@
 import { DynamicModule, Module } from "@nestjs/common";
 import { AgentAuthModule } from "./agent-auth/agent-auth.module";
+import { AgentDueFeedsModule } from "./agent-due-feeds/agent-due-feeds.module";
 import { AgentHeartbeatModule } from "./agent-heartbeat/agent-heartbeat.module";
 import { RuntimeConfig } from "./configuration/runtime-config";
 import { RuntimeConfigModule } from "./configuration/runtime-config.module";
@@ -18,6 +19,7 @@ export class ApiModule {
         RuntimeConfigModule.register(config),
         AgentAuthModule,
         AgentHeartbeatModule,
+        AgentDueFeedsModule,
         TenantAuthModule,
         HealthModule,
         TenantFeedsModule,

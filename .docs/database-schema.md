@@ -38,6 +38,8 @@ Prisma Client, temel model erisimini saglar. Asagidaki PostgreSQL ozellikleri ca
 
 Bu ozelliklerde migration SQL ile `schema.prisma` arasinda yorum farki olursa canonical kaynak migration SQL ve master veri modelidir.
 
+`feeds_due` index'i `next_check_at ASC, id ASC` key order'una ve `active = true AND subscriber_count > 0` predicate'ine sahiptir. MS-010 `GET /agent/feeds/due` read-only sorgusu bu index ile uyumlu olarak `next_check_at <= captured server now` filtresi, canonical order ve `limit + 1` bounded read kullanir.
+
 ## Dogrulama
 
 Container toolchain ile:
