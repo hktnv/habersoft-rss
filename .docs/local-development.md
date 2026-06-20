@@ -31,7 +31,7 @@ docker compose down -v
 - `redis`: Redis 8.8 local yeniden kurulabilir runtime servisi.
 - `tenant-auth-jwks-fixture`: Local-only deterministik olmayan, ephemeral RS256 public JWKS fixture servisi. Host portu yayimlamaz; yalnizca Compose agi icinden kullanilir.
 - `migrate`: PostgreSQL saglikli olduktan sonra `prisma migrate deploy` calistiran sonlu gorev.
-- `main-service-api`: NestJS HTTP API process'i. Health endpoint'lerini, tenant auth/JWKS lifecycle'ini, tenant feed abonelik endpoint'lerini, tenant entry listeleme/detail endpoint'lerini, API-only tenant rate limiting guard'ini ve Agent `X-Agent-Key` auth provider'larini baslatir.
+- `main-service-api`: NestJS HTTP API process'i. Health endpoint'lerini, tenant auth/JWKS lifecycle'ini, tenant feed abonelik endpoint'lerini, tenant entry listeleme/detail endpoint'lerini, API-only tenant rate limiting guard'ini, Agent `X-Agent-Key` auth provider'larini ve `POST /agent/heartbeat` route'unu baslatir.
 - `main-service-worker`: HTTP listener acmayan Nest application context. Config, PostgreSQL ve Redis baglantilarini bootstrap eder; tenant auth/JWKS lifecycle'i, Agent auth provider'lari, BullMQ consumer, cleanup scheduler veya business job calistirmaz.
 
 ## Sabit Image Surumleri
@@ -69,7 +69,17 @@ AGENT_KEY=replace_with_local_only_agent_key_at_least_32_bytes
 
 Worker, migrate ve local JWKS fixture container'lari `AGENT_KEY` almaz. Production ortaminda bu placeholder, bos/whitespace degerler, 32 UTF-8 byte altindaki degerler, leading/trailing whitespace ve ASCII control character iceren degerler reddedilir.
 
-MS-008 production `/agent/*` endpoint'i eklemez. `X-Agent-Key` yalniz gelecekteki Agent route'larinda route-level guard olarak kullanilacak altyapidir; Tenant API rotalarini acmaz.
+MS-009 itibariyla `X-Agent-Key` ile korunan tek production Agent route'u `POST /agent/heartbeat`tir. Agent key Tenant API rotalarini acmaz.
+
+## Agent Heartbeat
+
+Local smoke icin secret degeri yazdirmadan authenticated heartbeat gondermek gerekir. Tercih edilen dogrulama komutu:
+
+```powershell
+docker compose run --rm main-service-api npm run test:agent-heartbeat
+```
+
+`POST /agent/heartbeat`, yalniz `agent_runtime_status` current-state satirini upsert eder ve exact `{ "ok": true }` dondurur. `feeds`, `entries`, `entry_details`, `site_feeds`, `agent_feed_check_events`, scheduler state veya Redis/JWKS/network hattina dokunmaz.
 
 ## Migration
 
@@ -109,6 +119,8 @@ docker compose run --rm main-service-api npm run lint
 docker compose run --rm main-service-api npm run typecheck
 docker compose run --rm main-service-api npm run test:auth
 docker compose run --rm main-service-api npm run test:agent-auth
+docker compose run --rm main-service-api npm run test:agent-heartbeat
+docker compose run --rm main-service-api npm run test:db:agent-heartbeat
 docker compose run --rm main-service-api npm run test:rate-limit
 docker compose run --rm main-service-api npm run test:tenant-entries
 docker compose run --rm main-service-api npm run test:tenant-entry-detail
@@ -119,11 +131,11 @@ docker compose run --rm main-service-api npm run test:all
 docker compose run --rm main-service-api npm run build
 ```
 
-`npm run test:agent-auth`, Agent key config, header parser, digest verification, principal, guard, production route yoklugu ve worker boundary kontrollerini calistirir. `npm run test:rate-limit`, tenant rate-limit config, HMAC key turetimi, Redis reply parsing, guard/servis davranisi, worker siniri ve Compose icinde Redis entegrasyon senaryolarini calistirir. `npm run test:tenant-entries`, entry listeleme query validation, DTO mapping, controller/rate-limit davranisi ve Compose icinde PostgreSQL/Redis entegrasyon senaryolarini calistirir. `npm run test:tenant-entry-detail`, entry detail id/query validation, DTO mapping, controller/rate-limit davranisi, worker siniri ve Compose icinde PostgreSQL/Redis detail/null/404/invariant senaryolarini calistirir. `npm run test:tenant-feeds`, feed abonelik request dogrulama, use-case ve controller testlerini calistirir. `npm run test:db`, Compose PostgreSQL servisi uzerinde izole gecici bir database olusturur, migration'lari bastan uygular, ikinci deploy'un no-op oldugunu dogrular, katalog/constraint/index kontrollerini ve MS-004/MS-006/MS-007 PostgreSQL entegrasyon senaryolarini calistirir.
+`npm run test:agent-auth`, Agent key config, header parser, digest verification, principal, guard ve worker boundary kontrollerini calistirir. `npm run test:agent-heartbeat`, heartbeat validation, use-case, HTTP route/auth/validation precedence, route inventory ve worker boundary senaryolarini calistirir. `npm run test:db:agent-heartbeat`, Compose PostgreSQL uzerinde heartbeat current-state/no-side-effect senaryolarini calistirir. `npm run test:rate-limit`, tenant rate-limit config, HMAC key turetimi, Redis reply parsing, guard/servis davranisi, worker siniri ve Compose icinde Redis entegrasyon senaryolarini calistirir. `npm run test:tenant-entries`, entry listeleme query validation, DTO mapping, controller/rate-limit davranisi ve Compose icinde PostgreSQL/Redis entegrasyon senaryolarini calistirir. `npm run test:tenant-entry-detail`, entry detail id/query validation, DTO mapping, controller/rate-limit davranisi, worker siniri ve Compose icinde PostgreSQL/Redis detail/null/404/invariant senaryolarini calistirir. `npm run test:tenant-feeds`, feed abonelik request dogrulama, use-case ve controller testlerini calistirir. `npm run test:db`, Compose PostgreSQL servisi uzerinde izole gecici bir database olusturur, migration'lari bastan uygular, ikinci deploy'un no-op oldugunu dogrular, katalog/constraint/index kontrollerini ve MS-004/MS-006/MS-007/MS-009 PostgreSQL entegrasyon senaryolarini calistirir.
 
 ## Smoke Test
 
-MS-008 icin calistirilan smoke adimlari:
+MS-009 icin calistirilan smoke adimlari:
 
 ```powershell
 docker compose config
@@ -136,13 +148,15 @@ Invoke-WebRequest http://localhost:3000/agent/feeds/due
 docker compose port main-service-worker 3000
 docker compose logs main-service-worker
 docker compose run --rm main-service-api npm run test:agent-auth
+docker compose run --rm main-service-api npm run test:agent-heartbeat
+docker compose run --rm main-service-api npm run test:db:agent-heartbeat
 docker compose run --rm main-service-api npm run test:rate-limit
 docker compose run --rm main-service-api npm run test:tenant-entries
 docker compose run --rm main-service-api npm run test:tenant-entry-detail
 docker compose down
 ```
 
-Worker servisinde public HTTP portu yayimlanmaz. `docker compose port main-service-worker 3000` port bulunmadigini gostermelidir. `/agent/feeds/due` MS-008'de henuz production route olmadigi icin `404` donmelidir. Worker log'larinda JWKS refresh, tenant auth lifecycle, Agent auth lifecycle, tenant rate-limit capability check, tenant entry list module veya tenant entry detail module baslangici beklenmez.
+Worker servisinde public HTTP portu yayimlanmaz. `docker compose port main-service-worker 3000` port bulunmadigini gostermelidir. `/agent/feeds/due` MS-009'da henuz production route olmadigi icin `404` donmelidir. Worker log'larinda JWKS refresh, tenant auth lifecycle, Agent auth lifecycle, Agent heartbeat module, tenant rate-limit capability check, tenant entry list module veya tenant entry detail module baslangici beklenmez.
 
 ## Worker Scheduler Durumu
 

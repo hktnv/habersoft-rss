@@ -7,7 +7,7 @@
 - Canonical repository remote: `https://github.com/hktnv/habersoft-rss`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
-- Uygulama surumu/durum: `0.1.0-ms-008` / `Geciste`
+- Uygulama surumu/durum: `0.1.0-ms-009` / `Geciste`
 
 Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application repository siniridir. Merkezi master ve DEV alt dokumanlar bu repository'ye kopyalanmaz.
 
@@ -23,7 +23,8 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [tenant-rate-limiting.md](tenant-rate-limiting.md) | MS-005 Tenant API feed rotalarinda tenant basina Redis rate limiting davranisi ve sinirlari. |
 | [tenant-entry-listing.md](tenant-entry-listing.md) | MS-006 Tenant entry listeleme API route, pagination, visibility, query/projection ve test gercegi. |
 | [tenant-entry-detail.md](tenant-entry-detail.md) | MS-007 Tenant entry detail API route, visibility, retention/null/404 ayrimi, query/projection ve invariant test gercegi. |
-| [agent-authentication.md](agent-authentication.md) | MS-008 Agent API `X-Agent-Key` authentication altyapisi, API-only secret siniri ve production route yoklugu. |
+| [agent-authentication.md](agent-authentication.md) | MS-008 Agent API `X-Agent-Key` authentication altyapisi, API-only secret siniri ve route-level guard davranisi. |
+| [agent-heartbeat.md](agent-heartbeat.md) | MS-009 `POST /agent/heartbeat` endpoint'i, request validation, current-state upsert ve no-side-effect sinirlari. |
 
 ## Okuma Sirasi
 
@@ -35,8 +36,9 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 6. [tenant-entry-listing.md](tenant-entry-listing.md)
 7. [tenant-entry-detail.md](tenant-entry-detail.md)
 8. [agent-authentication.md](agent-authentication.md)
-9. [database-schema.md](database-schema.md)
-10. Repository kok [README.md](../README.md)
+9. [agent-heartbeat.md](agent-heartbeat.md)
+10. [database-schema.md](database-schema.md)
+11. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
@@ -44,14 +46,14 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 
 - Uygulama kimligi: `main-service`
 - Repository: `https://github.com/hktnv/habersoft-rss`
-- Uygulama surumu: `0.1.0-ms-008`
+- Uygulama surumu: `0.1.0-ms-009`
 - Master kaynak: `../../.md/master/`
 - Master baseline: `rss-habersoft-master-v10`
 - Master agac ozeti SHA-256: `1673e90d7c7596e13053c7669044a08a09b4a9b70fd9c54c8c5c0e59f8aed192`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
 - Uyum durumu: `Geciste`
 
-`Geciste` durumu bilincli kullanilmistir. MS-008 gelecekteki Agent API route'lari icin `X-Agent-Key` authentication altyapisini ekler; production Agent endpoint'i, cleanup scheduler ve job runner davranislari henuz uygulanmamistir.
+`Geciste` durumu bilincli kullanilmistir. MS-009 ilk production Agent endpoint'i olan `POST /agent/heartbeat` route'unu ekler; due-feed, entries ingestion, feed-check-results, cleanup scheduler ve job runner davranislari henuz uygulanmamistir.
 
 ## Sabit Runtime ve Altyapi Surumleri
 

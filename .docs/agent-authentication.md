@@ -2,7 +2,7 @@
 
 ## Kapsam
 
-MS-008, gelecekteki Agent API controller'lari icin route-level `X-Agent-Key` authentication altyapisini ekler. Bu milestone production `/agent/*` endpoint'i eklemez; yalnizca config, parser, verifier, guard, principal, test ve container siniri uygulanmistir.
+MS-008, Agent API controller'lari icin route-level `X-Agent-Key` authentication altyapisini ekler. MS-009 itibariyla ilk production consumer `POST /agent/heartbeat` route'udur.
 
 Tenant JWT authentication ayri kalir. `X-Agent-Key` tenant route'larini acmaz; tenant `Authorization: Bearer` token'i agent route'larini acmaz.
 
@@ -47,7 +47,7 @@ Principal raw key, digest veya fingerprint tasimaz.
 
 ## Runtime Boundary
 
-`AgentAuthModule` API module graph'ina provider olarak girer, global `APP_GUARD` kullanmaz ve controller expose etmez. Guard yalniz gelecekteki Agent route'larina route-level uygulanmak icin export edilir.
+`AgentAuthModule` API module graph'ina provider olarak girer, global `APP_GUARD` kullanmaz ve controller expose etmez. Guard Agent route'larina route-level uygulanmak icin export edilir; MS-009'da `POST /agent/heartbeat` bu guard'i kullanir.
 
 Agent auth DB, Redis, JWKS, network, session, cache, JWT, OAuth, Passport, scope, role, multi-key, dual-key veya hot reload kullanmaz.
 
@@ -59,4 +59,4 @@ Agent auth testleri:
 npm run test:agent-auth
 ```
 
-Bu test seti config, header parser, verifier, principal, test-only protected controller, production route yoklugu, health no-key davranisi, tenant/agent auth ayrimi ve worker boundary kontrollerini kapsar.
+Bu test seti config, header parser, verifier, principal, test-only protected controller, health no-key davranisi, tenant/agent auth ayrimi ve worker boundary kontrollerini kapsar.
