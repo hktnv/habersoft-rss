@@ -106,7 +106,7 @@ describe("Agent auth API boundary", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("exposes entries ingestion and keeps future feed-check-results closed", async () => {
+  it("exposes entries ingestion and feed-check-results as authenticated production routes", async () => {
     const entries = await fastify.inject({
       method: "POST",
       url: "/agent/entries",
@@ -122,6 +122,7 @@ describe("Agent auth API boundary", () => {
 
     expect(entries.statusCode).toBe(422);
     expect(JSON.parse(entries.payload)).toMatchObject({ error_code: "VALIDATION_FAILED" });
-    expect(feedCheckResults.statusCode).toBe(404);
+    expect(feedCheckResults.statusCode).toBe(422);
+    expect(JSON.parse(feedCheckResults.payload)).toMatchObject({ error_code: "VALIDATION_FAILED" });
   });
 });
