@@ -77,6 +77,7 @@ Known residual non-blockers:
 
 - production deployment decision is closed; rollout is not performed,
 - release identity alignment is verified; actual staging/production rollout is not performed,
+- MS-017 staging deployment target, host-key pin and remote marker are not yet provided in the active workspace,
 - external registry publication is not performed,
 - production edge DNS/TLS/CyberPanel live configuration is not changed,
 - admin/frontend is not implemented,

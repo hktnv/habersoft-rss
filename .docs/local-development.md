@@ -367,3 +367,15 @@ npm run production:restore:verify -- --backup <temp-backup>
 `deploy/production/compose.yaml` production topology proof'tur; local JWKS fixture icermez, DB/Redis/worker host port yayinlamaz ve `MAIN_SERVICE_IMAGE` digest pin contract'i ister. Local synthetic smoke gerekiyorsa unique Compose project, temp env ve temp output kullanilir. Destructive cleanup only that unique project, disposable restore container and temp files ile sinirlidir.
 
 External registry push, DNS/TLS change, CyberPanel live config, Git tag and GitHub Release MS-016 local verification commands tarafindan yapilmaz.
+
+## MS-017 Staging Preparation Tooling
+
+MS-017 A asamasi remote staging mutation yapmadan target safety, SSH option, remote layout, receipt ve rollback compatibility guard'larini ekler.
+
+```powershell
+npm run test:staging
+npm run staging:preflight -- --target <external-path>/staging-target.json
+npm run staging:receipt:verify -- --receipt <receipt.json>
+```
+
+`deploy/staging/target.example.json` yalniz schema ornegidir. Gercek target, known_hosts, staging env, release package, backup ve receipt Git'e alinmaz. Onayli staging target ve remote marker yoksa `staging:deploy`, `staging:rollback` ve `staging:roll-forward` basari iddiasi uretmez.

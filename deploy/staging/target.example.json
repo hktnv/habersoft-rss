@@ -1,0 +1,16 @@
+{
+  "environment": "staging",
+  "approved": true,
+  "target_alias": "rss-main-service-staging-1",
+  "ssh_host": "staging-host.example.invalid",
+  "ssh_port": 22,
+  "ssh_user": "deploy",
+  "known_hosts_file": "C:/secure/known_hosts",
+  "remote_environment_marker_path": "/etc/habersoft/environment",
+  "remote_environment_marker_value": "staging",
+  "remote_base_dir": "/opt/habersoft/rss-main-service-staging",
+  "compose_project_name": "habersoft-rss-staging",
+  "api_host_port": 13000,
+  "edge_mode": "loopback-only",
+  "public_base_url": null
+}

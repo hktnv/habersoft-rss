@@ -50,6 +50,8 @@ Provenance seviyesi `local metadata` ve attestation seviyesi `unsigned provenanc
 
 Default verifier staging-handoff icin `main-service-image.tar` ister. Hizli local no-image testi yalniz `--allow-no-image true` ile gecirilir ve staging-handoff kaniti sayilmaz.
 
+MS-017 hazirlik tooling'i staging target ve receipt kapilarini ekler; remote staging deployment yalniz onayli target, pinned host key, remote marker ve external staging env saglandiginda baslatilabilir. Bkz. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md).
+
 ## Publication Ayrimi
 
 MS-016 package uretir ve dogrular. External registry publish, Docker Hub/GHCR push, Git tag, GitHub Release ve production deployment yapmaz.

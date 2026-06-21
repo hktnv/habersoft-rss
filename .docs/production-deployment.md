@@ -44,6 +44,8 @@ Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Reque
 
 Package verified. Production rollout yapilmadi. DNS/TLS/CyberPanel live configuration degistirilmedi. Staging handoff MS-017 kapsamindadir.
 
+MS-017 A asamasinda staging safety tooling hazirlanmistir, ancak onayli staging target/host-key/marker bulunmadigi icin staging deployment veya rollback tatbikati yapilmamistir. Production runtime ve edge siniri degismemistir.
+
 ## Guvenli Troubleshooting
 
 Generated production env file, backup, SBOM, provenance, image tarball ve registry auth Git'e commit edilmez. Gercek host/IP/cert/secret bu belgeye yazilmaz.
