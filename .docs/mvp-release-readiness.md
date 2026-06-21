@@ -10,7 +10,7 @@ Master baseline:
 
 ```text
 release: rss-habersoft-master-v12
-SHA-256: def24246ee3fe2f3feabee35e3c658216899d343d21b32637622271bc74d8e50
+SHA-256: df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430
 active Markdown count: 29
 ```
 
@@ -55,7 +55,7 @@ Use a unique Compose project name. Destructive cleanup is limited to that unique
 
 | Gate | PASS olcutu |
 |---|---|
-| Master/docs | Master v11 count/hash exact, master files unchanged, repo-local docs fresh. |
+| Master/docs | Master v12 count/hash exact, master files unchanged, repo-local docs fresh. |
 | Build/lock/supply-chain | `npm ci`/lock deterministic, production audit zero, registry signature result recorded, SBOM parsed ephemerally. |
 | Schema/migrations | `prisma/schema.prisma` and `prisma/migrations/**` unchanged; two migrations apply and second deploy is no-op. |
 | Config/role isolation | API, worker, migrate and local JWKS fixture load only their expected configuration. |
@@ -76,7 +76,7 @@ Residual non-blocker is a bounded item outside the current MVP repository accept
 Known residual non-blockers:
 
 - production deployment decision is closed; rollout is not performed,
-- actual staging/production rollout is not performed,
+- release identity alignment is verified; actual staging/production rollout is not performed,
 - external registry publication is not performed,
 - production edge DNS/TLS/CyberPanel live configuration is not changed,
 - admin/frontend is not implemented,

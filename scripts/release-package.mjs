@@ -2,13 +2,20 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
+import {
+  EXPECTED_MIGRATIONS,
+  EXPECTED_PUBLIC_ROUTES,
+  EXPECTED_SERVICES,
+  RELEASE_IDENTITY,
+  verifyMasterBaseline
+} from "./release-identity.mjs";
 
-const version = "0.1.0-ms-016";
 const args = parseArgs(process.argv.slice(2));
 const output = args.output;
 const platform = args.platform ?? "linux/amd64";
-const image = args.image ?? `main-service-app:${version}`;
+const image = args.image ?? `main-service-app:${RELEASE_IDENTITY.version}`;
 const includeImage = args["no-image"] !== "true";
+const allowDirty = args["allow-dirty"] === "true";
 
 if (output === undefined) {
   fail("release:package requires --output <directory>");
@@ -20,9 +27,12 @@ mkdirSync(path.join(outputDir, "deploy", "production"), { recursive: true });
 mkdirSync(path.join(outputDir, "metadata"), { recursive: true });
 
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
-if (packageJson.version !== version) {
-  fail(`package.json version must be ${version}`);
+if (packageJson.version !== RELEASE_IDENTITY.version) {
+  fail(`package.json version must be ${RELEASE_IDENTITY.version}`);
 }
+
+const masterBaseline = verifyBaseline(args["master-dir"]);
+const sourceCommit = getGitCommit(allowDirty);
 
 copyFileSync("deploy/production/compose.yaml", path.join(outputDir, "deploy", "production", "compose.yaml"));
 copyFileSync("deploy/production/production.env.template", path.join(outputDir, "deploy", "production", "production.env.template"));
@@ -32,41 +42,43 @@ if (includeImage) {
   run("docker", ["save", "--output", path.join(outputDir, "main-service-image.tar"), image]);
 }
 
+const sbom = createSbom();
 const manifest = {
   schema_version: 1,
-  application: "main-service",
-  version,
-  status: "MVP Adayi - Deployment Karari Kesin / Release Paketi Dogrulandi",
-  master_release: "rss-habersoft-master-v12",
-  master_sha256: "df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430",
-  production_deployed: false,
-  release_published: false,
+  application: RELEASE_IDENTITY.application,
+  version: RELEASE_IDENTITY.version,
+  status: RELEASE_IDENTITY.status,
+  master_release: RELEASE_IDENTITY.masterRelease,
+  master_sha256: RELEASE_IDENTITY.masterSha256,
+  master_active_markdown_count: masterBaseline.count,
+  production_deployed: RELEASE_IDENTITY.productionDeployed,
+  release_published: RELEASE_IDENTITY.releasePublished,
+  source_commit: sourceCommit,
   platform,
   image: imageMetadata,
-  services: ["postgres", "redis", "migrate", "main-service-api", "main-service-worker"],
-  public_routes: [
-    "GET /health/live",
-    "GET /health/ready",
-    "POST /api/feeds",
-    "GET /api/feeds",
-    "DELETE /api/feeds/{feed_id}",
-    "GET /api/entries",
-    "GET /api/entries/{id}/detail",
-    "POST /agent/heartbeat",
-    "GET /agent/feeds/due",
-    "POST /agent/feeds/{feed_id}/new-guids",
-    "POST /agent/entries",
-    "POST /agent/feed-check-results"
-  ],
+  services: [...EXPECTED_SERVICES],
+  public_routes: [...EXPECTED_PUBLIC_ROUTES],
   migrations: readdirSync("prisma/migrations", { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort(),
+  sbom: {
+    generator: "npm sbom --sbom-format=cyclonedx --json",
+    bom_format: sbom.bomFormat,
+    spec_version: sbom.specVersion,
+    component_count: Array.isArray(sbom.components) ? sbom.components.length : 0
+  },
+  provenance_level: "local metadata",
+  attestation_level: "unsigned provenance",
   created_at: new Date().toISOString()
 };
 
+if (JSON.stringify(manifest.migrations) !== JSON.stringify(EXPECTED_MIGRATIONS)) {
+  fail(`migration inventory mismatch: ${manifest.migrations.join(", ")}`);
+}
+
 writeJson(path.join(outputDir, "manifest.json"), manifest);
-writeJson(path.join(outputDir, "metadata", "sbom.cdx.json"), createSbom(packageJson));
+writeJson(path.join(outputDir, "metadata", "sbom.cdx.json"), sbom);
 writeJson(path.join(outputDir, "metadata", "provenance.json"), createProvenance(manifest));
 writeChecksums(outputDir);
 
@@ -97,45 +109,46 @@ function inspectImage(imageRef, required) {
   };
 }
 
-function createSbom(packageJson) {
-  const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
-  const components = Object.entries(lock.packages ?? {})
-    .filter(([name, value]) => name.startsWith("node_modules/") && value.version !== undefined)
-    .map(([name, value]) => ({
-      type: "library",
-      name: name.replace("node_modules/", ""),
-      version: value.version,
-      purl: `pkg:npm/${encodeURIComponent(name.replace("node_modules/", ""))}@${value.version}`
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+function createSbom() {
+  const result = spawnSync("npm", ["sbom", "--sbom-format=cyclonedx", "--json"], {
+    encoding: "utf8",
+    shell: process.platform === "win32"
+  });
+  if (result.status !== 0) {
+    process.stderr.write(result.stderr);
+    fail("npm CycloneDX SBOM generation failed");
+  }
 
-  return {
-    bomFormat: "CycloneDX",
-    specVersion: "1.5",
-    version: 1,
-    metadata: {
-      component: {
-        type: "application",
-        name: packageJson.name,
-        version: packageJson.version
-      }
-    },
-    components
-  };
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    fail("npm CycloneDX SBOM output was not valid JSON");
+  }
 }
 
 function createProvenance(manifest) {
-  const gitCommit = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", shell: process.platform === "win32" });
   return {
     schema_version: 1,
     application: manifest.application,
     version: manifest.version,
-    git_commit: gitCommit.status === 0 ? gitCommit.stdout.trim() : "unknown",
+    source_commit: manifest.source_commit,
+    master_release: manifest.master_release,
+    master_sha256: manifest.master_sha256,
+    master_active_markdown_count: manifest.master_active_markdown_count,
     platform: manifest.platform,
+    image: manifest.image,
     builder: "local Docker Engine / Docker Compose verification",
+    provenance_level: "local metadata",
+    attestation_level: "unsigned provenance",
+    sbom: manifest.sbom,
     external_registry_push: false,
     git_tag_created: false,
-    github_release_created: false
+    github_release_created: false,
+    staging_deployed: false,
+    production_deployed: false,
+    buildkit_attestation: false,
+    signed_attestation: false,
+    generated_at: manifest.created_at
   };
 }
 
@@ -194,4 +207,34 @@ function parseArgs(rawArgs) {
 function fail(message) {
   console.error(message);
   process.exit(1);
+}
+
+function getGitCommit(allowDirtyTree) {
+  const result = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", shell: process.platform === "win32" });
+  if (result.status !== 0) {
+    process.stderr.write(result.stderr);
+    fail("git source commit could not be determined");
+  }
+  if (!allowDirtyTree) {
+    const status = spawnSync("git", ["status", "--porcelain", "--untracked-files=all"], {
+      encoding: "utf8",
+      shell: process.platform === "win32"
+    });
+    if (status.status !== 0) {
+      process.stderr.write(status.stderr);
+      fail("git working tree status could not be determined");
+    }
+    if (status.stdout.trim() !== "") {
+      fail("git working tree must be clean for release package generation; use --allow-dirty true only for local tests");
+    }
+  }
+  return result.stdout.trim();
+}
+
+function verifyBaseline(masterDir) {
+  try {
+    return verifyMasterBaseline(masterDir === undefined ? undefined : path.resolve(masterDir));
+  } catch (error) {
+    fail(`master baseline verification failed: ${error.message}`);
+  }
 }
