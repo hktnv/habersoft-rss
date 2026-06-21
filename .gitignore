@@ -4,3 +4,8 @@ dist/
 coverage/
 .prisma/
 npm-debug.log*
+deploy/staging/*.json
+!deploy/staging/target.example.json
+deploy/staging/*.env
+staging-deployment-receipt.json
+staging-deployment-receipt.*.json

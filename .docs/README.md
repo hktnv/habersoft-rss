@@ -35,6 +35,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [production-deployment.md](production-deployment.md) | MS-016 single-host production Compose topology, edge/vhost, service/network/port/volume/startup/readiness ve deploy edilmemislik durumu. |
 | [release-packaging.md](release-packaging.md) | MS-016 release package command, artifact inventory, manifest/checksum/SBOM/provenance, image identity, verifier ve publication/deployment ayrimi. |
 | [backup-and-restore.md](backup-and-restore.md) | MS-016 PostgreSQL backup prerequisite, checksum metadata, disposable restore verification, Redis siniri ve rollback data-protection gate'i. |
+| [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md) | MS-017 staging deployment/rollback tatbikati icin target safety, SSH, receipt ve blocked-before-remote-staging operasyon gercegi. |
 
 ## Okuma Sirasi
 
@@ -57,8 +58,9 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 17. [production-deployment.md](production-deployment.md)
 18. [release-packaging.md](release-packaging.md)
 19. [backup-and-restore.md](backup-and-restore.md)
-20. [database-schema.md](database-schema.md)
-21. Repository kok [README.md](../README.md)
+20. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
+21. [database-schema.md](database-schema.md)
+22. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
@@ -78,6 +80,8 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 v11 etki notu: MS-014 uygulamasi v11 master cleanup, retention ve job-runner sozlesmeleriyle uyumludur. `POST /agent/feed-check-results` response'u MS-013'te v11 dort-sayac sozlesmesini `accepted`, `feed_state_updated`, `idempotent_replay_count` ve `out_of_order_result_count` olarak uygulamaya devam eder.
 
 v12 etki notu: MS-016 production deployment karari master `23-uretim-deployment-gorunumu.md` ile kapanmistir. Release package identity canonical master hash ile hizalanmistir; staging-handoff paketi image artifact dahil edildiginde dogrulanir. Production deploy, registry publish, DNS/TLS/CyberPanel live change, Git tag ve GitHub Release yapilmamistir.
+
+MS-017 hazirlik notu: Staging target descriptor, pinned SSH known_hosts ve remote staging marker active workspace'te bulunmadigi icin remote staging deployment yapilmamistir. Hazirlik tooling'i [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md) dosyasinda belgelenir; uygulama surumu ve status `0.1.0-ms-016` / `MVP Adayi - Deployment Karari Kesin / Release Paketi Dogrulandi` olarak kalir.
 
 ## Sabit Runtime ve Altyapi Surumleri
 

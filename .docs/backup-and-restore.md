@@ -31,3 +31,5 @@ Redis rate-limit/job scheduler runtime state tasir. Redis kaybi canonical busine
 ## Rollback Preconditions
 
 MS-016 schema/migration degistirmez. Compatible rollback onceki app image'a donusle sinirlidir. Gelecek incompatible migration iceren release icin verified PostgreSQL backup ve restore plan olmadan rollout yapilmaz.
+
+MS-017 hazirlik tooling'i staging receipt icinde backup checksum ve restore verification alanlarini zorunlu kilar. Gercek staging backup/restore bu degisiklikte yapilmamistir; onayli staging target ve external staging env gereklidir.
