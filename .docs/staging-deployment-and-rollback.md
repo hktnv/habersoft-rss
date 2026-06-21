@@ -67,6 +67,12 @@ MS-017B2 local isolated staging rehearsal passed. Bu akisin sahibi [local-stagin
 
 Local rehearsal, canonical production package ve Compose kaynaklarini unique local Docker project altinda dry-run etti. Remote staging target, SSH, pinned known_hosts veya remote marker kullanmadi ve remote staging preflight/deployment basarisi sayilmaz.
 
+## Host Provisioning Handoff
+
+MS-017B3 staging host provisioning contract ve operator handoff bundle ekler. Bu akisin sahibi [staging-host-provisioning.md](staging-host-provisioning.md) dosyasidir.
+
+Handoff bundle operator'a host prerequisite, SSH trust, marker, Docker/Compose, network/port, filesystem, capacity, package handoff ve local rehearsal evidence ayrimini verir. Bundle secret-free ve machine-verifiable'dir, fakat gercek target/env/known_hosts uretmez, remote host'a baglanmaz, marker yaratmaz, package/image transfer etmez ve staging deployment veya rollback kaniti sayilmaz.
+
 ## Target Descriptor
 
 Tracked ornek:

@@ -113,3 +113,5 @@ Raw temp path, secret, DB URL, Agent key, JWT, host/IP veya raw sentinel payload
 ## Sonraki Adim
 
 Local rehearsal pass etse bile remote staging preflight hala ayridir ve operator-provided approved target, env, pinned known_hosts ve remote marker gerektirir.
+
+MS-017B3 operator handoff bundle bu belgedeki evidence ozetini `local-rehearsal-evidence.json` olarak repository disi bundle'a baglar. Bu baglanti local rehearsal'in remote staging kaniti oldugunu iddia etmez; yalniz operator'a hangi local dry-run kanitinin mevcut oldugunu secret-free ve checksum'li sekilde gosterir.

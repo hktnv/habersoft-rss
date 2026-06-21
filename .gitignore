@@ -6,7 +6,11 @@ coverage/
 npm-debug.log*
 deploy/staging/*.json
 !deploy/staging/target.example.json
+!deploy/staging/host-requirements.schema.json
+!deploy/staging/operator-handoff.schema.json
 deploy/staging/*.env
+staging-operator-handoff/
+staging-operator-handoff.*.json
 staging-target.json
 staging.env
 staging-known-hosts

@@ -54,6 +54,8 @@ MS-017 hazirlik tooling'i staging target ve receipt kapilarini ekler; remote sta
 
 MS-017B2 local rehearsal tooling'i previous ve candidate image-included package'leri izole local Docker project altinda kullanir. Application version ayni kalabilir; rollback identity source commit ve image ID ile ayrilir. Bkz. [local-staging-rehearsal.md](local-staging-rehearsal.md).
 
+MS-017B3 operator handoff bundle package uretmez veya image tasimaz; yalniz staging host prerequisite ve package handoff requirement'larini secret-free sozlesme olarak verir. Bkz. [staging-host-provisioning.md](staging-host-provisioning.md).
+
 ## Publication Ayrimi
 
 MS-016 package uretir ve dogrular. External registry publish, Docker Hub/GHCR push, Git tag, GitHub Release ve production deployment yapmaz.
