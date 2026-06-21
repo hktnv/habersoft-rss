@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rss.habersoft.com/schemas/main-service/staging-operator-handoff.schema.json",
+  "title": "main-service staging operator handoff manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bundle_type",
+    "environment",
+    "application",
+    "application_version",
+    "master_release",
+    "master_hash",
+    "master_count",
+    "generated_by",
+    "generated_at",
+    "generated_parameters",
+    "payload_files",
+    "safety_flags",
+    "official_source_topics"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "bundle_type": { "const": "staging-operator-handoff" },
+    "environment": { "const": "staging" },
+    "application": { "const": "main-service" },
+    "application_version": { "const": "0.1.0-ms-016" },
+    "master_release": { "const": "rss-habersoft-master-v12" },
+    "master_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "master_count": { "const": 29 },
+    "generated_by": { "const": "scripts/staging-operator-handoff.mjs" },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "generated_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "edge_mode",
+        "api_port",
+        "compose_project_name"
+      ],
+      "properties": {
+        "platform": { "const": "linux/amd64" },
+        "edge_mode": { "const": "loopback-only" },
+        "api_port": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "compose_project_name": {
+          "type": "string",
+          "pattern": "staging"
+        }
+      }
+    },
+    "payload_files": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "bytes"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "safety_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ssh_contacted",
+        "network_contacted",
+        "known_hosts_generated",
+        "target_approved_generated",
+        "secret_generated",
+        "remote_marker_created",
+        "release_package_generated",
+        "deployable_artifact_included",
+        "docker_mutation_performed",
+        "remote_mutation_performed",
+        "staging_deployment_performed",
+        "production_deployment_performed",
+        "artifact_publication_performed",
+        "git_tag_created",
+        "github_release_created",
+        "dns_changed",
+        "tls_changed",
+        "cyberpanel_changed"
+      ],
+      "properties": {
+        "ssh_contacted": { "const": false },
+        "network_contacted": { "const": false },
+        "known_hosts_generated": { "const": false },
+        "target_approved_generated": { "const": false },
+        "secret_generated": { "const": false },
+        "remote_marker_created": { "const": false },
+        "release_package_generated": { "const": false },
+        "deployable_artifact_included": { "const": false },
+        "docker_mutation_performed": { "const": false },
+        "remote_mutation_performed": { "const": false },
+        "staging_deployment_performed": { "const": false },
+        "production_deployment_performed": { "const": false },
+        "artifact_publication_performed": { "const": false },
+        "git_tag_created": { "const": false },
+        "github_release_created": { "const": false },
+        "dns_changed": { "const": false },
+        "tls_changed": { "const": false },
+        "cyberpanel_changed": { "const": false }
+      }
+    },
+    "official_source_topics": {
+      "type": "array",
+      "minItems": 5,
+      "items": { "type": "string" }
+    }
+  }
+}

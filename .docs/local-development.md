@@ -377,8 +377,11 @@ npm run test:staging
 npm run staging:inputs:scaffold -- --output-dir <external-empty-directory> --target-alias <staging-alias> --ssh-host <operator-host> --ssh-port 22 --ssh-user <operator-user> --known-hosts-file <external-known-hosts-path> --marker-path /etc/habersoft/environment --remote-base-dir <staging-base-dir> --project-name <staging-project> --api-port 13000 --edge-mode loopback-only
 npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input
 npm run staging:known-hosts:inspect -- --target <external-path>/staging-target.json
+npm run staging:handoff:generate -- --output-dir <external-empty-directory> --platform linux/amd64 --edge-mode loopback-only --marker-path <operator-marker-path> --remote-base-dir <operator-staging-base-dir> --project-name <staging-project> --api-port <staging-api-port>
+npm run staging:handoff:verify -- --bundle <external-output-directory>
 npm run staging:rehearsal:local -- --previous-commit <previous-commit> --candidate-commit <candidate-commit> --platform linux/amd64 --output-root <external-temp-dir>
 npm run staging:rehearsal:verify -- --receipt <external-temp-dir>/receipt/local-staging-rehearsal-receipt.json
+npm run test:staging:handoff
 npm run test:staging:rehearsal
 npm run staging:preflight -- --target <external-path>/staging-target.json
 npm run staging:receipt:verify -- --receipt <receipt.json>
@@ -389,3 +392,5 @@ npm run staging:receipt:verify -- --receipt <receipt.json>
 Gercek target, known_hosts, staging env, release package, backup ve receipt Git'e alinmaz. Onayli staging target ve remote marker yoksa `staging:deploy`, `staging:rollback` ve `staging:roll-forward` basari iddiasi uretmez.
 
 `staging:rehearsal:local`, remote staging yerine gecmez. Unique local Docker project altinda previous/candidate image package'lerini, backup/restore'i ve immutable image rollback/roll-forward dry-run'ini dener. Generated package/env/backup/receipt output'u repository disinda tutulur.
+
+`staging:handoff:generate`, operator'a host prerequisite ve external input contract bundle'i uretir. Output repository disindadir, generated target template `approved=false` kalir, secret/known_hosts/package/image uretmez ve remote host'a baglanmaz. `staging:handoff:verify`, manifest, checksum, schema identity, secret scan, path safety ve false remote/deploy flags kapilarini dogrular. Ayrintili sorumluluk icin bkz. [staging-host-provisioning.md](staging-host-provisioning.md).

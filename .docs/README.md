@@ -36,6 +36,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [release-packaging.md](release-packaging.md) | MS-016 release package command, artifact inventory, manifest/checksum/SBOM/provenance, image identity, verifier ve publication/deployment ayrimi. |
 | [backup-and-restore.md](backup-and-restore.md) | MS-016 PostgreSQL backup prerequisite, checksum metadata, disposable restore verification, Redis siniri ve rollback data-protection gate'i. |
 | [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md) | MS-017 staging deployment/rollback tatbikati icin target safety, SSH, receipt ve blocked-before-remote-staging operasyon gercegi. |
+| [staging-host-provisioning.md](staging-host-provisioning.md) | MS-017B3 staging host prerequisite, operator responsibility, handoff bundle artifact model and external input contract. |
 | [local-staging-rehearsal.md](local-staging-rehearsal.md) | MS-017B2 izole local Docker rehearsal, package/image rollback dry-run, backup/restore ve remote staging'den ayrim. |
 
 ## Okuma Sirasi
@@ -60,9 +61,10 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 18. [release-packaging.md](release-packaging.md)
 19. [backup-and-restore.md](backup-and-restore.md)
 20. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
-21. [local-staging-rehearsal.md](local-staging-rehearsal.md)
-22. [database-schema.md](database-schema.md)
-23. Repository kok [README.md](../README.md)
+21. [staging-host-provisioning.md](staging-host-provisioning.md)
+22. [local-staging-rehearsal.md](local-staging-rehearsal.md)
+23. [database-schema.md](database-schema.md)
+24. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
@@ -88,6 +90,8 @@ MS-017 hazirlik notu: Staging target descriptor, pinned SSH known_hosts ve remot
 MS-017B1 notu: Staging operator input tooling prepared. Operator external target/env/known_hosts girdilerini local-only scaffold ve verify komutlariyla hazirlayabilir. Remote staging preflight not executed; staging deployment still not executed.
 
 MS-017B2 evidence notu: Local isolated staging rehearsal passed with previous source `9bed749e531fdbe435011b3948ec52982387269e` and runtime candidate source `b992e77353aef6138afef19620a9d38835f93266`. Local rollback dry-run, roll-forward, backup/restore, scheduler and teardown verification passed. Remote staging preflight not executed; remote staging deployment not executed; application version remains `0.1.0-ms-016`.
+
+MS-017B3 handoff notu: Staging host provisioning contract and operator handoff bundle generator/verifier prepared. Bundle output is external, secret-free and machine-verifiable; it does not generate real target/env/known_hosts, create a remote marker, contact SSH/network, transfer package/image, mutate Docker resources or deploy staging/production. Remote staging preflight remains not executed.
 
 ## Sabit Runtime ve Altyapi Surumleri
 
