@@ -245,6 +245,8 @@ Invoke-WebRequest http://localhost:3000/health/ready
 Bu komutlar container toolchain'i ile calistirilir:
 
 ```powershell
+docker compose run --rm main-service-api npm run release:verify
+docker compose run --rm main-service-api npm run test:mvp-acceptance
 docker compose run --rm main-service-api npm run lint
 docker compose run --rm main-service-api npm run typecheck
 docker compose run --rm main-service-api npm run test:auth
@@ -273,6 +275,37 @@ docker compose run --rm main-service-api npm run build
 ```
 
 `npm run test:agent-auth`, Agent key config, header parser, digest verification, principal, guard ve worker boundary kontrollerini calistirir. `npm run test:agent-due-feeds`, due-feed validation, mapper, use-case, HTTP route/auth precedence, worker boundary ve Compose PostgreSQL eligibility/order/limit/no-mutation senaryolarini calistirir. `npm run test:agent-heartbeat`, heartbeat validation, use-case, HTTP route/auth/validation precedence, route inventory ve worker boundary senaryolarini calistirir. `npm run test:agent-new-guids`, new-GUID validation, mapper, use-case, HTTP route/auth precedence, worker boundary ve Compose PostgreSQL filter/no-mutation/query-count/query-plan senaryolarini calistirir. `npm run test:agent-entries`, entry ingestion validation, phase policy, use-case, HTTP route/auth precedence ve Compose PostgreSQL transaction/replay/feed-state senaryolarini calistirir. `npm run test:agent-feed-check-results`, feed-check-results validation, phase/backoff policy, use-case, HTTP route/auth precedence, worker boundary ve Compose PostgreSQL transaction/replay/out-of-order/feed-state senaryolarini calistirir. `npm run test:job-runner`, cleanup orchestrator ve API/worker module boundary senaryolarini calistirir. `npm run test:cleanup`, cleanup registry ve payload policy'sini calistirir. `npm run test:queue`, Compose Redis uzerinde BullMQ scheduler/global-concurrency/job-processing senaryolarini calistirir. `npm run test:db:cleanup`, Compose PostgreSQL uzerinde retention age/cap, detail flag, event cleanup ve vacuum senaryolarini calistirir. `npm run test:db:agent-heartbeat`, Compose PostgreSQL uzerinde heartbeat current-state/no-side-effect senaryolarini calistirir. `npm run test:db:agent-entries`, Compose PostgreSQL uzerinde entry ingestion event/entry/detail/feed-state/replay/rollback senaryolarini calistirir. `npm run test:db:agent-feed-check-results`, Compose PostgreSQL uzerinde feed-check-results event/feed-state/replay/out-of-order/rollback senaryolarini calistirir. `npm run test:rate-limit`, tenant rate-limit config, HMAC key turetimi, Redis reply parsing, guard/servis davranisi, worker siniri ve Compose icinde Redis entegrasyon senaryolarini calistirir. `npm run test:tenant-entries`, entry listeleme query validation, DTO mapping, controller/rate-limit davranisi ve Compose icinde PostgreSQL/Redis entegrasyon senaryolarini calistirir. `npm run test:tenant-entry-detail`, entry detail id/query validation, DTO mapping, controller/rate-limit davranisi, worker siniri ve Compose icinde PostgreSQL/Redis detail/null/404/invariant senaryolarini calistirir. `npm run test:tenant-feeds`, feed abonelik request dogrulama, use-case ve controller testlerini calistirir. `npm run test:db`, Compose PostgreSQL servisi uzerinde izole gecici bir database olusturur, migration'lari bastan uygular, ikinci deploy'un no-op oldugunu dogrular, katalog/constraint/index kontrollerini ve MS-004/MS-006/MS-007/MS-009/MS-010/MS-011/MS-012/MS-013/MS-014 PostgreSQL ve Redis entegrasyon senaryolarini calistirir.
+
+`npm run release:verify`, static release integrity, lint, typecheck, unit/component tests, Prisma validate/generate, production audit ve build kapilarini fail-fast calistirir. `npm run test:mvp-acceptance`, real PostgreSQL ve Redis gerektiren integrated acceptance zinciridir ve authoritative kullanim Compose container icindedir.
+
+## Clean-room Acceptance
+
+Release adayini user stack veya volume'lerine dokunmadan dogrulamak icin detached worktree ve unique Compose project name kullan:
+
+```powershell
+git worktree add --detach <TEMP_PATH> HEAD
+Copy-Item <TEMP_PATH>\.env.example <TEMP_PATH>\.env
+docker compose -p main-service-ms015-acceptance-<unique> --project-directory <TEMP_PATH> build --no-cache
+docker compose -p main-service-ms015-acceptance-<unique> --project-directory <TEMP_PATH> up -d
+docker compose -p main-service-ms015-acceptance-<unique> --project-directory <TEMP_PATH> run --rm main-service-api npm run test:mvp-acceptance
+docker compose -p main-service-ms015-acceptance-<unique> --project-directory <TEMP_PATH> down -v --remove-orphans
+git worktree remove <TEMP_PATH>
+git worktree prune
+```
+
+`down -v` yalniz unique acceptance project icin kullanilir. `.env`, SBOM, audit output, logs, DB dump veya Redis dump commit edilmez.
+
+Supply-chain yardimci komutlari:
+
+```powershell
+npm audit --omit=dev
+npm audit
+npm audit signatures
+npm sbom --sbom-format=cyclonedx
+npm outdated
+```
+
+`MVP Adayi`, main-service repository kabul sonucudur; production deployment veya diger uygulamalarin readiness iddiasi degildir.
 
 ## Smoke Test
 
