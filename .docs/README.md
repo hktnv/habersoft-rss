@@ -54,12 +54,14 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 - Repository: `https://github.com/hktnv/habersoft-rss`
 - Uygulama surumu: `0.1.0-ms-012`
 - Master kaynak: `../../.md/master/`
-- Master baseline: `rss-habersoft-master-v10`
-- Master agac ozeti SHA-256: `1673e90d7c7596e13053c7669044a08a09b4a9b70fd9c54c8c5c0e59f8aed192`
+- Master baseline: `rss-habersoft-master-v11`
+- Master agac ozeti SHA-256: `be0d25d5523e185b23cf720a34bca777667a64b832ab31fad2d1bf9741687f32`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
 - Uyum durumu: `Geciste`
 
 `Geciste` durumu bilincli kullanilmistir. MS-012 production Agent route envanterini `POST /agent/heartbeat`, `GET /agent/feeds/due`, `POST /agent/feeds/{feed_id}/new-guids` ve `POST /agent/entries` olarak genisletir; feed-check-results, cleanup scheduler ve job runner davranislari henuz uygulanmamistir.
+
+v11 etki notu: MS-012 uygulamasi v11'e karsi etki analiziyle uyumludur. `POST /agent/feed-check-results` henuz uygulanmamistir; v11 response alani application code'da henuz yoktur. Onceki kayit: `rss-habersoft-master-v10` + `SHA-256:1673e90d7c7596e13053c7669044a08a09b4a9b70fd9c54c8c5c0e59f8aed192`.
 
 ## Sabit Runtime ve Altyapi Surumleri
 
