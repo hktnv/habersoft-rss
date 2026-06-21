@@ -14,3 +14,6 @@ staging-input-readiness.json
 staging-input-readiness.*.json
 staging-deployment-receipt.json
 staging-deployment-receipt.*.json
+local-staging-rehearsal-receipt.json
+local-staging-rehearsal-receipt.*.json
+local-staging-rehearsal/

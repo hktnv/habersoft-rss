@@ -52,6 +52,8 @@ Default verifier staging-handoff icin `main-service-image.tar` ister. Hizli loca
 
 MS-017 hazirlik tooling'i staging target ve receipt kapilarini ekler; remote staging deployment yalniz onayli target, pinned host key, remote marker ve external staging env saglandiginda baslatilabilir. Bkz. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md).
 
+MS-017B2 local rehearsal tooling'i previous ve candidate image-included package'leri izole local Docker project altinda kullanir. Application version ayni kalabilir; rollback identity source commit ve image ID ile ayrilir. Bkz. [local-staging-rehearsal.md](local-staging-rehearsal.md).
+
 ## Publication Ayrimi
 
 MS-016 package uretir ve dogrular. External registry publish, Docker Hub/GHCR push, Git tag, GitHub Release ve production deployment yapmaz.
