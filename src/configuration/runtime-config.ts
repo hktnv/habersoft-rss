@@ -20,6 +20,7 @@ export type RuntimeConfig = {
   readonly tenantRateLimit?: TenantRateLimitConfig;
   readonly agentAuth?: AgentAuthConfig;
   readonly agentEntries?: AgentEntriesConfig;
+  readonly maintenance?: MaintenanceConfig;
 };
 
 export type TenantAuthConfig = {
@@ -48,6 +49,18 @@ export type AgentAuthConfig = {
 export type AgentEntriesConfig = {
   readonly checkedAtMaxFutureSkewSeconds: number;
   readonly checkedAtMaxAgeSeconds: number;
+};
+
+export type MaintenanceConfig = {
+  readonly entryRetentionDays: number;
+  readonly entryMaxPerFeed: number;
+  readonly entryDetailRetentionDays: number;
+  readonly entryDetailMaxPerFeed: number;
+  readonly bullmqPrefix: string;
+  readonly completedJobRetentionSeconds: number;
+  readonly completedJobMaxCount: number;
+  readonly failedJobRetentionSeconds: number;
+  readonly failedJobMaxCount: number;
 };
 
 export class ConfigValidationError extends Error {
@@ -104,6 +117,23 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
           issues
         )
       : undefined;
+  const maintenance =
+    expectedRole === "worker"
+      ? requireMaintenanceConfig(
+          {
+            entryRetentionDays: env.ENTRY_RETENTION_DAYS,
+            entryMaxPerFeed: env.ENTRY_MAX_PER_FEED,
+            entryDetailRetentionDays: env.ENTRY_DETAIL_RETENTION_DAYS,
+            entryDetailMaxPerFeed: env.ENTRY_DETAIL_MAX_PER_FEED,
+            bullmqPrefix: env.BULLMQ_PREFIX,
+            completedJobRetentionSeconds: env.MAINTENANCE_COMPLETED_JOB_RETENTION_SECONDS,
+            completedJobMaxCount: env.MAINTENANCE_COMPLETED_JOB_MAX_COUNT,
+            failedJobRetentionSeconds: env.MAINTENANCE_FAILED_JOB_RETENTION_SECONDS,
+            failedJobMaxCount: env.MAINTENANCE_FAILED_JOB_MAX_COUNT
+          },
+          issues
+        )
+      : undefined;
 
   if (role !== undefined && role !== expectedRole) {
     issues.push(`RUNTIME_ROLE must be ${expectedRole}`);
@@ -130,7 +160,8 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
     ...(tenantAuth === undefined ? {} : { tenantAuth }),
     ...(tenantRateLimit === undefined ? {} : { tenantRateLimit }),
     ...(agentAuth === undefined ? {} : { agentAuth }),
-    ...(agentEntries === undefined ? {} : { agentEntries })
+    ...(agentEntries === undefined ? {} : { agentEntries }),
+    ...(maintenance === undefined ? {} : { maintenance })
   };
 }
 
@@ -254,6 +285,51 @@ function requireAgentEntriesConfig(
       issues
     ),
     checkedAtMaxAgeSeconds: requirePositiveInteger(values.checkedAtMaxAgeSeconds, "CHECKED_AT_MAX_AGE_SECONDS", issues)
+  };
+}
+
+function requireMaintenanceConfig(
+  values: {
+    readonly entryRetentionDays: string | undefined;
+    readonly entryMaxPerFeed: string | undefined;
+    readonly entryDetailRetentionDays: string | undefined;
+    readonly entryDetailMaxPerFeed: string | undefined;
+    readonly bullmqPrefix: string | undefined;
+    readonly completedJobRetentionSeconds: string | undefined;
+    readonly completedJobMaxCount: string | undefined;
+    readonly failedJobRetentionSeconds: string | undefined;
+    readonly failedJobMaxCount: string | undefined;
+  },
+  issues: string[]
+): MaintenanceConfig {
+  const bullmqPrefix = requireText(values.bullmqPrefix, "BULLMQ_PREFIX", issues);
+
+  if (bullmqPrefix !== "" && !/^[a-z0-9:_-]+$/u.test(bullmqPrefix)) {
+    issues.push("BULLMQ_PREFIX may contain only lowercase letters, digits, colon, underscore, and hyphen");
+  }
+
+  return {
+    entryRetentionDays: requirePositiveInteger(values.entryRetentionDays, "ENTRY_RETENTION_DAYS", issues),
+    entryMaxPerFeed: requirePositiveInteger(values.entryMaxPerFeed, "ENTRY_MAX_PER_FEED", issues),
+    entryDetailRetentionDays: requirePositiveInteger(values.entryDetailRetentionDays, "ENTRY_DETAIL_RETENTION_DAYS", issues),
+    entryDetailMaxPerFeed: requirePositiveInteger(values.entryDetailMaxPerFeed, "ENTRY_DETAIL_MAX_PER_FEED", issues),
+    bullmqPrefix,
+    completedJobRetentionSeconds: requirePositiveInteger(
+      values.completedJobRetentionSeconds,
+      "MAINTENANCE_COMPLETED_JOB_RETENTION_SECONDS",
+      issues
+    ),
+    completedJobMaxCount: requirePositiveInteger(
+      values.completedJobMaxCount,
+      "MAINTENANCE_COMPLETED_JOB_MAX_COUNT",
+      issues
+    ),
+    failedJobRetentionSeconds: requirePositiveInteger(
+      values.failedJobRetentionSeconds,
+      "MAINTENANCE_FAILED_JOB_RETENTION_SECONDS",
+      issues
+    ),
+    failedJobMaxCount: requirePositiveInteger(values.failedJobMaxCount, "MAINTENANCE_FAILED_JOB_MAX_COUNT", issues)
   };
 }
 
