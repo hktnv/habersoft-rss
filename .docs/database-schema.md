@@ -13,6 +13,8 @@ Bu repository'deki `schema.prisma`, canonical DB semasinin Prisma Client erisim 
 
 MS-002 yeni bir migration history olusturmaz ve mevcut bos initial migration'i yeniden yazmaz.
 
+MS-014 cleanup retention uygulamasi yeni tablo, kolon, index veya migration eklemez; mevcut `entries`, `entry_details` ve `agent_feed_check_events` tablolarindaki canonical alanlar uzerinde bounded delete/update ve `VACUUM ANALYZE` calistirir.
+
 ## Business Tablolari
 
 MS-002 yalnizca su alti canonical tabloyu olusturur:
@@ -41,6 +43,8 @@ Bu ozelliklerde migration SQL ile `schema.prisma` arasinda yorum farki olursa ca
 `feeds_due` index'i `next_check_at ASC, id ASC` key order'una ve `active = true AND subscriber_count > 0` predicate'ine sahiptir. MS-010 `GET /agent/feeds/due` read-only sorgusu bu index ile uyumlu olarak `next_check_at <= captured server now` filtresi, canonical order ve `limit + 1` bounded read kullanir.
 
 `entries_feed_id_guid_key` unique constraint'i `(feed_id, guid)` identity ve future Agent entry ingestion write idempotency siniridir. MS-011 `POST /agent/feeds/{feed_id}/new-guids` endpoint'i bu identity uzerinden target feed'deki existing GUID set'ini read-only filtreler; yeni schema, index veya migration eklemez.
+
+MS-014 `entry_details` cleanup'i detail satirini sildiginde parent `entries.has_detail=false` gunceller. `detail_extraction_status = 'ok'` ile `has_detail=false` durumu gecerlidir; status tarihsel extraction sonucunu, `has_detail` ise aktif detail satiri varligini temsil eder.
 
 ## Dogrulama
 

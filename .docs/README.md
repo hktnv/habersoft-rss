@@ -7,7 +7,7 @@
 - Canonical repository remote: `https://github.com/hktnv/habersoft-rss`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
-- Uygulama surumu/durum: `0.1.0-ms-013` / `Geciste`
+- Uygulama surumu/durum: `0.1.0-ms-014` / `Geciste`
 
 Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application repository siniridir. Merkezi master ve DEV alt dokumanlar bu repository'ye kopyalanmaz.
 
@@ -29,6 +29,8 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [agent-new-guid-filtering.md](agent-new-guid-filtering.md) | MS-011 `POST /agent/feeds/{feed_id}/new-guids` endpoint'i, strict request validation, duplicate/order policy, advisory DB filter ve no-side-effect sinirlari. |
 | [agent-entry-ingestion.md](agent-entry-ingestion.md) | MS-012 `POST /agent/entries` endpoint'i, strict validation, idempotent replay, atomic entry/detail/event/feed-state write ve checked_at window sinirlari. |
 | [agent-feed-check-results.md](agent-feed-check-results.md) | MS-013 `POST /agent/feed-check-results` endpoint'i, strict validation, idempotent batch replay, out-of-order accounting ve monotonic feed-state write sinirlari. |
+| [background-job-runner.md](background-job-runner.md) | MS-014 worker-only BullMQ queue, scheduler reconciliation, retry, readiness ve shutdown gercegi. |
+| [cleanup-retention.md](cleanup-retention.md) | MS-014 cleanup retention orkestrasyonu, canonical step sirasi, bounded SQL davranisi ve telemetry siniri. |
 
 ## Okuma Sirasi
 
@@ -45,8 +47,10 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 11. [agent-new-guid-filtering.md](agent-new-guid-filtering.md)
 12. [agent-entry-ingestion.md](agent-entry-ingestion.md)
 13. [agent-feed-check-results.md](agent-feed-check-results.md)
-14. [database-schema.md](database-schema.md)
-15. Repository kok [README.md](../README.md)
+14. [background-job-runner.md](background-job-runner.md)
+15. [cleanup-retention.md](cleanup-retention.md)
+16. [database-schema.md](database-schema.md)
+17. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
@@ -54,16 +58,16 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 
 - Uygulama kimligi: `main-service`
 - Repository: `https://github.com/hktnv/habersoft-rss`
-- Uygulama surumu: `0.1.0-ms-013`
+- Uygulama surumu: `0.1.0-ms-014`
 - Master kaynak: `../../.md/master/`
 - Master baseline: `rss-habersoft-master-v11`
 - Master agac ozeti SHA-256: `be0d25d5523e185b23cf720a34bca777667a64b832ab31fad2d1bf9741687f32`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
 - Uyum durumu: `Geciste`
 
-`Geciste` durumu bilincli kullanilmistir. MS-013 production Agent route envanterini `POST /agent/heartbeat`, `GET /agent/feeds/due`, `POST /agent/feeds/{feed_id}/new-guids`, `POST /agent/entries` ve `POST /agent/feed-check-results` olarak genisletir; cleanup scheduler ve job runner davranislari henuz uygulanmamistir.
+`Geciste` durumu bilincli kullanilmistir. MS-014 production Agent route envanterini degistirmez; cleanup scheduler ve job runner davranislari yalniz `main-service-worker` icinde uygulanmistir.
 
-v11 etki notu: MS-013 uygulamasi v11'e karsi etki analiziyle uyumludur. `POST /agent/feed-check-results` response'u v11 dort-sayac sozlesmesini `accepted`, `feed_state_updated`, `idempotent_replay_count` ve `out_of_order_result_count` olarak uygular. Onceki kayit: `rss-habersoft-master-v10` + `SHA-256:1673e90d7c7596e13053c7669044a08a09b4a9b70fd9c54c8c5c0e59f8aed192`.
+v11 etki notu: MS-014 uygulamasi v11 master cleanup, retention ve job-runner sozlesmeleriyle uyumludur. `POST /agent/feed-check-results` response'u MS-013'te v11 dort-sayac sozlesmesini `accepted`, `feed_state_updated`, `idempotent_replay_count` ve `out_of_order_result_count` olarak uygulamaya devam eder.
 
 ## Sabit Runtime ve Altyapi Surumleri
 
@@ -72,6 +76,8 @@ v11 etki notu: MS-013 uygulamasi v11'e karsi etki analiziyle uyumludur. `POST /a
 - NestJS: `11.1.27`
 - Prisma CLI ve Client: `6.19.3`
 - Redis client: `ioredis 5.11.1`
+- BullMQ: `5.79.0`
+- NestJS BullMQ integration: `@nestjs/bullmq 11.0.4`
 - JOSE/JWT library: `jose 6.2.3`
 - PostgreSQL image: `postgres:17.9-bookworm`
 - Redis image: `redis:8.8.0-trixie`

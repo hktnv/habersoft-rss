@@ -12,6 +12,6 @@ describe("tenant feeds module boundary", () => {
     const dynamicModule = WorkerModule.register(workerConfig);
 
     expect(dynamicModule.imports).not.toContain(TenantFeedsModule);
-    expect(dynamicModule.providers).toHaveLength(1);
+    expect(dynamicModule.providers ?? []).not.toContain(TenantFeedsModule);
   });
 });

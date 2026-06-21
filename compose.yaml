@@ -1,7 +1,7 @@
 name: main-service
 
 x-main-service-image: &main-service-image
-  image: main-service-app:0.1.0-ms-013
+  image: main-service-app:0.1.0-ms-014
   build:
     context: .
     dockerfile: Dockerfile
@@ -113,6 +113,15 @@ services:
       API_PORT: ${API_PORT:-3000}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      ENTRY_RETENTION_DAYS: ${ENTRY_RETENTION_DAYS:-30}
+      ENTRY_MAX_PER_FEED: ${ENTRY_MAX_PER_FEED:-10000}
+      ENTRY_DETAIL_RETENTION_DAYS: ${ENTRY_DETAIL_RETENTION_DAYS:-7}
+      ENTRY_DETAIL_MAX_PER_FEED: ${ENTRY_DETAIL_MAX_PER_FEED:-2000}
+      BULLMQ_PREFIX: ${BULLMQ_PREFIX:-main-service-local}
+      MAINTENANCE_COMPLETED_JOB_RETENTION_SECONDS: ${MAINTENANCE_COMPLETED_JOB_RETENTION_SECONDS:-604800}
+      MAINTENANCE_COMPLETED_JOB_MAX_COUNT: ${MAINTENANCE_COMPLETED_JOB_MAX_COUNT:-1000}
+      MAINTENANCE_FAILED_JOB_RETENTION_SECONDS: ${MAINTENANCE_FAILED_JOB_RETENTION_SECONDS:-2592000}
+      MAINTENANCE_FAILED_JOB_MAX_COUNT: ${MAINTENANCE_FAILED_JOB_MAX_COUNT:-5000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -120,6 +129,12 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "npm", "run", "worker:health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
 volumes:
   main-service-postgres-data:

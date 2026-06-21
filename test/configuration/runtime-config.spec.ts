@@ -19,7 +19,16 @@ const validEnv = {
   TENANT_RATE_LIMIT_KEY_SECRET: "replace_with_local_only_rate_limit_key_secret_32",
   AGENT_KEY: localAgentKeyPlaceholder,
   CHECKED_AT_MAX_FUTURE_SKEW_SECONDS: "60",
-  CHECKED_AT_MAX_AGE_SECONDS: "900"
+  CHECKED_AT_MAX_AGE_SECONDS: "900",
+  ENTRY_RETENTION_DAYS: "30",
+  ENTRY_MAX_PER_FEED: "10000",
+  ENTRY_DETAIL_RETENTION_DAYS: "7",
+  ENTRY_DETAIL_MAX_PER_FEED: "2000",
+  BULLMQ_PREFIX: "main-service-local",
+  MAINTENANCE_COMPLETED_JOB_RETENTION_SECONDS: "604800",
+  MAINTENANCE_COMPLETED_JOB_MAX_COUNT: "1000",
+  MAINTENANCE_FAILED_JOB_RETENTION_SECONDS: "2592000",
+  MAINTENANCE_FAILED_JOB_MAX_COUNT: "5000"
 };
 
 function omitTenantAuth(env: typeof validEnv): Record<string, string | undefined> {
@@ -108,6 +117,54 @@ describe("loadRuntimeConfig", () => {
     expect(config.tenantRateLimit).toBeUndefined();
     expect(config.agentAuth).toBeUndefined();
     expect(config.agentEntries).toBeUndefined();
+    expect(config.maintenance).toEqual({
+      entryRetentionDays: 30,
+      entryMaxPerFeed: 10000,
+      entryDetailRetentionDays: 7,
+      entryDetailMaxPerFeed: 2000,
+      bullmqPrefix: "main-service-local",
+      completedJobRetentionSeconds: 604800,
+      completedJobMaxCount: 1000,
+      failedJobRetentionSeconds: 2592000,
+      failedJobMaxCount: 5000
+    });
+  });
+
+  it("does not require worker cleanup configuration for the API role", () => {
+    const config = loadRuntimeConfig(
+      {
+        ...validEnv,
+        ENTRY_RETENTION_DAYS: undefined,
+        BULLMQ_PREFIX: undefined
+      },
+      "api"
+    );
+
+    expect(config.maintenance).toBeUndefined();
+  });
+
+  it("requires and validates worker cleanup configuration for the worker role", () => {
+    expect(() =>
+      loadRuntimeConfig(
+        {
+          ...omitTenantAuth(validEnv),
+          RUNTIME_ROLE: "worker",
+          ENTRY_RETENTION_DAYS: "0"
+        },
+        "worker"
+      )
+    ).toThrow(ConfigValidationError);
+
+    expect(() =>
+      loadRuntimeConfig(
+        {
+          ...omitTenantAuth(validEnv),
+          RUNTIME_ROLE: "worker",
+          BULLMQ_PREFIX: "Main Service"
+        },
+        "worker"
+      )
+    ).toThrow(ConfigValidationError);
   });
 
   it("rejects local or non-HTTPS JWKS URLs in production", () => {
