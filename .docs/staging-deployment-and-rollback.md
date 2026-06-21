@@ -61,6 +61,12 @@ Known_hosts inspect komutu offline calisir; `ssh-keyscan` kullanmaz, network'e c
 
 MS-017B1 sonunda application version `0.1.0-ms-016` olarak kalir. Staging deployment, rollback, roll-forward, package/image transfer ve remote preflight hala yapilmamistir. Siradaki bounded adim MS-017B approved staging target read-only remote preflight'tir.
 
+## Local Rehearsal Ayrimi
+
+MS-017B2 local isolated staging rehearsal tooling'i ayrica hazirlanmistir. Bu akisin sahibi [local-staging-rehearsal.md](local-staging-rehearsal.md) dosyasidir.
+
+Local rehearsal, canonical production package ve Compose kaynaklarini unique local Docker project altinda dry-run eder. Remote staging target, SSH, pinned known_hosts veya remote marker kullanmaz ve remote staging preflight/deployment basarisi sayilmaz.
+
 ## Target Descriptor
 
 Tracked ornek:

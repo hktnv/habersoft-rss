@@ -377,6 +377,9 @@ npm run test:staging
 npm run staging:inputs:scaffold -- --output-dir <external-empty-directory> --target-alias <staging-alias> --ssh-host <operator-host> --ssh-port 22 --ssh-user <operator-user> --known-hosts-file <external-known-hosts-path> --marker-path /etc/habersoft/environment --remote-base-dir <staging-base-dir> --project-name <staging-project> --api-port 13000 --edge-mode loopback-only
 npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input
 npm run staging:known-hosts:inspect -- --target <external-path>/staging-target.json
+npm run staging:rehearsal:local -- --previous-commit <previous-commit> --candidate-commit <candidate-commit> --platform linux/amd64 --output-root <external-temp-dir>
+npm run staging:rehearsal:verify -- --receipt <external-temp-dir>/receipt/local-staging-rehearsal-receipt.json
+npm run test:staging:rehearsal
 npm run staging:preflight -- --target <external-path>/staging-target.json
 npm run staging:receipt:verify -- --receipt <receipt.json>
 ```
@@ -384,3 +387,5 @@ npm run staging:receipt:verify -- --receipt <receipt.json>
 `deploy/staging/target.example.json` yalniz schema ornegidir. `staging:inputs:scaffold`, production env template'inin current variable inventory'sinden external `staging.env` olusturur; target default `approved=false` gelir. `--generate-staging-secrets` kullanilirse secret degerleri yalniz external env dosyasina yazilir ve console'a basilmadan kalir. Known_hosts tool tarafindan uretilmez; operator fingerprint'i host owner ile out-of-band dogrulayip pinned dosyayi kendisi hazirlar. Local readiness receipt remote preflight receipt degildir ve host trust veya marker verification iddiasi tasimaz.
 
 Gercek target, known_hosts, staging env, release package, backup ve receipt Git'e alinmaz. Onayli staging target ve remote marker yoksa `staging:deploy`, `staging:rollback` ve `staging:roll-forward` basari iddiasi uretmez.
+
+`staging:rehearsal:local`, remote staging yerine gecmez. Unique local Docker project altinda previous/candidate image package'lerini, backup/restore'i ve immutable image rollback/roll-forward dry-run'ini dener. Generated package/env/backup/receipt output'u repository disinda tutulur.

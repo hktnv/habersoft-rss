@@ -7,6 +7,7 @@ import os from "node:os";
 const tempRoot = mkdtempSync(path.join(os.tmpdir(), "main-service-release-packaging-"));
 const envFile = path.join(tempRoot, "production-smoke.env");
 const packageDir = path.join(tempRoot, "package");
+const masterDirArgs = process.env.MASTER_DIR === undefined ? [] : ["--master-dir", process.env.MASTER_DIR];
 
 writeFileSync(
   envFile,
@@ -52,7 +53,8 @@ try {
     "--no-image",
     "true",
     "--allow-dirty",
-    "true"
+    "true",
+    ...masterDirArgs
   ]);
   run("node", ["scripts/release-package-verify.mjs", "--package", packageDir, "--allow-no-image", "true"]);
   expectFailure(["scripts/release-package-verify.mjs", "--package", packageDir], "missing image artifact");
