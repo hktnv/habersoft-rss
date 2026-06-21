@@ -1,0 +1,125 @@
+name: main-service-production
+
+x-main-service-image: &main-service-image
+  image: ${MAIN_SERVICE_IMAGE:?MAIN_SERVICE_IMAGE is required and must be digest-pinned}
+
+services:
+  postgres:
+    image: postgres:17.9-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+    volumes:
+      - main-service-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.8.0-trixie
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - main-service-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  migrate:
+    <<: *main-service-image
+    command: ["npm", "run", "migrate:deploy"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  main-service-api:
+    <<: *main-service-image
+    command: ["npm", "run", "start:api"]
+    environment:
+      RUNTIME_ROLE: api
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:?LOG_LEVEL is required}
+      API_BIND_HOST: 0.0.0.0
+      API_PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      TENANT_AUTH_JWKS_URL: ${TENANT_AUTH_JWKS_URL:?TENANT_AUTH_JWKS_URL is required}
+      TENANT_RATE_LIMIT_MAX_REQUESTS: ${TENANT_RATE_LIMIT_MAX_REQUESTS:?TENANT_RATE_LIMIT_MAX_REQUESTS is required}
+      TENANT_RATE_LIMIT_WINDOW_SECONDS: ${TENANT_RATE_LIMIT_WINDOW_SECONDS:?TENANT_RATE_LIMIT_WINDOW_SECONDS is required}
+      TENANT_RATE_LIMIT_REDIS_PREFIX: ${TENANT_RATE_LIMIT_REDIS_PREFIX:?TENANT_RATE_LIMIT_REDIS_PREFIX is required}
+      TENANT_RATE_LIMIT_KEY_SECRET: ${TENANT_RATE_LIMIT_KEY_SECRET:?TENANT_RATE_LIMIT_KEY_SECRET is required}
+      AGENT_KEY: ${AGENT_KEY:?AGENT_KEY is required}
+      CHECKED_AT_MAX_FUTURE_SKEW_SECONDS: ${CHECKED_AT_MAX_FUTURE_SKEW_SECONDS:?CHECKED_AT_MAX_FUTURE_SKEW_SECONDS is required}
+      CHECKED_AT_MAX_AGE_SECONDS: ${CHECKED_AT_MAX_AGE_SECONDS:?CHECKED_AT_MAX_AGE_SECONDS is required}
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:?API_HOST_PORT is required}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health/live').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  main-service-worker:
+    <<: *main-service-image
+    command: ["npm", "run", "start:worker"]
+    environment:
+      RUNTIME_ROLE: worker
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:?LOG_LEVEL is required}
+      API_BIND_HOST: 0.0.0.0
+      API_PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      ENTRY_RETENTION_DAYS: ${ENTRY_RETENTION_DAYS:?ENTRY_RETENTION_DAYS is required}
+      ENTRY_MAX_PER_FEED: ${ENTRY_MAX_PER_FEED:?ENTRY_MAX_PER_FEED is required}
+      ENTRY_DETAIL_RETENTION_DAYS: ${ENTRY_DETAIL_RETENTION_DAYS:?ENTRY_DETAIL_RETENTION_DAYS is required}
+      ENTRY_DETAIL_MAX_PER_FEED: ${ENTRY_DETAIL_MAX_PER_FEED:?ENTRY_DETAIL_MAX_PER_FEED is required}
+      BULLMQ_PREFIX: ${BULLMQ_PREFIX:?BULLMQ_PREFIX is required}
+      MAINTENANCE_COMPLETED_JOB_RETENTION_SECONDS: ${MAINTENANCE_COMPLETED_JOB_RETENTION_SECONDS:?MAINTENANCE_COMPLETED_JOB_RETENTION_SECONDS is required}
+      MAINTENANCE_COMPLETED_JOB_MAX_COUNT: ${MAINTENANCE_COMPLETED_JOB_MAX_COUNT:?MAINTENANCE_COMPLETED_JOB_MAX_COUNT is required}
+      MAINTENANCE_FAILED_JOB_RETENTION_SECONDS: ${MAINTENANCE_FAILED_JOB_RETENTION_SECONDS:?MAINTENANCE_FAILED_JOB_RETENTION_SECONDS is required}
+      MAINTENANCE_FAILED_JOB_MAX_COUNT: ${MAINTENANCE_FAILED_JOB_MAX_COUNT:?MAINTENANCE_FAILED_JOB_MAX_COUNT is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "npm", "run", "worker:health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  main-service-postgres-data:
+  main-service-redis-data:

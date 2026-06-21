@@ -62,3 +62,7 @@ docker compose run --rm main-service-worker npm run test:queue
 ```
 
 `test:job-runner`, orchestrator failure policy ve API/worker module boundary kontrollerini calistirir. `test:queue`, Redis/BullMQ uzerinde scheduler reconciliation, global concurrency ve typed job processing davranisini dogrular.
+
+## MS-016 Production Placement
+
+Production Compose worker'i API'den ayri long-running role olarak ayni immutable image'dan calistirir. Worker public port yayinlamaz; PostgreSQL ve Redis/BullMQ internal network bagimliliklarini kullanir. Production topology icin bkz. [production-deployment.md](production-deployment.md).
