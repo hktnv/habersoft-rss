@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const expectedVersion = "0.1.0-ms-015";
+const expectedVersion = "0.1.0-ms-016";
 const expectedMigrations = ["20260620000000_initial_empty", "20260620001000_canonical_business_schema"];
 const failures = [];
 
@@ -18,6 +18,8 @@ function assert(condition, message) {
 
 const packageJson = JSON.parse(read("package.json"));
 const composeYaml = read("compose.yaml");
+const productionComposeYaml = read("deploy/production/compose.yaml");
+const productionTemplate = read("deploy/production/production.env.template");
 const registry = read("src/maintenance/maintenance.registry.ts");
 const sourceText = collectFiles(path.join(root, "src"), ".ts")
   .map((file) => readFileSync(file, "utf8"))
@@ -27,6 +29,12 @@ assert(packageJson.version === expectedVersion, `package.json version must be ${
 assert(packageJson.dependencies?.bullmq === "5.79.0", "bullmq must remain pinned to 5.79.0");
 assert(packageJson.dependencies?.["@nestjs/bullmq"] === "11.0.4", "@nestjs/bullmq must remain pinned to 11.0.4");
 assert(composeYaml.includes(`main-service-app:${expectedVersion}`), `compose image tag must be ${expectedVersion}`);
+assert(productionComposeYaml.includes("${MAIN_SERVICE_IMAGE:?MAIN_SERVICE_IMAGE is required and must be digest-pinned}"), "production Compose must use externally supplied immutable image");
+assert(!productionComposeYaml.includes("tenant-auth-jwks-fixture"), "production Compose must not include local JWKS fixture");
+assert(!/\bbuild\s*:/u.test(productionComposeYaml), "production Compose must not build from source");
+assert(productionComposeYaml.includes("127.0.0.1:${API_HOST_PORT"), "production API must bind to loopback");
+assert(!/5432:5432|6379:6379/u.test(productionComposeYaml), "production Compose must not publish PostgreSQL or Redis ports");
+assert(productionTemplate.includes("TENANT_AUTH_JWKS_URL=https://auth.habersoft.com/.well-known/jwks.json"), "production env template must use HTTPS JWKS placeholder");
 assert(registry.includes('MAINTENANCE_QUEUE_NAME = "main-service.maintenance"'), "maintenance queue registry mismatch");
 assert(registry.includes('CLEANUP_RUN_JOB_NAME = "cleanup.run.v1"'), "cleanup job registry mismatch");
 assert(registry.includes('CLEANUP_DAILY_SCHEDULER_ID = "cleanup.daily"'), "cleanup scheduler registry mismatch");

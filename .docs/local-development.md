@@ -349,3 +349,21 @@ Worker servisinde public HTTP portu yayimlanmaz. `docker compose port main-servi
 ## Worker Scheduler Durumu
 
 MS-014 itibariyla worker, BullMQ `main-service.maintenance` queue'sunu, `cleanup.daily` scheduler'ini ve `cleanup.run.v1` consumer'ini uygular. Worker readiness `npm run worker:health` ile PostgreSQL, Redis, scheduler inventory ve global concurrency uyumunu dogrular.
+
+## MS-016 Production Package Verification
+
+Production package commands generated temp paths with non-production placeholder secrets use eder; real production secrets kullanilmaz ve output commit edilmez.
+
+```powershell
+npm run test:release-packaging
+npm run production:config:check -- --env-file <temp-production-env>
+npm run production:compose:verify -- --env-file <temp-production-env>
+npm run release:package -- --platform linux/amd64 --output <temp-release-dir>
+npm run release:package:verify -- --package <temp-release-dir>
+npm run production:backup -- --compose-file <compose-file> --env-file <env-file> --output <temp-backup>
+npm run production:restore:verify -- --backup <temp-backup>
+```
+
+`deploy/production/compose.yaml` production topology proof'tur; local JWKS fixture icermez, DB/Redis/worker host port yayinlamaz ve `MAIN_SERVICE_IMAGE` digest pin contract'i ister. Local synthetic smoke gerekiyorsa unique Compose project, temp env ve temp output kullanilir. Destructive cleanup only that unique project, disposable restore container and temp files ile sinirlidir.
+
+External registry push, DNS/TLS change, CyberPanel live config, Git tag and GitHub Release MS-016 local verification commands tarafindan yapilmaz.

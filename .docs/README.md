@@ -7,7 +7,7 @@
 - Canonical repository remote: `https://github.com/hktnv/habersoft-rss`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
-- Uygulama surumu/durum: `0.1.0-ms-015` / `MVP Adayi`
+- Uygulama surumu/durum: `0.1.0-ms-016` / `MVP Adayi - Deployment Karari Kesin / Release Paketi Dogrulandi`
 
 Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application repository siniridir. Merkezi master ve DEV alt dokumanlar bu repository'ye kopyalanmaz.
 
@@ -32,6 +32,9 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [background-job-runner.md](background-job-runner.md) | MS-014 worker-only BullMQ queue, scheduler reconciliation, retry, readiness ve shutdown gercegi. |
 | [cleanup-retention.md](cleanup-retention.md) | MS-014 cleanup retention orkestrasyonu, canonical step sirasi, bounded SQL davranisi ve telemetry siniri. |
 | [mvp-release-readiness.md](mvp-release-readiness.md) | MS-015 MVP adayinin release-blocker tanimi, kabul komutlari, gate matrisi, clean-room yontemi ve residual risk siniri. |
+| [production-deployment.md](production-deployment.md) | MS-016 single-host production Compose topology, edge/vhost, service/network/port/volume/startup/readiness ve deploy edilmemislik durumu. |
+| [release-packaging.md](release-packaging.md) | MS-016 release package command, artifact inventory, manifest/checksum/SBOM/provenance, image identity, verifier ve publication/deployment ayrimi. |
+| [backup-and-restore.md](backup-and-restore.md) | MS-016 PostgreSQL backup prerequisite, checksum metadata, disposable restore verification, Redis siniri ve rollback data-protection gate'i. |
 
 ## Okuma Sirasi
 
@@ -51,8 +54,11 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 14. [background-job-runner.md](background-job-runner.md)
 15. [cleanup-retention.md](cleanup-retention.md)
 16. [mvp-release-readiness.md](mvp-release-readiness.md)
-17. [database-schema.md](database-schema.md)
-18. Repository kok [README.md](../README.md)
+17. [production-deployment.md](production-deployment.md)
+18. [release-packaging.md](release-packaging.md)
+19. [backup-and-restore.md](backup-and-restore.md)
+20. [database-schema.md](database-schema.md)
+21. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
@@ -60,16 +66,18 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 
 - Uygulama kimligi: `main-service`
 - Repository: `https://github.com/hktnv/habersoft-rss`
-- Uygulama surumu: `0.1.0-ms-015`
+- Uygulama surumu: `0.1.0-ms-016`
 - Master kaynak: `../../.md/master/`
-- Master baseline: `rss-habersoft-master-v11`
-- Master agac ozeti SHA-256: `be0d25d5523e185b23cf720a34bca777667a64b832ab31fad2d1bf9741687f32`
+- Master baseline: `rss-habersoft-master-v12`
+- Master agac ozeti SHA-256: `def24246ee3fe2f3feabee35e3c658216899d343d21b32637622271bc74d8e50`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
-- Uyum durumu: `MVP Kabul Kapisi Gecti`
+- Uyum durumu: `Deployment Karari Kesin / Release Paketi Dogrulandi`
 
-`MVP Adayi`, main-service repository acceptance sonucudur. Production deployment karari, rollout, Agent application readiness veya Tenant application readiness iddiasi degildir.
+`MVP Adayi`, main-service repository acceptance sonucudur. Production deployment karari MS-016 ile kesinlesmistir; production rollout, artifact publication, Git tag, GitHub Release, Agent application readiness veya Tenant application readiness iddiasi degildir.
 
 v11 etki notu: MS-014 uygulamasi v11 master cleanup, retention ve job-runner sozlesmeleriyle uyumludur. `POST /agent/feed-check-results` response'u MS-013'te v11 dort-sayac sozlesmesini `accepted`, `feed_state_updated`, `idempotent_replay_count` ve `out_of_order_result_count` olarak uygulamaya devam eder.
+
+v12 etki notu: MS-016 production deployment karari master `23-uretim-deployment-gorunumu.md` ile kapanmistir. Release package verified; production deploy, registry publish, DNS/TLS/CyberPanel live change, Git tag ve GitHub Release yapilmamistir.
 
 ## Sabit Runtime ve Altyapi Surumleri
 

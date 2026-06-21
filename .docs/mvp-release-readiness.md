@@ -2,16 +2,16 @@
 
 ## Scope
 
-MS-015, `main-service` repository'sinin mevcut MVP davranisini release-blocker kapilarindan gecirir. `MVP Adayi`, production'a deploy edildi, deployment platformu secildi, admin/frontend tamamlandi veya bagimsiz Agent/Tenant uygulamalari release-ready anlamina gelmez.
+MS-015, `main-service` repository'sinin mevcut MVP davranisini release-blocker kapilarindan gecirir. MS-016 sonrasi deployment karari kapatilmis ve release package dogrulanmistir. `MVP Adayi`, production'a deploy edildi, admin/frontend tamamlandi veya bagimsiz Agent/Tenant uygulamalari release-ready anlamina gelmez.
 
-Application version: `0.1.0-ms-015`
+Application version: `0.1.0-ms-016`
 
 Master baseline:
 
 ```text
-release: rss-habersoft-master-v11
-SHA-256: be0d25d5523e185b23cf720a34bca777667a64b832ab31fad2d1bf9741687f32
-active Markdown count: 28
+release: rss-habersoft-master-v12
+SHA-256: def24246ee3fe2f3feabee35e3c658216899d343d21b32637622271bc74d8e50
+active Markdown count: 29
 ```
 
 Source branch ve commit bilgisi final MS-015 raporundan izlenir; bu belge yasayan commit hash'ini kendi icine yazmaz.
@@ -75,11 +75,16 @@ Residual non-blocker is a bounded item outside the current MVP repository accept
 
 Known residual non-blockers:
 
-- production deployment decision and rollout are not performed,
+- production deployment decision is closed; rollout is not performed,
+- actual staging/production rollout is not performed,
+- external registry publication is not performed,
+- production edge DNS/TLS/CyberPanel live configuration is not changed,
 - admin/frontend is not implemented,
 - current dev-only audit advisories are not in the production/runtime dependency gate,
 - optional observability dashboard/notification backend is not implemented,
-- post-MVP deployment packaging and capacity decisions remain future work.
+- HA, managed DB/Redis and post-MVP capacity decisions remain future work.
+
+MS-016 package gate details: [production-deployment.md](production-deployment.md), [release-packaging.md](release-packaging.md), [backup-and-restore.md](backup-and-restore.md).
 
 ## No Secrets Or Dumps
 

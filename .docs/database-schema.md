@@ -57,3 +57,9 @@ docker compose run --rm main-service-api npm run test:db
 ```
 
 `test:db`, izole bir PostgreSQL database uzerinde clean replay yapar, ikinci migration deploy'un no-op oldugunu dogrular, `prisma migrate status` calistirir ve tablo/index/constraint katalog kontrollerini yapar.
+
+## MS-016 Production Packaging Etkisi
+
+MS-016 production deployment ve release packaging schema veya migration eklemez. `prisma/schema.prisma` ve `prisma/migrations/**` unchanged kalir; migration inventory package manifestinde `20260620000000_initial_empty` ve `20260620001000_canonical_business_schema` olarak dogrulanir.
+
+PostgreSQL backup/restore verification icin bkz. [backup-and-restore.md](backup-and-restore.md).
