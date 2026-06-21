@@ -28,6 +28,39 @@ MS-017 A asamasi yalniz local hazirlik ekler:
 
 Mutating staging command'lari hazirlik modunda remote marker ve host identity preflight kaniti olmadan fail-fast olur. Bu durum staging deployment basarisi sayilmaz.
 
+## Operator Input Preparation Kit
+
+MS-017B1 asamasi gercek host veya secret uydurmadan, operator'un gerekli external girdileri repository disinda hazirlamasi icin local-only tooling ekler:
+
+```powershell
+npm run staging:inputs:scaffold -- --output-dir <external-empty-directory> --target-alias <staging-alias> --ssh-host <operator-host> --ssh-port 22 --ssh-user <operator-user> --known-hosts-file <external-known-hosts-path> --marker-path /etc/habersoft/environment --remote-base-dir <staging-base-dir> --project-name <staging-project> --api-port 13000 --edge-mode loopback-only
+npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input
+npm run staging:known-hosts:inspect -- --target <external-path>/staging-target.json
+```
+
+Scaffold output'u:
+
+```text
+<external-output-dir>/
+  staging-target.json
+  staging.env
+  staging-input-readiness.json
+```
+
+`staging-known-hosts` dosyasi tool tarafindan uretilmez. Operator, host owner'dan out-of-band dogruladigi fingerprint ile pinned known_hosts dosyasini kendisi hazirlar ve target descriptor icindeki path'e baglar.
+
+Target descriptor scaffold'ta `approved=false` gelir. Operator dosyayi inceledikten ve known_hosts trust anchor'i hazirladiktan sonra `approved=true` yapmalidir; tool kendi olusturdugu target'i otomatik onaylamaz.
+
+`--generate-staging-secrets` flag'i yalniz external `staging.env` dosyasina cryptographic random staging secret'lari yazar. Secret degerleri console'a, readiness receipt'e veya dokumana yazilmaz; existing `staging.env` uzerine secret generation yapilmaz.
+
+`staging-input-readiness.json` local readiness receipt'tir; remote preflight receipt degildir. Bu receipt `host_key_trust_confirmed_by_tool=false`, `remote_environment_marker_verified=false`, `remote_contact_performed=false`, `remote_mutation_performed=false` ve `deployment_performed=false` alanlarini tasir.
+
+`operator-input` mode image/package identity hazir olmadigini `image_identity_ready=false` olarak siniflandirabilir ve yine de read-only remote preflight icin input hazirligini dogrulayabilir. `deployment-ready` mode immutable digest-pinned `MAIN_SERVICE_IMAGE` ve existing production config/Compose verifier kapilarini ister.
+
+Known_hosts inspect komutu offline calisir; `ssh-keyscan` kullanmaz, network'e cikmaz, dosyayi degistirmez ve fingerprint'i yalniz operator'un out-of-band karsilastirmasi icin gosterir.
+
+MS-017B1 sonunda application version `0.1.0-ms-016` olarak kalir. Staging deployment, rollback, roll-forward, package/image transfer ve remote preflight hala yapilmamistir. Siradaki bounded adim MS-017B approved staging target read-only remote preflight'tir.
+
 ## Target Descriptor
 
 Tracked ornek:
@@ -92,6 +125,9 @@ Receipt host/IP, username, known_hosts path, DB URL, JWT, Agent key, rate-limit 
 ## Rerun Placeholders
 
 ```powershell
+npm run staging:inputs:scaffold -- --output-dir <external-empty-directory> --target-alias <staging-alias> --ssh-host <operator-host> --ssh-port 22 --ssh-user <operator-user> --known-hosts-file <external-known-hosts-path> --marker-path /etc/habersoft/environment --remote-base-dir <staging-base-dir> --project-name <staging-project> --api-port 13000 --edge-mode loopback-only
+npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input
+npm run staging:known-hosts:inspect -- --target <external-path>/staging-target.json
 npm run staging:preflight -- --target <external-path>/staging-target.json
 npm run staging:deploy -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <candidate-package> --confirm-environment staging
 npm run staging:rollback -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <previous-package> --confirm-release 0.1.0-ms-016

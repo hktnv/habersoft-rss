@@ -7,5 +7,10 @@ npm-debug.log*
 deploy/staging/*.json
 !deploy/staging/target.example.json
 deploy/staging/*.env
+staging-target.json
+staging.env
+staging-known-hosts
+staging-input-readiness.json
+staging-input-readiness.*.json
 staging-deployment-receipt.json
 staging-deployment-receipt.*.json

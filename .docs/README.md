@@ -83,6 +83,8 @@ v12 etki notu: MS-016 production deployment karari master `23-uretim-deployment-
 
 MS-017 hazirlik notu: Staging target descriptor, pinned SSH known_hosts ve remote staging marker active workspace'te bulunmadigi icin remote staging deployment yapilmamistir. Hazirlik tooling'i [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md) dosyasinda belgelenir; uygulama surumu ve status `0.1.0-ms-016` / `MVP Adayi - Deployment Karari Kesin / Release Paketi Dogrulandi` olarak kalir.
 
+MS-017B1 notu: Staging operator input tooling prepared. Operator external target/env/known_hosts girdilerini local-only scaffold ve verify komutlariyla hazirlayabilir. Remote staging preflight not executed; staging deployment still not executed.
+
 ## Sabit Runtime ve Altyapi Surumleri
 
 - Node.js application image: `node:24.17.0-bookworm-slim`
