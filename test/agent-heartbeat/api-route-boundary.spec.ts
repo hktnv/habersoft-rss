@@ -52,7 +52,7 @@ describe("Agent heartbeat API route boundary", () => {
     app = undefined;
   });
 
-  it("exposes heartbeat, due-feed, new-GUID filtering, and entries among production agent routes", async () => {
+  it("exposes heartbeat, due-feed, new-GUID filtering, entries, and feed-check-results among production agent routes", async () => {
     const success = await fastify.inject({
       method: "POST",
       url: "/agent/heartbeat",
@@ -87,7 +87,7 @@ describe("Agent heartbeat API route boundary", () => {
       method: "POST",
       url: "/agent/feed-check-results",
       headers: { "X-Agent-Key": runtimeConfig.agentAuth?.key },
-      payload: {}
+      payload: { results: [] }
     });
 
     expect(success.statusCode).toBe(200);
@@ -96,7 +96,8 @@ describe("Agent heartbeat API route boundary", () => {
     expect(JSON.parse(newGuids.payload)).toEqual({ new: ["guid-1"] });
     expect(entries.statusCode).toBe(422);
     expect(JSON.parse(entries.payload)).toMatchObject({ error_code: "VALIDATION_FAILED" });
-    expect(results.statusCode).toBe(404);
+    expect(results.statusCode).toBe(422);
+    expect(JSON.parse(results.payload)).toMatchObject({ error_code: "FEED_CHECK_RESULTS_EMPTY" });
   });
 
   it("keeps health endpoints unauthenticated and tenant routes closed to agent keys", async () => {

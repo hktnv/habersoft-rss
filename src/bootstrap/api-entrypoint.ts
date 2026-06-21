@@ -7,6 +7,7 @@ import {
   AGENT_ENTRIES_BODY_LIMIT_BYTES,
   DEFAULT_FASTIFY_BODY_LIMIT_BYTES
 } from "../agent-entries/agent-entries.policy";
+import { AGENT_FEED_CHECK_RESULTS_BODY_LIMIT_BYTES } from "../agent-feed-check-results/agent-feed-check-results.policy";
 import { ApiModule } from "../api.module";
 import { loadRuntimeConfig } from "../configuration/runtime-config";
 
@@ -41,7 +42,12 @@ export function configureApiBodyLimits(app: NestFastifyApplication): void {
     }
 
     const path = request.raw.url?.split("?", 1)[0] ?? "";
-    const limit = path === "/agent/entries" ? AGENT_ENTRIES_BODY_LIMIT_BYTES : DEFAULT_FASTIFY_BODY_LIMIT_BYTES;
+    const limit =
+      path === "/agent/entries"
+        ? AGENT_ENTRIES_BODY_LIMIT_BYTES
+        : path === "/agent/feed-check-results"
+          ? AGENT_FEED_CHECK_RESULTS_BODY_LIMIT_BYTES
+          : DEFAULT_FASTIFY_BODY_LIMIT_BYTES;
 
     if (contentLength > limit) {
       reply.code(413).send({ error_code: "REQUEST_BODY_TOO_LARGE" });

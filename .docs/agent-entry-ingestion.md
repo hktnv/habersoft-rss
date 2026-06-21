@@ -12,8 +12,9 @@ The endpoint accepts Agent-normalized RSS entries for one feed check and writes
 the event ledger, new `entries`, `entry_details` for successful detail
 extraction, and monotonic feed success state in one PostgreSQL transaction.
 
-This endpoint does not implement feed-check-results outcomes for
-`not_modified`, `no_new_entries`, or fetch errors. Those remain for MS-013.
+This endpoint does not accept feed-check-results outcomes for `not_modified`,
+`no_new_entries`, or fetch errors. Those non-entry outcomes are handled by
+`POST /agent/feed-check-results`.
 
 ## Auth
 

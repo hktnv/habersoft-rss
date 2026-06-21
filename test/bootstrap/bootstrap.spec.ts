@@ -3,6 +3,7 @@ import {
   AGENT_ENTRIES_BODY_LIMIT_BYTES,
   DEFAULT_FASTIFY_BODY_LIMIT_BYTES
 } from "../../src/agent-entries/agent-entries.policy";
+import { AGENT_FEED_CHECK_RESULTS_BODY_LIMIT_BYTES } from "../../src/agent-feed-check-results/agent-feed-check-results.policy";
 import { configureApiBodyLimits, startApi } from "../../src/bootstrap/api-entrypoint";
 import { startWorker } from "../../src/bootstrap/worker-entrypoint";
 import { ConfigValidationError } from "../../src/configuration/runtime-config";
@@ -110,11 +111,25 @@ describe("bootstrap boundaries", () => {
   it("keeps the larger request body limit scoped to agent entries", () => {
     const hook = installBodyLimitHook();
     const entriesOversized = invokeBodyLimitHook(hook, "/agent/entries", AGENT_ENTRIES_BODY_LIMIT_BYTES + 1);
+    const checkResultsOversized = invokeBodyLimitHook(
+      hook,
+      "/agent/feed-check-results",
+      AGENT_FEED_CHECK_RESULTS_BODY_LIMIT_BYTES + 1
+    );
+    const checkResultsAllowed = invokeBodyLimitHook(
+      hook,
+      "/agent/feed-check-results",
+      AGENT_FEED_CHECK_RESULTS_BODY_LIMIT_BYTES
+    );
     const otherOversized = invokeBodyLimitHook(hook, "/agent/heartbeat", DEFAULT_FASTIFY_BODY_LIMIT_BYTES + 1);
     const entriesAllowed = invokeBodyLimitHook(hook, "/agent/entries", AGENT_ENTRIES_BODY_LIMIT_BYTES);
 
     expect(entriesOversized.reply.code).toHaveBeenCalledWith(413);
     expect(entriesOversized.reply.send).toHaveBeenCalledWith({ error_code: "REQUEST_BODY_TOO_LARGE" });
+    expect(checkResultsOversized.reply.code).toHaveBeenCalledWith(413);
+    expect(checkResultsOversized.reply.send).toHaveBeenCalledWith({ error_code: "REQUEST_BODY_TOO_LARGE" });
+    expect(checkResultsAllowed.done).toHaveBeenCalledTimes(1);
+    expect(checkResultsAllowed.reply.send).not.toHaveBeenCalled();
     expect(otherOversized.reply.code).toHaveBeenCalledWith(413);
     expect(entriesAllowed.done).toHaveBeenCalledTimes(1);
     expect(entriesAllowed.reply.send).not.toHaveBeenCalled();
