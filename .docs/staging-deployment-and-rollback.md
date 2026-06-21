@@ -63,9 +63,9 @@ MS-017B1 sonunda application version `0.1.0-ms-016` olarak kalir. Staging deploy
 
 ## Local Rehearsal Ayrimi
 
-MS-017B2 local isolated staging rehearsal tooling'i ayrica hazirlanmistir. Bu akisin sahibi [local-staging-rehearsal.md](local-staging-rehearsal.md) dosyasidir.
+MS-017B2 local isolated staging rehearsal passed. Bu akisin sahibi [local-staging-rehearsal.md](local-staging-rehearsal.md) dosyasidir.
 
-Local rehearsal, canonical production package ve Compose kaynaklarini unique local Docker project altinda dry-run eder. Remote staging target, SSH, pinned known_hosts veya remote marker kullanmaz ve remote staging preflight/deployment basarisi sayilmaz.
+Local rehearsal, canonical production package ve Compose kaynaklarini unique local Docker project altinda dry-run etti. Remote staging target, SSH, pinned known_hosts veya remote marker kullanmadi ve remote staging preflight/deployment basarisi sayilmaz.
 
 ## Target Descriptor
 

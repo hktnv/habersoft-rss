@@ -87,7 +87,7 @@ MS-017 hazirlik notu: Staging target descriptor, pinned SSH known_hosts ve remot
 
 MS-017B1 notu: Staging operator input tooling prepared. Operator external target/env/known_hosts girdilerini local-only scaffold ve verify komutlariyla hazirlayabilir. Remote staging preflight not executed; staging deployment still not executed.
 
-MS-017B2 hazirlik notu: Local isolated staging rehearsal tooling prepared. Remote staging preflight not executed; remote staging deployment not executed; application version remains `0.1.0-ms-016`.
+MS-017B2 evidence notu: Local isolated staging rehearsal passed with previous source `9bed749e531fdbe435011b3948ec52982387269e` and runtime candidate source `b992e77353aef6138afef19620a9d38835f93266`. Local rollback dry-run, roll-forward, backup/restore, scheduler and teardown verification passed. Remote staging preflight not executed; remote staging deployment not executed; application version remains `0.1.0-ms-016`.
 
 ## Sabit Runtime ve Altyapi Surumleri
 

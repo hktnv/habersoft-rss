@@ -6,13 +6,51 @@ Bu belge canonical production package ve Compose kaynaklarinin izole local Docke
 
 ## Durum
 
-Status: `Prepared / Not executed`
+Status: `Passed`
 
-Local isolated staging rehearsal tooling hazirlandi. Bu durum remote staging preflight veya remote staging deployment basarisi degildir.
+Local isolated staging rehearsal exact MS-016A previous package ve exact MS-017B2 Commit A candidate package ile tamamlandi. Bu durum remote staging preflight veya remote staging deployment basarisi degildir.
 
-Application version remains: `0.1.0-ms-016`
+Local isolated staging rehearsal: Passed
+
+Remote staging preflight: Not executed
+
+Remote staging deployment: Not executed
+
+Application version: 0.1.0-ms-016
 
 Master baseline: `rss-habersoft-master-v12` / `df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430` / `29`
+
+## Evidence Ozeti
+
+Runtime candidate source commit: `b992e77353aef6138afef19620a9d38835f93266`
+
+Previous source commit: `9bed749e531fdbe435011b3948ec52982387269e`
+
+Previous package SHA-256: `b5602ef5fc4cafb2746454cd4043956ad63ed6109e3e0e157a865c6886c775d9`
+
+Candidate package SHA-256: `b4b34e1614de8dd18a4d6a08b28e19965546cc0b4f8c399ac757d7f37b9948c8`
+
+Previous image ID: `sha256:cb1f9ac8c63c1d78512423d4837adf34d1dd453eaa73a31d23218c63b6ca01d8`
+
+Candidate image ID: `sha256:2ee7a5fba06cd8ca241eb4196595eb873b441a2a3fadc4e10dd8165b8a06fb7e`
+
+Backup SHA-256: `32f02e02b37ba079e7b2633fa02e3128eb10b1d1d9fa0de5a9f33cb568d1f491`
+
+Tenant auth rehearsal mode: `external-https-jwks-readiness-only`
+
+Local rehearsal project name: `main-service-ms017b2-761600552c67`
+
+Receipt verification: `Passed`
+
+Restore verification: `Passed`
+
+Rollback dry-run: `Passed`
+
+Roll-forward: `Passed`
+
+Teardown verification: `Passed`
+
+Scheduler verification: `Passed`
 
 ## Kapsam
 
@@ -59,7 +97,7 @@ API yalniz loopback host portuna acilir. PostgreSQL, Redis ve worker host port y
 
 ## Receipt
 
-External `local-staging-rehearsal-receipt.json` secret-free olmalidir ve su gercekleri tasir:
+External `local-staging-rehearsal-receipt.json` secret-free olarak verify edildi ve su gercekleri tasir:
 
 - previous/candidate source commit.
 - previous/candidate package checksum.
