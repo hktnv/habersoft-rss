@@ -7,7 +7,7 @@
 - Canonical repository remote: `https://github.com/hktnv/habersoft-rss`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
-- Uygulama surumu/durum: `0.1.0-ms-014` / `Geciste`
+- Uygulama surumu/durum: `0.1.0-ms-015` / `MVP Adayi`
 
 Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application repository siniridir. Merkezi master ve DEV alt dokumanlar bu repository'ye kopyalanmaz.
 
@@ -31,6 +31,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [agent-feed-check-results.md](agent-feed-check-results.md) | MS-013 `POST /agent/feed-check-results` endpoint'i, strict validation, idempotent batch replay, out-of-order accounting ve monotonic feed-state write sinirlari. |
 | [background-job-runner.md](background-job-runner.md) | MS-014 worker-only BullMQ queue, scheduler reconciliation, retry, readiness ve shutdown gercegi. |
 | [cleanup-retention.md](cleanup-retention.md) | MS-014 cleanup retention orkestrasyonu, canonical step sirasi, bounded SQL davranisi ve telemetry siniri. |
+| [mvp-release-readiness.md](mvp-release-readiness.md) | MS-015 MVP adayinin release-blocker tanimi, kabul komutlari, gate matrisi, clean-room yontemi ve residual risk siniri. |
 
 ## Okuma Sirasi
 
@@ -49,8 +50,9 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 13. [agent-feed-check-results.md](agent-feed-check-results.md)
 14. [background-job-runner.md](background-job-runner.md)
 15. [cleanup-retention.md](cleanup-retention.md)
-16. [database-schema.md](database-schema.md)
-17. Repository kok [README.md](../README.md)
+16. [mvp-release-readiness.md](mvp-release-readiness.md)
+17. [database-schema.md](database-schema.md)
+18. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
@@ -58,14 +60,14 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 
 - Uygulama kimligi: `main-service`
 - Repository: `https://github.com/hktnv/habersoft-rss`
-- Uygulama surumu: `0.1.0-ms-014`
+- Uygulama surumu: `0.1.0-ms-015`
 - Master kaynak: `../../.md/master/`
 - Master baseline: `rss-habersoft-master-v11`
 - Master agac ozeti SHA-256: `be0d25d5523e185b23cf720a34bca777667a64b832ab31fad2d1bf9741687f32`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
-- Uyum durumu: `Geciste`
+- Uyum durumu: `MVP Kabul Kapisi Gecti`
 
-`Geciste` durumu bilincli kullanilmistir. MS-014 production Agent route envanterini degistirmez; cleanup scheduler ve job runner davranislari yalniz `main-service-worker` icinde uygulanmistir.
+`MVP Adayi`, main-service repository acceptance sonucudur. Production deployment karari, rollout, Agent application readiness veya Tenant application readiness iddiasi degildir.
 
 v11 etki notu: MS-014 uygulamasi v11 master cleanup, retention ve job-runner sozlesmeleriyle uyumludur. `POST /agent/feed-check-results` response'u MS-013'te v11 dort-sayac sozlesmesini `accepted`, `feed_state_updated`, `idempotent_replay_count` ve `out_of_order_result_count` olarak uygulamaya devam eder.
 

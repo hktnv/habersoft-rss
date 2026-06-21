@@ -1,6 +1,6 @@
 {
   "name": "main-service",
-  "version": "0.1.0-ms-014",
+  "version": "0.1.0-ms-015",
   "private": true,
   "description": "rss.habersoft.com main-service tenant feed subscription API foundation",
   "license": "UNLICENSED",
@@ -16,6 +16,7 @@
     "start:jwks-fixture": "node dist/main-local-jwks-fixture.js",
     "start:worker": "node dist/main-worker.js",
     "worker:health": "node dist/main-worker-health.js",
+    "release:verify": "node scripts/release-verify.mjs",
     "test:auth": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/tenant-auth",
     "test:agent-auth": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/agent-auth",
     "test:agent-due-feeds": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/agent-due-feeds test/database/agent-due-feeds.integration.spec.ts",
@@ -32,6 +33,7 @@
     "test:queue": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand test/maintenance/queue",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --testPathIgnorePatterns test/database test/maintenance/queue",
     "test:all": "npm test && npm run test:db",
+    "test:mvp-acceptance": "node scripts/mvp-acceptance.mjs",
     "test:db": "npm run test:db:tenant-feeds && npm run test:db:schema && npm run test:db:tenant-entries && npm run test:db:tenant-entry-detail && npm run test:db:agent-heartbeat && npm run test:db:agent-due-feeds && npm run test:db:agent-new-guids && npm run test:db:agent-entries && npm run test:db:agent-feed-check-results && npm run test:db:cleanup && npm run test:queue",
     "test:db:schema": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/schema.integration.spec.ts",
     "test:db:tenant-entries": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/tenant-entries.integration.spec.ts",

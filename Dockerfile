@@ -11,6 +11,7 @@ COPY prisma ./prisma
 COPY eslint.config.js jest.config.js tsconfig.json tsconfig.build.json ./
 COPY src ./src
 COPY test ./test
+COPY scripts ./scripts
 RUN npm run prisma:generate && npm run build
 
 FROM node:24.17.0-bookworm-slim AS runtime
@@ -24,6 +25,7 @@ COPY --chown=node:node --from=build /app/dist ./dist
 COPY --chown=node:node --from=build /app/prisma ./prisma
 COPY --chown=node:node --from=build /app/src ./src
 COPY --chown=node:node --from=build /app/test ./test
+COPY --chown=node:node --from=build /app/scripts ./scripts
 COPY --chown=node:node --from=build /app/eslint.config.js /app/jest.config.js /app/tsconfig.json /app/tsconfig.build.json ./
 COPY --chown=node:node package.json package-lock.json ./
 USER node
