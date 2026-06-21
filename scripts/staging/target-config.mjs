@@ -6,6 +6,22 @@ const edgeModes = new Set(["loopback-only", "https"]);
 const safeBasePrefixes = ["/opt/habersoft/", "/srv/habersoft/", "/var/opt/habersoft/"];
 const forbiddenRootDirs = new Set(["/", "/etc", "/var", "/var/lib", "/var/lib/docker", "/home", "/root", "/tmp"]);
 const allowedSensitivePathKeys = new Set(["known_hosts_file"]);
+const targetConfigKeys = new Set([
+  "environment",
+  "approved",
+  "target_alias",
+  "ssh_host",
+  "ssh_port",
+  "ssh_user",
+  "known_hosts_file",
+  "remote_environment_marker_path",
+  "remote_environment_marker_value",
+  "remote_base_dir",
+  "compose_project_name",
+  "api_host_port",
+  "edge_mode",
+  "public_base_url"
+]);
 
 export function loadTargetConfig(file) {
   if (file === undefined) {
@@ -14,7 +30,9 @@ export function loadTargetConfig(file) {
   return JSON.parse(stripBom(readFileSync(path.resolve(file), "utf8")));
 }
 
-export function validateTargetConfig(target) {
+export function validateTargetConfig(target, options = {}) {
+  const requireApproved = options.requireApproved ?? true;
+  const requireKnownHostsReadable = options.requireKnownHostsReadable ?? true;
   const failures = [];
   const assert = (condition, message) => {
     if (!condition) {
@@ -23,7 +41,13 @@ export function validateTargetConfig(target) {
   };
 
   assert(target?.environment === "staging", "environment must be staging");
-  assert(target?.approved === true, "approved must be true");
+  assert(typeof target?.approved === "boolean", "approved must be boolean");
+  if (requireApproved) {
+    assert(target?.approved === true, "approved must be true");
+  }
+  for (const key of Object.keys(target ?? {})) {
+    assert(targetConfigKeys.has(key), `unknown target config key ${key}`);
+  }
   assertNonEmptyString(target?.target_alias, "target_alias", assert);
   assertNonEmptyString(target?.ssh_host, "ssh_host", assert);
   assertNonEmptyString(target?.ssh_user, "ssh_user", assert);
@@ -46,12 +70,15 @@ export function validateTargetConfig(target) {
   assert(!productionHosts.has(host), "ssh_host must not be a production hostname");
   assert(host !== "localhost" && host !== "127.0.0.1" && host !== "::1", "ssh_host must not be localhost");
   assert(!host.endsWith(".local"), "ssh_host must not be an implicit local target");
+  assert(target?.remote_environment_marker_value === "staging", "remote_environment_marker_value must be staging");
   assertInteger(target?.ssh_port, 1, 65535, "ssh_port", assert);
   assertInteger(target?.api_host_port, 1024, 65535, "api_host_port", assert);
   assert(target?.api_host_port !== 80 && target?.api_host_port !== 443, "api_host_port must not be 80 or 443");
 
   assert(path.isAbsolute(path.resolve(target?.known_hosts_file ?? "")), "known_hosts_file must resolve to an absolute local path");
-  assert(existsSync(path.resolve(target?.known_hosts_file ?? "")), "known_hosts_file must be readable");
+  if (requireKnownHostsReadable) {
+    assert(existsSync(path.resolve(target?.known_hosts_file ?? "")), "known_hosts_file must be readable");
+  }
   assert(isAbsolutePosix(marker), "remote_environment_marker_path must be absolute");
   assert(!containsTraversal(marker), "remote_environment_marker_path must not contain traversal");
   assert(isAbsolutePosix(base), "remote_base_dir must be absolute");
