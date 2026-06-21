@@ -1,10 +1,14 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import {
+  EXPECTED_MIGRATIONS,
+  RELEASE_IDENTITY
+} from "./release-identity.mjs";
 
 const root = process.cwd();
-const expectedVersion = "0.1.0-ms-016";
-const expectedMigrations = ["20260620000000_initial_empty", "20260620001000_canonical_business_schema"];
+const expectedVersion = RELEASE_IDENTITY.version;
 const failures = [];
+const nonCanonicalMasterHash = "def24246ee3fe2f3feabee35e3c658216899d343d21b32637622271bc74d8e50";
 
 function read(relativePath) {
   return readFileSync(path.join(root, relativePath), "utf8");
@@ -20,6 +24,9 @@ const packageJson = JSON.parse(read("package.json"));
 const composeYaml = read("compose.yaml");
 const productionComposeYaml = read("deploy/production/compose.yaml");
 const productionTemplate = read("deploy/production/production.env.template");
+const prodDocsText = collectFiles(path.join(root, ".docs"), ".md")
+  .map((file) => readFileSync(file, "utf8"))
+  .join("\n");
 const registry = read("src/maintenance/maintenance.registry.ts");
 const sourceText = collectFiles(path.join(root, "src"), ".ts")
   .map((file) => readFileSync(file, "utf8"))
@@ -35,6 +42,11 @@ assert(!/\bbuild\s*:/u.test(productionComposeYaml), "production Compose must not
 assert(productionComposeYaml.includes("127.0.0.1:${API_HOST_PORT"), "production API must bind to loopback");
 assert(!/5432:5432|6379:6379/u.test(productionComposeYaml), "production Compose must not publish PostgreSQL or Redis ports");
 assert(productionTemplate.includes("TENANT_AUTH_JWKS_URL=https://auth.habersoft.com/.well-known/jwks.json"), "production env template must use HTTPS JWKS placeholder");
+assert(prodDocsText.includes(RELEASE_IDENTITY.masterSha256), "repo-local docs must include canonical master v12 hash");
+assert(!prodDocsText.includes(nonCanonicalMasterHash), "repo-local docs must not include non-canonical master hash");
+assert(read("scripts/release-package.mjs").includes("verifyMasterBaseline"), "release package must verify active master baseline");
+assert(read("scripts/release-package-verify.mjs").includes("verifySbom"), "release package verifier must validate SBOM structure");
+assert(read("scripts/release-package-verify.mjs").includes("signed_attestation === false"), "release package verifier must reject false signed attestation claims");
 assert(registry.includes('MAINTENANCE_QUEUE_NAME = "main-service.maintenance"'), "maintenance queue registry mismatch");
 assert(registry.includes('CLEANUP_RUN_JOB_NAME = "cleanup.run.v1"'), "cleanup job registry mismatch");
 assert(registry.includes('CLEANUP_DAILY_SCHEDULER_ID = "cleanup.daily"'), "cleanup scheduler registry mismatch");
@@ -52,7 +64,7 @@ const migrations = readdirSync(path.join(root, "prisma", "migrations"), { withFi
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
   .sort();
-assert(JSON.stringify(migrations) === JSON.stringify(expectedMigrations), "migration inventory mismatch");
+assert(JSON.stringify(migrations) === JSON.stringify(EXPECTED_MIGRATIONS), "migration inventory mismatch");
 
 if (failures.length > 0) {
   for (const failure of failures) {

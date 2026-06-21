@@ -10,7 +10,7 @@ Bu belge MS-016 ile uygulanmis production deployment package'inin single-host Co
 - Main-service DEV leaf: `../../.md/sub-docs/main-service/13-uretim-deployment-ve-release-paketleme-tasarimi.md`
 - Application version: `0.1.0-ms-016`
 - Master baseline: `rss-habersoft-master-v12`
-- Master SHA-256: `def24246ee3fe2f3feabee35e3c658216899d343d21b32637622271bc74d8e50`
+- Master SHA-256: `df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430`
 
 ## Topology
 

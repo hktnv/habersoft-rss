@@ -1,5 +1,6 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import path from "node:path";
 import os from "node:os";
 
@@ -42,18 +43,52 @@ writeFileSync(
 try {
   run("node", ["scripts/production-config-check.mjs", "--env-file", envFile]);
   run("node", ["scripts/production-compose-verify.mjs", "--env-file", envFile]);
-  run("node", ["scripts/release-package.mjs", "--platform", "linux/amd64", "--output", packageDir, "--no-image", "true"]);
-  run("node", ["scripts/release-package-verify.mjs", "--package", packageDir]);
+  run("node", [
+    "scripts/release-package.mjs",
+    "--platform",
+    "linux/amd64",
+    "--output",
+    packageDir,
+    "--no-image",
+    "true",
+    "--allow-dirty",
+    "true"
+  ]);
+  run("node", ["scripts/release-package-verify.mjs", "--package", packageDir, "--allow-no-image", "true"]);
+  expectFailure(["scripts/release-package-verify.mjs", "--package", packageDir], "missing image artifact");
 
-  writeFileSync(path.join(packageDir, "manifest.json"), "{}\n");
-  const tamper = spawnSync("node", ["scripts/release-package-verify.mjs", "--package", packageDir], {
-    encoding: "utf8",
-    shell: process.platform === "win32"
+  const tamperDir = clonePackage("tamper");
+  writeFileSync(path.join(tamperDir, "manifest.json"), "{}\n");
+  expectFailure(["scripts/release-package-verify.mjs", "--package", tamperDir, "--allow-no-image", "true"], "tamper");
+
+  const wrongHashDir = clonePackage("wrong-hash");
+  mutateJson(wrongHashDir, "manifest.json", (manifest) => {
+    manifest.master_sha256 = "def24246ee3fe2f3feabee35e3c658216899d343d21b32637622271bc74d8e50";
   });
-  if (tamper.status === 0) {
-    throw new Error("tamper verification unexpectedly passed");
-  }
-  console.log("test-release-packaging: tamper negative test ok");
+  expectFailure(["scripts/release-package-verify.mjs", "--package", wrongHashDir, "--allow-no-image", "true"], "wrong master hash");
+
+  const wrongCountDir = clonePackage("wrong-count");
+  mutateJson(wrongCountDir, "manifest.json", (manifest) => {
+    manifest.master_active_markdown_count = 28;
+  });
+  expectFailure(["scripts/release-package-verify.mjs", "--package", wrongCountDir, "--allow-no-image", "true"], "wrong master count");
+
+  const wrongSourceDir = clonePackage("wrong-source");
+  mutateJson(wrongSourceDir, "metadata/provenance.json", (provenance) => {
+    provenance.source_commit = "0000000000000000000000000000000000000000";
+  });
+  expectFailure(["scripts/release-package-verify.mjs", "--package", wrongSourceDir, "--allow-no-image", "true"], "wrong source commit");
+
+  const malformedSbomDir = clonePackage("malformed-sbom");
+  writeFileSync(path.join(malformedSbomDir, "metadata", "sbom.cdx.json"), "{}\n");
+  rewriteChecksums(malformedSbomDir);
+  expectFailure(["scripts/release-package-verify.mjs", "--package", malformedSbomDir, "--allow-no-image", "true"], "malformed SBOM");
+
+  const falseAttestationDir = clonePackage("false-attestation");
+  mutateJson(falseAttestationDir, "metadata/provenance.json", (provenance) => {
+    provenance.signed_attestation = true;
+  });
+  expectFailure(["scripts/release-package-verify.mjs", "--package", falseAttestationDir, "--allow-no-image", "true"], "false signed attestation");
 } finally {
   rmSync(tempRoot, { recursive: true, force: true });
 }
@@ -65,4 +100,51 @@ function run(command, args) {
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
+}
+
+function expectFailure(args, label) {
+  const result = spawnSync("node", args, {
+    encoding: "utf8",
+    shell: process.platform === "win32"
+  });
+  if (result.status === 0) {
+    throw new Error(`${label} verification unexpectedly passed`);
+  }
+  console.log(`test-release-packaging: ${label} negative test ok`);
+}
+
+function clonePackage(name) {
+  const destination = path.join(tempRoot, name);
+  cpSync(packageDir, destination, { recursive: true });
+  return destination;
+}
+
+function mutateJson(directory, relativePath, mutate) {
+  const file = path.join(directory, relativePath);
+  const value = JSON.parse(readFileSync(file, "utf8"));
+  mutate(value);
+  writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+  rewriteChecksums(directory);
+}
+
+function rewriteChecksums(directory) {
+  const files = collectFiles(directory)
+    .filter((file) => path.basename(file) !== "checksums.sha256")
+    .sort();
+  const lines = files.map((file) => {
+    const relative = path.relative(directory, file).replaceAll(path.sep, "/");
+    const digest = crypto.createHash("sha256").update(readFileSync(file)).digest("hex");
+    return `${digest}  ${relative}`;
+  });
+  writeFileSync(path.join(directory, "checksums.sha256"), `${lines.join("\n")}\n`);
+}
+
+function collectFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      return collectFiles(fullPath);
+    }
+    return entry.isFile() ? [fullPath] : [];
+  });
 }

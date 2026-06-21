@@ -16,6 +16,7 @@
     "start:jwks-fixture": "node dist/main-local-jwks-fixture.js",
     "start:worker": "node dist/main-worker.js",
     "worker:health": "node dist/main-worker-health.js",
+    "master:baseline:verify": "node scripts/master-baseline-verify.mjs",
     "production:config:check": "node scripts/production-config-check.mjs",
     "production:compose:verify": "node scripts/production-compose-verify.mjs",
     "release:package": "node scripts/release-package.mjs",
