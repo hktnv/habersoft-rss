@@ -60,6 +60,33 @@ export function buildScpArgs(target, source, destination) {
   ];
 }
 
+export function buildScpDownloadArgs(target, source, destination) {
+  return [
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "StrictHostKeyChecking=yes",
+    "-o",
+    `UserKnownHostsFile=${target.known_hosts_file}`,
+    "-o",
+    "PasswordAuthentication=no",
+    "-o",
+    "KbdInteractiveAuthentication=no",
+    "-o",
+    "PreferredAuthentications=publickey",
+    "-o",
+    "ForwardAgent=no",
+    "-o",
+    "ClearAllForwardings=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "-P",
+    String(target.ssh_port),
+    `${target.ssh_user}@${target.ssh_host}:${source}`,
+    destination
+  ];
+}
+
 export function assertNoInsecureSshArgs(args) {
   const joined = args.join(" ");
   if (/StrictHostKeyChecking=no|UserKnownHostsFile=(?:\/dev\/null|NUL)|sshpass|password=/iu.test(joined)) {

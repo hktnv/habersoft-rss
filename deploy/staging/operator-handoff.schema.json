@@ -25,7 +25,7 @@
     "bundle_type": { "const": "staging-operator-handoff" },
     "environment": { "const": "staging" },
     "application": { "const": "main-service" },
-    "application_version": { "const": "0.1.0-ms-016" },
+    "application_version": { "const": "0.1.0-ms-017" },
     "master_release": { "const": "rss-habersoft-master-v12" },
     "master_hash": {
       "type": "string",

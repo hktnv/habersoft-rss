@@ -7,7 +7,7 @@
 - Canonical repository remote: `https://github.com/hktnv/habersoft-rss`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
-- Uygulama surumu/durum: `0.1.0-ms-016` / `MVP Adayi - Deployment Karari Kesin / Release Paketi Dogrulandi`
+- Uygulama surumu/durum: `0.1.0-ms-017` / `Staging Adayi`
 
 Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application repository siniridir. Merkezi master ve DEV alt dokumanlar bu repository'ye kopyalanmaz.
 
@@ -72,20 +72,22 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 
 - Uygulama kimligi: `main-service`
 - Repository: `https://github.com/hktnv/habersoft-rss`
-- Uygulama surumu: `0.1.0-ms-016`
+- Uygulama surumu: `0.1.0-ms-017`
 - Master kaynak: `../../.md/master/`
 - Master baseline: `rss-habersoft-master-v12`
 - Master agac ozeti SHA-256: `df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
-- Uyum durumu: `Deployment Karari Kesin / Release Paketi Dogrulandi`
+- Uyum durumu: `Staging Adayi`
 
-`MVP Adayi`, main-service repository acceptance sonucudur. Production deployment karari MS-016 ile kesinlesmistir; production rollout, artifact publication, Git tag, GitHub Release, Agent application readiness veya Tenant application readiness iddiasi degildir.
+`Staging Adayi`, MS-017C candidate package ve approved staging drill hazirlik durumudur. Production rollout, artifact publication, Git tag, GitHub Release, Agent application readiness veya Tenant application readiness iddiasi degildir.
 
 v11 etki notu: MS-014 uygulamasi v11 master cleanup, retention ve job-runner sozlesmeleriyle uyumludur. `POST /agent/feed-check-results` response'u MS-013'te v11 dort-sayac sozlesmesini `accepted`, `feed_state_updated`, `idempotent_replay_count` ve `out_of_order_result_count` olarak uygulamaya devam eder.
 
 v12 etki notu: MS-016 production deployment karari master `23-uretim-deployment-gorunumu.md` ile kapanmistir. Release package identity canonical master hash ile hizalanmistir; staging-handoff paketi image artifact dahil edildiginde dogrulanir. Production deploy, registry publish, DNS/TLS/CyberPanel live change, Git tag ve GitHub Release yapilmamistir.
 
-MS-017 hazirlik notu: Staging deployment yapilmamistir. Hazirlik ve preflight tooling'i [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md) dosyasinda belgelenir; uygulama surumu ve status `0.1.0-ms-016` / `MVP Adayi - Deployment Karari Kesin / Release Paketi Dogrulandi` olarak kalir.
+MS-017C candidate notu: Approved staging target preflight kaniti uzerinden `0.1.0-ms-017` / `Staging Adayi` commit'i hazirlanir. Staging deployment, rollback ve roll-forward evidence commit'i ancak remote drill full success sonrasi yazilir.
+
+MS-017C1 incident notu: Ilk approved staging candidate attempt, migrate success ve `/health/live` 200 sonrasinda `/health/ready` 503 / tenantAuth `down` ile durdu. Root cause `OPERATOR_JWKS_CONFIG_INVALID`: external staging env JWKS endpoint'i HTTPS ve canonical path tasidi, fakat canonical auth hostname sinirinda degildi ve local/remote host/candidate image network probe'larinda DNS failure verdi. Canonical auth JWKS endpoint ayni katmanlarda HTTPS/TLS/JSON/RS256 shape kontrollerinden gecti. Repository source fix gerekmedi; full staging deployment, sentinel, backup, rollback, roll-forward, production deployment, artifact publication, Git tag ve GitHub Release yapilmadi.
 
 MS-017B1 notu: Staging operator input tooling prepared. Operator external target/env/known_hosts girdilerini local-only scaffold ve verify komutlariyla hazirlayabilir. Remote staging preflight not executed; staging deployment still not executed.
 

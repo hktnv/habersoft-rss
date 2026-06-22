@@ -1,8 +1,8 @@
-import { existsSync } from "node:fs";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { loadAndValidateTargetConfig, sanitizeTargetForReceipt } from "./staging/target-config.mjs";
-import { assertNoInsecureSshArgs, buildScpArgs } from "./staging/ssh-client.mjs";
 import { loadReceipt, validateReceipt } from "./staging/receipt.mjs";
+import { runRemoteDrill } from "./staging/remote-drill.mjs";
 import {
   validatePreflightComparison,
   validatePreflightReceipt,
@@ -19,7 +19,7 @@ try {
       preflight();
       break;
     case "deploy":
-      guardedMutation("deploy", "confirm-environment", "staging");
+      deploy();
       break;
     case "verify":
       guardedVerify();
@@ -83,9 +83,29 @@ function guardedMutation(action, confirmName, confirmValue) {
   if (confirmValue === undefined && (args[confirmName] === undefined || args[confirmName].trim() === "")) {
     throw new Error(`${confirmName} is required`);
   }
-  const scpArgs = buildScpArgs(target, path.resolve(args.package), `${target.remote_base_dir}/incoming/`);
-  assertNoInsecureSshArgs(scpArgs);
   throw new Error(`${action} is blocked in preparation mode until an approved target passes remote marker and host-key preflight`);
+}
+
+function deploy() {
+  if (args["confirm-environment"] !== "staging") {
+    throw new Error("confirm-environment must be staging");
+  }
+  const result = runRemoteDrill(args);
+  console.log(JSON.stringify({
+    status: "remote-staging-deployment-rollback-drill-passed",
+    target_alias: result.receipt.target_alias,
+    previous_version: result.receipt.previous_version,
+    candidate_version: result.receipt.deployed_candidate_version,
+    previous_package_sha256: result.previousPackageSha256,
+    candidate_package_sha256: result.candidatePackageSha256,
+    previous_image_id: result.receipt.previous_image_id,
+    candidate_image_id: result.receipt.candidate_image_id,
+    backup_sha256: result.receipt.backup_sha256,
+    final_active_version: result.receipt.final_active_version,
+    receipt_file: path.basename(result.receiptFile),
+    production_touched: false,
+    external_registry_publish: false
+  }, null, 2));
 }
 
 function receiptVerify() {

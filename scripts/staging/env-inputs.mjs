@@ -133,11 +133,11 @@ export function validateStagingEnv(env, target, mode = "operator-input") {
   requireSecret("TENANT_RATE_LIMIT_KEY_SECRET", env.TENANT_RATE_LIMIT_KEY_SECRET, 32, assert);
   requireSecret("AGENT_KEY", env.AGENT_KEY, 32, assert);
 
-  const imageIdentityReady = isDigestPinnedImage(env.MAIN_SERVICE_IMAGE);
+  const imageIdentityReady = isImmutableImageReference(env.MAIN_SERVICE_IMAGE);
   if (mode === "deployment-ready") {
-    assert(imageIdentityReady, "MAIN_SERVICE_IMAGE must be digest-pinned for deployment-ready mode");
+    assert(imageIdentityReady, "MAIN_SERVICE_IMAGE must be immutable for deployment-ready mode");
   } else {
-    assert(imageIdentityReady || env.MAIN_SERVICE_IMAGE === INCOMPLETE_IMAGE_MARKER, "MAIN_SERVICE_IMAGE must be digest-pinned or explicitly package-not-selected");
+    assert(imageIdentityReady || env.MAIN_SERVICE_IMAGE === INCOMPLETE_IMAGE_MARKER, "MAIN_SERVICE_IMAGE must be immutable or explicitly package-not-selected");
   }
 
   for (const [key, value] of Object.entries(env)) {
@@ -226,8 +226,10 @@ function requireSecret(name, value, minBytes, assert) {
   assert(String(value ?? "").trim() === value, `${name} must not include leading or trailing whitespace`);
 }
 
-function isDigestPinnedImage(value) {
-  return typeof value === "string" && !value.endsWith(":latest") && /@sha256:[a-f0-9]{64}$/u.test(value);
+function isImmutableImageReference(value) {
+  return typeof value === "string"
+    && !value.endsWith(":latest")
+    && (/@sha256:[a-f0-9]{64}$/u.test(value) || /^sha256:[a-f0-9]{64}$/u.test(value));
 }
 
 function redactedLineName(line) {
