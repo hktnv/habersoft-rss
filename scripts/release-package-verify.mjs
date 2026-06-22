@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import path from "node:path";
 import {
@@ -7,6 +8,11 @@ import {
   EXPECTED_SERVICES,
   RELEASE_IDENTITY
 } from "./release-identity.mjs";
+import {
+  RUNTIME_IMAGE_ENV_PATH,
+  isImmutableImageId,
+  loadRuntimeImageEnv
+} from "./runtime-image-env.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const packagePath = args.package;
@@ -40,6 +46,7 @@ assert(manifest.attestation_level === "unsigned provenance", "manifest attestati
 
 verifyChecksums(root);
 verifyImage(root, manifest);
+verifyRuntimeImageEnv(root, manifest);
 verifySbom(root, manifest);
 verifyProvenance(root, manifest);
 scanPackage(root);
@@ -91,7 +98,42 @@ function verifyImage(directory, manifest) {
   }
   if (manifest.image?.included === true) {
     assert(hasImageTar, "manifest claims included image but image tar is missing");
-    assert(/^sha256:[a-f0-9]{64}$/u.test(manifest.image.id ?? ""), "included image id must be a sha256 digest");
+    assert(isImmutableImageId(manifest.image.id), "included image id must be a sha256 digest");
+    assert(savedImageId(imageTar) === manifest.image.id, "image tar identity mismatch");
+  }
+}
+
+function verifyRuntimeImageEnv(directory, manifest) {
+  const runtimeImageEnv = path.join(directory, RUNTIME_IMAGE_ENV_PATH);
+  if (manifest.image?.included !== true) {
+    if (!allowNoImage) {
+      assert(false, "runtime-image.env requires an included image artifact");
+    }
+    assert(manifest.runtime_image_env?.included === false, "runtime image env must be marked absent without image");
+    assert(!existsSync(runtimeImageEnv), "runtime-image.env must not exist without image");
+    return;
+  }
+
+  assert(existsSync(runtimeImageEnv), "deploy/runtime-image.env is required");
+  const parsed = safeLoadRuntimeImageEnv(directory);
+  assert(parsed !== undefined, "runtime-image.env parse failed");
+  if (parsed === undefined) {
+    return;
+  }
+  assert(manifest.runtime_image_env?.included === true, "manifest runtime image env must be included");
+  assert(manifest.runtime_image_env?.path === RUNTIME_IMAGE_ENV_PATH, "manifest runtime image env path mismatch");
+  assert(manifest.runtime_image_env?.key === "MAIN_SERVICE_IMAGE", "manifest runtime image env key mismatch");
+  assert(manifest.runtime_image_env?.image_id === manifest.image.id, "manifest runtime image env image mismatch");
+  assert(manifest.runtime_image_env?.sha256 === parsed.sha256, "manifest runtime image env checksum mismatch");
+  assert(parsed.imageId === manifest.image.id, "runtime-image.env image id mismatch");
+  assert(parsed.imageId !== `sha256:${RELEASE_IDENTITY.masterSha256}`, "runtime-image.env must not use master documentation hash");
+}
+
+function safeLoadRuntimeImageEnv(directory) {
+  try {
+    return loadRuntimeImageEnv(directory);
+  } catch {
+    return undefined;
   }
 }
 
@@ -130,6 +172,64 @@ function verifyProvenance(directory, manifest) {
   assert(provenance.signed_attestation === false, "provenance must not claim signed attestation");
   assert(JSON.stringify(provenance.sbom) === JSON.stringify(manifest.sbom), "provenance SBOM summary mismatch");
   assert(JSON.stringify(provenance.image) === JSON.stringify(manifest.image), "provenance image identity mismatch");
+  assert(JSON.stringify(provenance.runtime_image_env) === JSON.stringify(manifest.runtime_image_env), "provenance runtime image env mismatch");
+}
+
+function savedImageId(imageTar) {
+  const index = readTarJson(imageTar, "index.json");
+  const indexDigest = index?.manifests?.find((entry) => isImmutableImageId(entry?.digest))?.digest;
+  if (indexDigest !== undefined) {
+    const blobPath = indexDigest.replace("sha256:", "blobs/sha256/");
+    const blob = readTarEntry(imageTar, blobPath);
+    if (blob === undefined) {
+      assert(false, "image tar OCI manifest blob could not be read");
+      return undefined;
+    }
+    assert(`sha256:${sha256(blob)}` === indexDigest, "image tar OCI manifest digest mismatch");
+    return indexDigest;
+  }
+
+  const manifest = readTarJson(imageTar, "manifest.json");
+  const configFile = Array.isArray(manifest)
+    ? manifest.find((entry) => typeof entry?.Config === "string")?.Config
+    : undefined;
+  if (configFile === undefined) {
+    assert(false, "image tar config JSON missing");
+    return undefined;
+  }
+  const config = readTarEntry(imageTar, configFile);
+  if (config === undefined) {
+    assert(false, "image tar config JSON could not be read");
+    return undefined;
+  }
+  return `sha256:${sha256(config)}`;
+}
+
+function readTarJson(imageTar, file) {
+  const entry = readTarEntry(imageTar, file, { optional: true });
+  if (entry === undefined) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(entry.toString("utf8"));
+  } catch {
+    assert(false, `image tar ${file} is not valid JSON`);
+    return undefined;
+  }
+}
+
+function readTarEntry(imageTar, file, { optional = false } = {}) {
+  const entry = spawnSync("tar", ["-xOf", imageTar, file], {
+    encoding: "buffer",
+    shell: process.platform === "win32"
+  });
+  if (entry.status !== 0 || entry.stdout.length === 0) {
+    if (!optional) {
+      assert(false, `image tar entry could not be read: ${file}`);
+    }
+    return undefined;
+  }
+  return entry.stdout;
 }
 
 function collectFiles(directory) {

@@ -9,6 +9,11 @@ import {
   RELEASE_IDENTITY,
   verifyMasterBaseline
 } from "./release-identity.mjs";
+import {
+  RUNTIME_IMAGE_ENV_PATH,
+  formatRuntimeImageEnv,
+  sha256 as sha256Text
+} from "./runtime-image-env.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const output = args.output;
@@ -23,6 +28,7 @@ if (output === undefined) {
 
 const outputDir = path.resolve(output);
 mkdirSync(outputDir, { recursive: true });
+mkdirSync(path.join(outputDir, "deploy"), { recursive: true });
 mkdirSync(path.join(outputDir, "deploy", "production"), { recursive: true });
 mkdirSync(path.join(outputDir, "metadata"), { recursive: true });
 
@@ -40,7 +46,20 @@ copyFileSync("deploy/production/production.env.template", path.join(outputDir, "
 const imageMetadata = inspectImage(image, includeImage);
 if (includeImage) {
   run("docker", ["save", "--output", path.join(outputDir, "main-service-image.tar"), image]);
+  writeFileSync(path.join(outputDir, RUNTIME_IMAGE_ENV_PATH), formatRuntimeImageEnv(imageMetadata.id));
 }
+const runtimeImageEnv = includeImage
+  ? {
+      included: true,
+      path: RUNTIME_IMAGE_ENV_PATH,
+      key: "MAIN_SERVICE_IMAGE",
+      image_id: imageMetadata.id,
+      sha256: sha256Text(readFileSync(path.join(outputDir, RUNTIME_IMAGE_ENV_PATH), "utf8"))
+    }
+  : {
+      included: false,
+      path: RUNTIME_IMAGE_ENV_PATH
+    };
 
 const sbom = createSbom();
 const manifest = {
@@ -56,6 +75,7 @@ const manifest = {
   source_commit: sourceCommit,
   platform,
   image: imageMetadata,
+  runtime_image_env: runtimeImageEnv,
   services: [...EXPECTED_SERVICES],
   public_routes: [...EXPECTED_PUBLIC_ROUTES],
   migrations: readdirSync("prisma/migrations", { withFileTypes: true })
@@ -137,6 +157,7 @@ function createProvenance(manifest) {
     master_active_markdown_count: manifest.master_active_markdown_count,
     platform: manifest.platform,
     image: manifest.image,
+    runtime_image_env: manifest.runtime_image_env,
     builder: "local Docker Engine / Docker Compose verification",
     provenance_level: "local metadata",
     attestation_level: "unsigned provenance",

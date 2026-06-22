@@ -10,7 +10,6 @@ const productionIdentifiers = [
 ];
 
 export const REQUIRED_ENV_KEYS = Object.freeze([
-  "MAIN_SERVICE_IMAGE",
   "LOG_LEVEL",
   "API_HOST_PORT",
   "POSTGRES_USER",
@@ -36,6 +35,12 @@ export const REQUIRED_ENV_KEYS = Object.freeze([
   "MAINTENANCE_FAILED_JOB_RETENTION_SECONDS",
   "MAINTENANCE_FAILED_JOB_MAX_COUNT",
   "NODE_ENV"
+]);
+
+export const LEGACY_RUNTIME_IMAGE_ENV_KEY = "MAIN_SERVICE_IMAGE";
+export const ALLOWED_ENV_KEYS = Object.freeze([
+  LEGACY_RUNTIME_IMAGE_ENV_KEY,
+  ...REQUIRED_ENV_KEYS
 ]);
 
 const numericKeys = new Set([
@@ -70,7 +75,6 @@ export function stagingEnvFromTemplate(target, secrets = {}) {
 
   return {
     ...env,
-    MAIN_SERVICE_IMAGE: INCOMPLETE_IMAGE_MARKER,
     API_HOST_PORT: String(target.api_host_port),
     POSTGRES_USER: postgresUser,
     POSTGRES_PASSWORD: postgresPassword,
@@ -87,6 +91,11 @@ export function stagingEnvFromTemplate(target, secrets = {}) {
 
 export function formatEnv(env) {
   return `${Object.entries(env).map(([key, value]) => `${key}=${value}`).join("\n")}\n`;
+}
+
+export function removeRuntimeImageFromEnv(env) {
+  const { [LEGACY_RUNTIME_IMAGE_ENV_KEY]: _ignored, ...sharedEnv } = env;
+  return sharedEnv;
 }
 
 export function loadEnvFile(file) {
@@ -112,7 +121,7 @@ export function validateStagingEnv(env, target, mode = "operator-input") {
     assert(env[key] !== undefined && env[key].trim() !== "", `${key} is required`);
   }
   for (const key of Object.keys(env)) {
-    assert(REQUIRED_ENV_KEYS.includes(key), `unknown env key ${key}`);
+    assert(ALLOWED_ENV_KEYS.includes(key), `unknown env key ${key}`);
   }
 
   assert(env.NODE_ENV === "production", "NODE_ENV must be production");
@@ -133,11 +142,10 @@ export function validateStagingEnv(env, target, mode = "operator-input") {
   requireSecret("TENANT_RATE_LIMIT_KEY_SECRET", env.TENANT_RATE_LIMIT_KEY_SECRET, 32, assert);
   requireSecret("AGENT_KEY", env.AGENT_KEY, 32, assert);
 
-  const imageIdentityReady = isImmutableImageReference(env.MAIN_SERVICE_IMAGE);
-  if (mode === "deployment-ready") {
-    assert(imageIdentityReady, "MAIN_SERVICE_IMAGE must be immutable for deployment-ready mode");
-  } else {
-    assert(imageIdentityReady || env.MAIN_SERVICE_IMAGE === INCOMPLETE_IMAGE_MARKER, "MAIN_SERVICE_IMAGE must be immutable or explicitly package-not-selected");
+  const legacyImagePresent = env[LEGACY_RUNTIME_IMAGE_ENV_KEY] !== undefined;
+  const imageIdentityReady = false;
+  if (legacyImagePresent) {
+    assert(String(env[LEGACY_RUNTIME_IMAGE_ENV_KEY]).trim() !== "", "legacy MAIN_SERVICE_IMAGE must not be empty when present");
   }
 
   for (const [key, value] of Object.entries(env)) {
@@ -154,7 +162,9 @@ export function validateStagingEnv(env, target, mode = "operator-input") {
   return {
     envSchemaValid: true,
     secretsPresent: true,
-    imageIdentityReady
+    imageIdentityReady,
+    legacyImageFieldPresent: legacyImagePresent,
+    packageImageRequired: mode === "deployment-ready"
   };
 }
 

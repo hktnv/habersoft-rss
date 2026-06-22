@@ -66,7 +66,6 @@ export function buildRehearsalEnv({ imageId, apiPort, projectName, secrets }) {
   const postgresUser = "main_service_rehearsal";
   const postgresDb = "main_service_rehearsal";
   return {
-    MAIN_SERVICE_IMAGE: imageId,
     LOG_LEVEL: "info",
     API_HOST_PORT: String(apiPort),
     POSTGRES_USER: postgresUser,
@@ -127,6 +126,12 @@ export function compareLocalRehearsalPackagePair(previousManifest, candidateMani
   }
   if (previousManifest.image?.included !== true || candidateManifest.image?.included !== true) {
     failures.push("both packages must include image artifacts");
+  }
+  if (previousManifest.runtime_image_env?.image_id !== previousManifest.image?.id) {
+    failures.push("previous runtime image env mismatch");
+  }
+  if (candidateManifest.runtime_image_env?.image_id !== candidateManifest.image?.id) {
+    failures.push("candidate runtime image env mismatch");
   }
   if (previousManifest.image?.id === candidateManifest.image?.id) {
     failures.push("image ids must differ");

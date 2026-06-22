@@ -13,7 +13,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { EXPECTED_MIGRATIONS, EXPECTED_SERVICES, RELEASE_IDENTITY } from "../release-identity.mjs";
-import { loadEnvFile, validateStagingEnv, formatEnv } from "./env-inputs.mjs";
+import { loadEnvFile, validateStagingEnv, formatEnv, removeRuntimeImageFromEnv } from "./env-inputs.mjs";
 import { loadReceipt, validateReceipt } from "./receipt.mjs";
 import { compareRollbackCompatibility, loadManifest } from "./package-pair.mjs";
 import { assertNoVolumeDeletion, assertPathInsideBase, releaseDir, switchCommands } from "./remote-layout.mjs";
@@ -36,7 +36,8 @@ export function runRemoteDrill(args) {
   const envFile = requiredFile(args["env-file"], "env-file");
   const target = loadAndValidateTargetConfig(targetFile);
   const operatorEnv = loadEnvFile(envFile);
-  validateStagingEnv(operatorEnv, target, "deployment-ready");
+  const sharedOperatorEnv = removeRuntimeImageFromEnv(operatorEnv);
+  validateStagingEnv(sharedOperatorEnv, target, "deployment-ready");
 
   const candidatePackage = requiredDirectory(args["candidate-package"] ?? args.package, "candidate-package");
   const previousPackage = requiredDirectory(args["previous-package"], "previous-package");
@@ -71,19 +72,15 @@ export function runRemoteDrill(args) {
 
     assertCapacity(preflightReceipt, [candidateArchive, previousArchive]);
 
-    const candidateEnvFile = path.join(tempRoot, "candidate.env");
-    const previousEnvFile = path.join(tempRoot, "previous.env");
-    writePrivateFile(candidateEnvFile, formatEnv({ ...operatorEnv, MAIN_SERVICE_IMAGE: candidateManifest.image.id }));
-    writePrivateFile(previousEnvFile, formatEnv({ ...operatorEnv, MAIN_SERVICE_IMAGE: previousManifest.image.id }));
-    validateStagingEnv(loadEnvFile(candidateEnvFile), target, "deployment-ready");
-    validateStagingEnv(loadEnvFile(previousEnvFile), target, "deployment-ready");
+    const sharedEnvFile = path.join(tempRoot, "staging.env");
+    writePrivateFile(sharedEnvFile, formatEnv(sharedOperatorEnv));
+    validateStagingEnv(loadEnvFile(sharedEnvFile), target, "deployment-ready");
 
     const remoteNames = remoteTransferNames(previousManifest, candidateManifest, runId);
     runRemotePrepare(target);
     uploadFile(target, candidateArchive, incomingPath(target, remoteNames.candidateArchive), "candidate archive");
     uploadFile(target, previousArchive, incomingPath(target, remoteNames.previousArchive), "previous archive");
-    uploadFile(target, candidateEnvFile, incomingPath(target, remoteNames.candidateEnv), "candidate env");
-    uploadFile(target, previousEnvFile, incomingPath(target, remoteNames.previousEnv), "previous env");
+    uploadFile(target, sharedEnvFile, incomingPath(target, remoteNames.sharedEnv), "shared env");
 
     const startedAt = new Date();
     const remoteCommand = buildRemoteDrillCommand({
@@ -193,6 +190,7 @@ export function buildRemoteDrillCommand({
   const previousSwitch = switchCommands(baseDir, previousDir).join("\n");
   const candidateSwitch = switchCommands(baseDir, candidateDir).join("\n");
   const backupPath = joinPosix(baseDir, "backups", `${runId}.dump`);
+  const sharedEnv = joinPosix(baseDir, "shared", "staging.env");
 
   for (const remotePath of [
     previousDir,
@@ -200,8 +198,8 @@ export function buildRemoteDrillCommand({
     backupPath,
     incomingPath(target, remoteNames.previousArchive),
     incomingPath(target, remoteNames.candidateArchive),
-    incomingPath(target, remoteNames.previousEnv),
-    incomingPath(target, remoteNames.candidateEnv)
+    incomingPath(target, remoteNames.sharedEnv),
+    sharedEnv
   ]) {
     assertPathInsideBase(baseDir, remotePath);
     assertSafeRemotePath(remotePath);
@@ -220,10 +218,12 @@ export function buildRemoteDrillCommand({
     `candidate_package_sha256=${posixSingleQuote(candidatePackageSha256)}`,
     `previous_dir=${posixSingleQuote(previousDir)}`,
     `candidate_dir=${posixSingleQuote(candidateDir)}`,
-    `previous_env_incoming=${posixSingleQuote(incomingPath(target, remoteNames.previousEnv))}`,
-    `candidate_env_incoming=${posixSingleQuote(incomingPath(target, remoteNames.candidateEnv))}`,
-    `previous_env=${posixSingleQuote(joinPosix(previousDir, "deployment.env"))}`,
-    `candidate_env=${posixSingleQuote(joinPosix(candidateDir, "deployment.env"))}`,
+    `shared_env_incoming=${posixSingleQuote(incomingPath(target, remoteNames.sharedEnv))}`,
+    `shared_env=${posixSingleQuote(sharedEnv)}`,
+    `previous_runtime_env=${posixSingleQuote(joinPosix(previousDir, "runtime-image.env"))}`,
+    `candidate_runtime_env=${posixSingleQuote(joinPosix(candidateDir, "runtime-image.env"))}`,
+    `previous_package_runtime_env=${posixSingleQuote(joinPosix(previousDir, "deploy/runtime-image.env"))}`,
+    `candidate_package_runtime_env=${posixSingleQuote(joinPosix(candidateDir, "deploy/runtime-image.env"))}`,
     `previous_image_ref=${posixSingleQuote(previousManifest.image.reference)}`,
     `candidate_image_ref=${posixSingleQuote(candidateManifest.image.reference)}`,
     `previous_image_id=${posixSingleQuote(previousManifest.image.id)}`,
@@ -234,41 +234,49 @@ export function buildRemoteDrillCommand({
     "emit() { printf '%s=%s\\n' \"$1\" \"$2\"; }",
     "fail() { emit failure_stage \"$1\"; emit failure_reason \"$2\"; exit 42; }",
     "need_tool() { command -v \"$1\" >/dev/null 2>&1 || fail tooling \"missing-$1\"; }",
-    "for tool in docker tar sha256sum curl awk sort tr; do need_tool \"$tool\"; done",
+    "for tool in docker tar sha256sum curl awk sort tr grep; do need_tool \"$tool\"; done",
     "docker compose version --short >/dev/null 2>&1 || fail tooling compose-v2-unavailable",
     "verify_sha() { actual=$(sha256sum \"$1\" | awk '{print $1}'); [ \"$actual\" = \"$2\" ] || fail \"$3\" checksum-mismatch; }",
+    "install_shared_env() {",
+    "  [ -f \"$shared_env_incoming\" ] || fail shared-env missing",
+    "  if grep -E '^[[:space:]]*MAIN_SERVICE_IMAGE=' \"$shared_env_incoming\" >/dev/null 2>&1; then fail shared-env contains-runtime-image; fi",
+    "  mkdir -p \"$base_dir/shared\"",
+    "  mv -f \"$shared_env_incoming\" \"$shared_env\"",
+    "  chmod 600 \"$shared_env\"",
+    "}",
     "extract_release() {",
-    "  role=$1 archive=$2 archive_sha=$3 release_dir=$4 env_incoming=$5 env_dest=$6 package_sha=$7",
+    "  role=$1 archive=$2 archive_sha=$3 release_dir=$4 package_sha=$5",
     "  [ -f \"$archive\" ] || fail \"$role\" archive-missing",
-    "  [ -f \"$env_incoming\" ] || fail \"$role\" env-missing",
     "  [ ! -e \"$release_dir\" ] || fail \"$role\" release-dir-exists",
     "  mkdir -p \"$release_dir\"",
     "  verify_sha \"$archive\" \"$archive_sha\" \"$role-transfer\"",
     "  tar -xf \"$archive\" --strip-components=1 -C \"$release_dir\"",
     "  (cd \"$release_dir\" && sha256sum -c checksums.sha256 >/dev/null) || fail \"$role\" package-checksum-failed",
     "  verify_sha \"$release_dir/checksums.sha256\" \"$package_sha\" \"$role-package\"",
-    "  mv \"$env_incoming\" \"$env_dest\"",
-    "  chmod 600 \"$env_dest\"",
     "}",
     "load_image() {",
-    "  role=$1 release_dir=$2 image_ref=$3 expected_image=$4",
+    "  role=$1 release_dir=$2 image_ref=$3 expected_image=$4 runtime_env=$5 package_runtime_env=$6",
+    "  if [ \"$role\" = candidate ]; then [ -f \"$package_runtime_env\" ] || fail \"$role\" package-runtime-image-env-missing; fi",
     "  docker load --input \"$release_dir/main-service-image.tar\" >/dev/null",
     "  actual=$(docker image inspect --format '{{.Id}}' \"$image_ref\" 2>/dev/null) || fail \"$role\" image-inspect-failed",
     "  [ \"$actual\" = \"$expected_image\" ] || fail \"$role\" image-id-mismatch",
+    "  printf 'MAIN_SERVICE_IMAGE=%s\\n' \"$actual\" > \"$runtime_env\"",
+    "  chmod 644 \"$runtime_env\"",
+    "  if [ -f \"$package_runtime_env\" ]; then cmp -s \"$runtime_env\" \"$package_runtime_env\" || fail \"$role\" runtime-image-env-mismatch; fi",
     "}",
-    "compose_cmd() { env_file=$1; compose_file=$2; shift 2; docker compose -p \"$compose_project\" --env-file \"$env_file\" -f \"$compose_file\" \"$@\"; }",
+    "compose_cmd() { env_file=$1; runtime_env=$2; compose_file=$3; shift 3; docker compose -p \"$compose_project\" --env-file \"$env_file\" --env-file \"$runtime_env\" -f \"$compose_file\" \"$@\"; }",
     "compose_up_initial() {",
-    "  env_file=$1 compose_file=$2",
-    "  compose_cmd \"$env_file\" \"$compose_file\" config --quiet >/dev/null",
-    "  services=$(compose_cmd \"$env_file\" \"$compose_file\" config --services | sort | tr '\\n' ',')",
+    "  env_file=$1 runtime_env=$2 compose_file=$3",
+    "  compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" config --quiet >/dev/null",
+    "  services=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" config --services | sort | tr '\\n' ',')",
     "  [ \"$services\" = 'main-service-api,main-service-worker,migrate,postgres,redis,' ] || fail compose service-inventory-mismatch",
-    "  compose_cmd \"$env_file\" \"$compose_file\" pull --policy missing postgres redis >/dev/null",
-    "  compose_cmd \"$env_file\" \"$compose_file\" up -d --no-build --pull never --wait --wait-timeout 180 >/dev/null",
+    "  compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" pull --policy missing postgres redis >/dev/null",
+    "  compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" up -d --no-build --pull never --wait --wait-timeout 180 >/dev/null",
     "}",
     "compose_switch_app() {",
-    "  env_file=$1 compose_file=$2",
-    "  compose_cmd \"$env_file\" \"$compose_file\" up --no-build --pull never --force-recreate --no-deps migrate >/dev/null",
-    "  compose_cmd \"$env_file\" \"$compose_file\" up -d --no-build --pull never --force-recreate --no-deps --wait --wait-timeout 180 main-service-api main-service-worker >/dev/null",
+    "  env_file=$1 runtime_env=$2 compose_file=$3",
+    "  compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" up --no-build --pull never --force-recreate --no-deps migrate >/dev/null",
+    "  compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" up -d --no-build --pull never --force-recreate --no-deps --wait --wait-timeout 180 main-service-api main-service-worker >/dev/null",
     "}",
     "verify_ports() {",
     "  for service in postgres redis main-service-worker; do",
@@ -291,35 +299,35 @@ export function buildRemoteDrillCommand({
     "  fail api readiness-timeout",
     "}",
     "psql_count() {",
-    "  env_file=$1 compose_file=$2 sql=$3",
-    "  printf '%s\\n' \"$sql\" | compose_cmd \"$env_file\" \"$compose_file\" exec -T postgres sh -lc 'psql -X -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -At -v ON_ERROR_STOP=1'",
+    "  env_file=$1 runtime_env=$2 compose_file=$3 sql=$4",
+    "  printf '%s\\n' \"$sql\" | compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" exec -T postgres sh -lc 'psql -X -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -At -v ON_ERROR_STOP=1'",
     "}",
     "verify_images() {",
-    "  env_file=$1 compose_file=$2 expected_image=$3",
+    "  env_file=$1 runtime_env=$2 compose_file=$3 expected_image=$4",
     "  for service in main-service-api main-service-worker; do",
-    "    container=$(compose_cmd \"$env_file\" \"$compose_file\" ps -q \"$service\")",
+    "    container=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" ps -q \"$service\")",
     "    [ -n \"$container\" ] || fail images \"$service-missing\"",
     "    actual=$(docker inspect -f '{{.Image}}' \"$container\")",
     "    [ \"$actual\" = \"$expected_image\" ] || fail images \"$service-image-mismatch\"",
     "  done",
     "}",
     "verify_worker() {",
-    "  env_file=$1 compose_file=$2",
-    "  output=$(compose_cmd \"$env_file\" \"$compose_file\" exec -T main-service-worker npm run worker:health)",
+    "  env_file=$1 runtime_env=$2 compose_file=$3",
+    "  output=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" exec -T main-service-worker npm run worker:health)",
     "  case \"$output\" in *'\"scheduler_id\":\"cleanup.daily\"'* ) ;; *) fail worker scheduler-missing ;; esac",
     "  case \"$output\" in *'\"global_concurrency\":1'* ) ;; *) fail worker global-concurrency-missing ;; esac",
     "  case \"$output\" in *'\"local_concurrency\":1'* ) ;; *) fail worker local-concurrency-missing ;; esac",
     "}",
     "verify_migrations() {",
-    "  env_file=$1 compose_file=$2",
-    "  output=$(compose_cmd \"$env_file\" \"$compose_file\" exec -T main-service-api npm run migrate:status)",
+    "  env_file=$1 runtime_env=$2 compose_file=$3",
+    "  output=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" exec -T main-service-api npm run migrate:status)",
     "  case \"$output\" in *'Database schema is up to date'*|*'already in sync'*|*'No pending migrations'* ) ;; *) fail migrations status-not-clean ;; esac",
-    "  count=$(psql_count \"$env_file\" \"$compose_file\" \"select count(*) from _prisma_migrations where migration_name in ('20260620000000_initial_empty','20260620001000_canonical_business_schema');\" | tr -d '\\r')",
+    "  count=$(psql_count \"$env_file\" \"$runtime_env\" \"$compose_file\" \"select count(*) from _prisma_migrations where migration_name in ('20260620000000_initial_empty','20260620001000_canonical_business_schema');\" | tr -d '\\r')",
     "  [ \"$count\" = 2 ] || fail migrations inventory-mismatch",
     "}",
     "agent_tenant_smoke() {",
-    "  env_file=$1 compose_file=$2",
-    "  output=$(compose_cmd \"$env_file\" \"$compose_file\" exec -T main-service-api node - <<'NODE'",
+    "  env_file=$1 runtime_env=$2 compose_file=$3",
+    "  output=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" exec -T main-service-api node - <<'NODE'",
     "const heartbeat = await fetch('http://127.0.0.1:3000/agent/heartbeat', {",
     "  method: 'POST',",
     "  headers: { 'content-type': 'application/json', 'X-Agent-Key': process.env.AGENT_KEY },",
@@ -343,45 +351,46 @@ export function buildRemoteDrillCommand({
     "  case \"$output\" in *'agent_tenant_smoke=ok'* ) ;; *) fail smoke agent-tenant-smoke-failed ;; esac",
     "}",
     "verify_sentinel() {",
-    "  env_file=$1 compose_file=$2",
-    "  count=$(psql_count \"$env_file\" \"$compose_file\" \"select count(*) from agent_runtime_status where agent_id='default' and status='ok';\" | tr -d '\\r')",
+    "  env_file=$1 runtime_env=$2 compose_file=$3",
+    "  count=$(psql_count \"$env_file\" \"$runtime_env\" \"$compose_file\" \"select count(*) from agent_runtime_status where agent_id='default' and status='ok';\" | tr -d '\\r')",
     "  [ \"$count\" = 1 ] || fail sentinel count-mismatch",
     "}",
     "verify_active_version() {",
-    "  env_file=$1 compose_file=$2 expected_version=$3",
-    "  version=$(compose_cmd \"$env_file\" \"$compose_file\" exec -T main-service-api node -p \"require('./package.json').version\" | tr -d '\\r')",
+    "  env_file=$1 runtime_env=$2 compose_file=$3 expected_version=$4",
+    "  version=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" exec -T main-service-api node -p \"require('./package.json').version\" | tr -d '\\r')",
     "  [ \"$version\" = \"$expected_version\" ] || fail version active-version-mismatch",
     "}",
     "verify_phase() {",
-    "  env_file=$1 compose_file=$2 expected_image=$3 expected_version=$4",
-    "  verify_images \"$env_file\" \"$compose_file\" \"$expected_image\"",
+    "  env_file=$1 runtime_env=$2 compose_file=$3 expected_image=$4 expected_version=$5",
+    "  verify_images \"$env_file\" \"$runtime_env\" \"$compose_file\" \"$expected_image\"",
     "  wait_api /health/live",
     "  wait_api /health/ready",
-    "  verify_worker \"$env_file\" \"$compose_file\"",
-    "  verify_migrations \"$env_file\" \"$compose_file\"",
-    "  agent_tenant_smoke \"$env_file\" \"$compose_file\"",
-    "  verify_sentinel \"$env_file\" \"$compose_file\"",
+    "  verify_worker \"$env_file\" \"$runtime_env\" \"$compose_file\"",
+    "  verify_migrations \"$env_file\" \"$runtime_env\" \"$compose_file\"",
+    "  agent_tenant_smoke \"$env_file\" \"$runtime_env\" \"$compose_file\"",
+    "  verify_sentinel \"$env_file\" \"$runtime_env\" \"$compose_file\"",
     "  verify_ports",
-    "  verify_active_version \"$env_file\" \"$compose_file\" \"$expected_version\"",
+    "  verify_active_version \"$env_file\" \"$runtime_env\" \"$compose_file\" \"$expected_version\"",
     "}",
-    "extract_release previous \"$previous_archive\" \"$previous_archive_sha256\" \"$previous_dir\" \"$previous_env_incoming\" \"$previous_env\" \"$previous_package_sha256\"",
-    "extract_release candidate \"$candidate_archive\" \"$candidate_archive_sha256\" \"$candidate_dir\" \"$candidate_env_incoming\" \"$candidate_env\" \"$candidate_package_sha256\"",
+    "install_shared_env",
+    "extract_release previous \"$previous_archive\" \"$previous_archive_sha256\" \"$previous_dir\" \"$previous_package_sha256\"",
+    "extract_release candidate \"$candidate_archive\" \"$candidate_archive_sha256\" \"$candidate_dir\" \"$candidate_package_sha256\"",
     "previous_compose=\"$previous_dir/deploy/production/compose.yaml\"",
     "candidate_compose=\"$candidate_dir/deploy/production/compose.yaml\"",
-    "load_image previous \"$previous_dir\" \"$previous_image_ref\" \"$previous_image_id\"",
-    "load_image candidate \"$candidate_dir\" \"$candidate_image_ref\" \"$candidate_image_id\"",
-    "compose_up_initial \"$candidate_env\" \"$candidate_compose\"",
-    "verify_phase \"$candidate_env\" \"$candidate_compose\" \"$candidate_image_id\" \"$candidate_version\"",
+    "load_image previous \"$previous_dir\" \"$previous_image_ref\" \"$previous_image_id\" \"$previous_runtime_env\" \"$previous_package_runtime_env\"",
+    "load_image candidate \"$candidate_dir\" \"$candidate_image_ref\" \"$candidate_image_id\" \"$candidate_runtime_env\" \"$candidate_package_runtime_env\"",
+    "compose_up_initial \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\"",
+    "verify_phase \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" \"$candidate_image_id\" \"$candidate_version\"",
     candidateSwitch,
-    "compose_cmd \"$candidate_env\" \"$candidate_compose\" exec -T postgres sh -lc 'pg_dump -Fc -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' > \"$backup_file\"",
+    "compose_cmd \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" exec -T postgres sh -lc 'pg_dump -Fc -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' > \"$backup_file\"",
     "backup_sha256=$(sha256sum \"$backup_file\" | awk '{print $1}')",
-    "compose_switch_app \"$previous_env\" \"$previous_compose\"",
-    "verify_phase \"$previous_env\" \"$previous_compose\" \"$previous_image_id\" \"$previous_version\"",
+    "compose_switch_app \"$shared_env\" \"$previous_runtime_env\" \"$previous_compose\"",
+    "verify_phase \"$shared_env\" \"$previous_runtime_env\" \"$previous_compose\" \"$previous_image_id\" \"$previous_version\"",
     previousSwitch,
-    "compose_switch_app \"$candidate_env\" \"$candidate_compose\"",
-    "verify_phase \"$candidate_env\" \"$candidate_compose\" \"$candidate_image_id\" \"$candidate_version\"",
+    "compose_switch_app \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\"",
+    "verify_phase \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" \"$candidate_image_id\" \"$candidate_version\"",
     candidateSwitch,
-    "sentinel_count=$(psql_count \"$candidate_env\" \"$candidate_compose\" \"select count(*) from agent_runtime_status where agent_id='default' and status='ok';\" | tr -d '\\r')",
+    "sentinel_count=$(psql_count \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" \"select count(*) from agent_runtime_status where agent_id='default' and status='ok';\" | tr -d '\\r')",
     "emit status remote-staging-drill-passed",
     "emit previous_transfer_verified true",
     "emit candidate_transfer_verified true",
@@ -415,8 +424,8 @@ export function buildRemotePrepareCommand(target) {
     "[ ! -L \"$marker_path\" ] || fail marker symlink",
     "marker_value=$(cat \"$marker_path\") || fail marker unreadable",
     "[ \"$marker_value\" = \"$marker_expected\" ] || fail marker mismatch",
-    "mkdir -p \"$base_dir/incoming\" \"$base_dir/releases\" \"$base_dir/backups\"",
-    "chmod 700 \"$base_dir\" \"$base_dir/incoming\" \"$base_dir/backups\"",
+    "mkdir -p \"$base_dir/incoming\" \"$base_dir/releases\" \"$base_dir/backups\" \"$base_dir/shared\"",
+    "chmod 700 \"$base_dir\" \"$base_dir/incoming\" \"$base_dir/backups\" \"$base_dir/shared\"",
     "emit status remote-prepare-passed",
     "emit remote_mutation_performed true"
   ].join("\n");
@@ -505,6 +514,8 @@ function validateManifests(previousManifest, candidateManifest) {
   assert(candidateManifest.image?.included === true, "candidate package must include image");
   assert(/^sha256:[a-f0-9]{64}$/u.test(previousManifest.image.id), "previous image id is invalid");
   assert(/^sha256:[a-f0-9]{64}$/u.test(candidateManifest.image.id), "candidate image id is invalid");
+  assert(previousManifest.runtime_image_env === undefined || previousManifest.runtime_image_env?.image_id === previousManifest.image.id, "previous runtime image env identity mismatch");
+  assert(candidateManifest.runtime_image_env?.image_id === candidateManifest.image.id, "candidate runtime image env identity mismatch");
   assert(previousManifest.image.id !== candidateManifest.image.id, "previous and candidate image ids must differ");
   assert(JSON.stringify(candidateManifest.migrations) === JSON.stringify(EXPECTED_MIGRATIONS), "candidate migration inventory mismatch");
   assert(JSON.stringify(candidateManifest.services) === JSON.stringify(EXPECTED_SERVICES), "candidate service inventory mismatch");
@@ -532,8 +543,7 @@ function remoteTransferNames(previousManifest, candidateManifest, runId) {
   return {
     previousArchive: `${runId}-previous-${previousManifest.version}-${previousManifest.source_commit.slice(0, 12)}.tar`,
     candidateArchive: `${runId}-candidate-${candidateManifest.version}-${candidateManifest.source_commit.slice(0, 12)}.tar`,
-    previousEnv: `${runId}-previous.env`,
-    candidateEnv: `${runId}-candidate.env`
+    sharedEnv: `${runId}-staging.env`
   };
 }
 

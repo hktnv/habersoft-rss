@@ -37,6 +37,7 @@ assert(packageJson.dependencies?.bullmq === "5.79.0", "bullmq must remain pinned
 assert(packageJson.dependencies?.["@nestjs/bullmq"] === "11.0.4", "@nestjs/bullmq must remain pinned to 11.0.4");
 assert(composeYaml.includes(`main-service-app:${expectedVersion}`), `compose image tag must be ${expectedVersion}`);
 assert(productionComposeYaml.includes("${MAIN_SERVICE_IMAGE:?MAIN_SERVICE_IMAGE is required and must be digest-pinned}"), "production Compose must use externally supplied immutable image");
+assert(!productionTemplate.includes("MAIN_SERVICE_IMAGE="), "production env template must not own MAIN_SERVICE_IMAGE");
 assert(!productionComposeYaml.includes("tenant-auth-jwks-fixture"), "production Compose must not include local JWKS fixture");
 assert(!/\bbuild\s*:/u.test(productionComposeYaml), "production Compose must not build from source");
 assert(productionComposeYaml.includes("127.0.0.1:${API_HOST_PORT"), "production API must bind to loopback");
@@ -45,7 +46,9 @@ assert(productionTemplate.includes("TENANT_AUTH_JWKS_URL=https://auth.habersoft.
 assert(prodDocsText.includes(RELEASE_IDENTITY.masterSha256), "repo-local docs must include canonical master v12 hash");
 assert(!prodDocsText.includes(nonCanonicalMasterHash), "repo-local docs must not include non-canonical master hash");
 assert(read("scripts/release-package.mjs").includes("verifyMasterBaseline"), "release package must verify active master baseline");
+assert(read("scripts/release-package.mjs").includes("runtime_image_env"), "release package must include runtime image env metadata");
 assert(read("scripts/release-package-verify.mjs").includes("verifySbom"), "release package verifier must validate SBOM structure");
+assert(read("scripts/release-package-verify.mjs").includes("verifyRuntimeImageEnv"), "release package verifier must validate runtime image env");
 assert(read("scripts/release-package-verify.mjs").includes("signed_attestation === false"), "release package verifier must reject false signed attestation claims");
 assert(registry.includes('MAINTENANCE_QUEUE_NAME = "main-service.maintenance"'), "maintenance queue registry mismatch");
 assert(registry.includes('CLEANUP_RUN_JOB_NAME = "cleanup.run.v1"'), "cleanup job registry mismatch");

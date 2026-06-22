@@ -21,6 +21,7 @@ import {
   validateRehearsalReceipt
 } from "./staging/local-rehearsal.mjs";
 import { EXPECTED_MIGRATIONS, EXPECTED_SERVICES } from "./release-identity.mjs";
+import { formatRuntimeImageEnv } from "./runtime-image-env.mjs";
 
 const [command, ...rawArgs] = process.argv.slice(2);
 const args = parseArgs(rawArgs);
@@ -105,34 +106,36 @@ async function runLocalRehearsal() {
     const apiPort = await findFreeLoopbackPort();
     const secrets = generateRehearsalSecrets();
     const composeFile = path.join(candidatePackage, "deploy", "production", "compose.yaml");
-    const candidateEnvFile = path.join(envDir, "candidate.env");
-    const previousEnvFile = path.join(envDir, "previous.env");
-    writePrivateFile(candidateEnvFile, formatEnv(buildRehearsalEnv({ imageId: candidateImageId, apiPort, projectName, secrets })));
-    writePrivateFile(previousEnvFile, formatEnv(buildRehearsalEnv({ imageId: previousImageId, apiPort, projectName, secrets })));
+    const sharedEnvFile = path.join(envDir, "staging.env");
+    const candidateRuntimeEnvFile = path.join(envDir, "candidate-runtime-image.env");
+    const previousRuntimeEnvFile = path.join(envDir, "previous-runtime-image.env");
+    writePrivateFile(sharedEnvFile, formatEnv(buildRehearsalEnv({ apiPort, projectName, secrets })));
+    writePrivateFile(candidateRuntimeEnvFile, formatRuntimeImageEnv(candidateImageId));
+    writePrivateFile(previousRuntimeEnvFile, formatRuntimeImageEnv(previousImageId));
 
-    verifyComposeConfig(projectName, composeFile, candidateEnvFile);
-    runComposeUp(projectName, composeFile, candidateEnvFile);
-    verifyServiceImages(projectName, composeFile, candidateEnvFile, candidateImageId);
+    verifyComposeConfig(projectName, composeFile, sharedEnvFile, candidateRuntimeEnvFile);
+    runComposeUp(projectName, composeFile, sharedEnvFile, candidateRuntimeEnvFile);
+    verifyServiceImages(projectName, composeFile, sharedEnvFile, candidateRuntimeEnvFile, candidateImageId);
     await verifyApi(apiPort, "candidate-first");
-    verifyWorker(projectName, composeFile, candidateEnvFile);
-    verifyMigrationStatus(projectName, composeFile, candidateEnvFile);
-    await writeAndVerifySentinel(apiPort, secrets.agentKey, projectName, composeFile, candidateEnvFile, 101);
+    verifyWorker(projectName, composeFile, sharedEnvFile, candidateRuntimeEnvFile);
+    verifyMigrationStatus(projectName, composeFile, sharedEnvFile, candidateRuntimeEnvFile);
+    await writeAndVerifySentinel(apiPort, secrets.agentKey, projectName, composeFile, sharedEnvFile, candidateRuntimeEnvFile, 101);
     const backupPath = path.join(backupDir, "rehearsal-backup.dump");
-    run("node", ["scripts/production-backup.mjs", "--compose-file", composeFile, "--env-file", candidateEnvFile, "--output", backupPath, "--project", projectName]);
+    run("node", ["scripts/production-backup.mjs", "--compose-file", composeFile, "--env-file", sharedEnvFile, "--runtime-image-env", candidateRuntimeEnvFile, "--output", backupPath, "--project", projectName]);
     run("node", ["scripts/production-restore-verify.mjs", "--backup", backupPath]);
 
-    switchApplicationImages(projectName, composeFile, previousEnvFile, previousImageId);
+    switchApplicationImages(projectName, composeFile, sharedEnvFile, previousRuntimeEnvFile, previousImageId);
     await verifyApi(apiPort, "previous-rollback");
-    verifyWorker(projectName, composeFile, previousEnvFile);
-    verifyMigrationStatus(projectName, composeFile, previousEnvFile);
-    verifySentinel(projectName, composeFile, previousEnvFile);
-    await writeAndVerifySentinel(apiPort, secrets.agentKey, projectName, composeFile, previousEnvFile, 202);
+    verifyWorker(projectName, composeFile, sharedEnvFile, previousRuntimeEnvFile);
+    verifyMigrationStatus(projectName, composeFile, sharedEnvFile, previousRuntimeEnvFile);
+    verifySentinel(projectName, composeFile, sharedEnvFile, previousRuntimeEnvFile);
+    await writeAndVerifySentinel(apiPort, secrets.agentKey, projectName, composeFile, sharedEnvFile, previousRuntimeEnvFile, 202);
 
-    switchApplicationImages(projectName, composeFile, candidateEnvFile, candidateImageId);
+    switchApplicationImages(projectName, composeFile, sharedEnvFile, candidateRuntimeEnvFile, candidateImageId);
     await verifyApi(apiPort, "candidate-roll-forward");
-    verifyWorker(projectName, composeFile, candidateEnvFile);
-    verifyMigrationStatus(projectName, composeFile, candidateEnvFile);
-    verifySentinel(projectName, composeFile, candidateEnvFile);
+    verifyWorker(projectName, composeFile, sharedEnvFile, candidateRuntimeEnvFile);
+    verifyMigrationStatus(projectName, composeFile, sharedEnvFile, candidateRuntimeEnvFile);
+    verifySentinel(projectName, composeFile, sharedEnvFile, candidateRuntimeEnvFile);
 
     const finishedAt = new Date().toISOString();
     receipt = createRehearsalReceipt({
@@ -161,7 +164,7 @@ async function runLocalRehearsal() {
       finished_at: finishedAt
     });
   } finally {
-    teardownVerified = teardownProject(args.project ?? createProjectName(candidateCommit), path.join(outputRoot, "packages", "candidate-package", "deploy", "production", "compose.yaml"), path.join(outputRoot, "env", "candidate.env"));
+    teardownVerified = teardownProject(args.project ?? createProjectName(candidateCommit), path.join(outputRoot, "packages", "candidate-package", "deploy", "production", "compose.yaml"), path.join(outputRoot, "env", "staging.env"), path.join(outputRoot, "env", "candidate-runtime-image.env"));
     removeWorktree(previousWorktree);
     removeWorktree(candidateWorktree);
   }
@@ -221,8 +224,8 @@ function prepareLegacyMasterLayout(worktree, masterDir) {
   cpSync(masterDir, legacyMasterDir, { recursive: true });
 }
 
-function verifyComposeConfig(projectName, composeFile, envFile) {
-  const config = dockerOutput(["compose", "-p", projectName, "--env-file", envFile, "-f", composeFile, "config", "--format", "json"]);
+function verifyComposeConfig(projectName, composeFile, envFile, runtimeEnvFile) {
+  const config = dockerOutput(["compose", "-p", projectName, "--env-file", envFile, "--env-file", runtimeEnvFile, "-f", composeFile, "config", "--format", "json"]);
   const parsed = JSON.parse(config);
   const services = Object.keys(parsed.services ?? {}).sort();
   if (JSON.stringify(services) !== JSON.stringify([...EXPECTED_SERVICES].sort())) {
@@ -239,19 +242,19 @@ function verifyComposeConfig(projectName, composeFile, envFile) {
   }
 }
 
-function runComposeUp(projectName, composeFile, envFile) {
-  run("docker", ["compose", "-p", projectName, "--env-file", envFile, "-f", composeFile, "up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "180"]);
+function runComposeUp(projectName, composeFile, envFile, runtimeEnvFile) {
+  run("docker", ["compose", "-p", projectName, "--env-file", envFile, "--env-file", runtimeEnvFile, "-f", composeFile, "up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "180"]);
 }
 
-function switchApplicationImages(projectName, composeFile, envFile, expectedImageId) {
-  run("docker", ["compose", "-p", projectName, "--env-file", envFile, "-f", composeFile, "up", "--no-build", "--pull", "never", "--force-recreate", "--no-deps", "migrate"]);
-  run("docker", ["compose", "-p", projectName, "--env-file", envFile, "-f", composeFile, "up", "-d", "--no-build", "--pull", "never", "--force-recreate", "--no-deps", "--wait", "--wait-timeout", "180", "main-service-api", "main-service-worker"]);
-  verifyServiceImages(projectName, composeFile, envFile, expectedImageId);
+function switchApplicationImages(projectName, composeFile, envFile, runtimeEnvFile, expectedImageId) {
+  run("docker", ["compose", "-p", projectName, "--env-file", envFile, "--env-file", runtimeEnvFile, "-f", composeFile, "up", "--no-build", "--pull", "never", "--force-recreate", "--no-deps", "migrate"]);
+  run("docker", ["compose", "-p", projectName, "--env-file", envFile, "--env-file", runtimeEnvFile, "-f", composeFile, "up", "-d", "--no-build", "--pull", "never", "--force-recreate", "--no-deps", "--wait", "--wait-timeout", "180", "main-service-api", "main-service-worker"]);
+  verifyServiceImages(projectName, composeFile, envFile, runtimeEnvFile, expectedImageId);
 }
 
-function verifyServiceImages(projectName, composeFile, envFile, expectedImageId) {
+function verifyServiceImages(projectName, composeFile, envFile, runtimeEnvFile, expectedImageId) {
   for (const service of ["main-service-api", "main-service-worker"]) {
-    const container = dockerOutput(["compose", "-p", projectName, "--env-file", envFile, "-f", composeFile, "ps", "-q", service]).trim();
+    const container = dockerOutput(["compose", "-p", projectName, "--env-file", envFile, "--env-file", runtimeEnvFile, "-f", composeFile, "ps", "-q", service]).trim();
     if (container === "") {
       throw new Error(`${service} container was not found`);
     }
@@ -267,20 +270,20 @@ async function verifyApi(apiPort, phase) {
   await waitForOk(`http://127.0.0.1:${apiPort}/health/ready`, phase);
 }
 
-function verifyWorker(projectName, composeFile, envFile) {
-  const output = dockerOutput(["compose", "-p", projectName, "--env-file", envFile, "-f", composeFile, "exec", "-T", "main-service-worker", "npm", "run", "worker:health"]);
+function verifyWorker(projectName, composeFile, envFile, runtimeEnvFile) {
+  const output = dockerOutput(["compose", "-p", projectName, "--env-file", envFile, "--env-file", runtimeEnvFile, "-f", composeFile, "exec", "-T", "main-service-worker", "npm", "run", "worker:health"]);
   if (!output.includes('"scheduler_id":"cleanup.daily"') || !output.includes('"global_concurrency":1')) {
     throw new Error("worker health did not prove scheduler inventory");
   }
 }
 
-function verifyMigrationStatus(projectName, composeFile, envFile) {
-  const output = dockerOutput(["compose", "-p", projectName, "--env-file", envFile, "-f", composeFile, "exec", "-T", "main-service-api", "npm", "run", "migrate:status"]);
+function verifyMigrationStatus(projectName, composeFile, envFile, runtimeEnvFile) {
+  const output = dockerOutput(["compose", "-p", projectName, "--env-file", envFile, "--env-file", runtimeEnvFile, "-f", composeFile, "exec", "-T", "main-service-api", "npm", "run", "migrate:status"]);
   if (!/Database schema is up to date|already in sync|No pending migrations/iu.test(output)) {
     throw new Error("migration status did not prove no-op state");
   }
   const migrations = parsePsqlCount(
-    psql(projectName, composeFile, envFile, "select count(*) from _prisma_migrations where migration_name in ('20260620000000_initial_empty','20260620001000_canonical_business_schema');"),
+    psql(projectName, composeFile, envFile, runtimeEnvFile, "select count(*) from _prisma_migrations where migration_name in ('20260620000000_initial_empty','20260620001000_canonical_business_schema');"),
     "migration inventory"
   );
   if (migrations !== EXPECTED_MIGRATIONS.length) {
@@ -288,7 +291,7 @@ function verifyMigrationStatus(projectName, composeFile, envFile) {
   }
 }
 
-async function writeAndVerifySentinel(apiPort, agentKey, projectName, composeFile, envFile, feedsProcessed) {
+async function writeAndVerifySentinel(apiPort, agentKey, projectName, composeFile, envFile, runtimeEnvFile, feedsProcessed) {
   const response = await fetch(`http://127.0.0.1:${apiPort}/agent/heartbeat`, {
     method: "POST",
     headers: {
@@ -311,19 +314,19 @@ async function writeAndVerifySentinel(apiPort, agentKey, projectName, composeFil
   if (body.ok !== true) {
     throw new Error("sentinel heartbeat response mismatch");
   }
-  verifySentinel(projectName, composeFile, envFile);
+  verifySentinel(projectName, composeFile, envFile, runtimeEnvFile);
 }
 
-function verifySentinel(projectName, composeFile, envFile) {
-  const count = parsePsqlCount(psql(projectName, composeFile, envFile, "select count(*) from agent_runtime_status where agent_id='default' and status='ok';"), "sentinel");
+function verifySentinel(projectName, composeFile, envFile, runtimeEnvFile) {
+  const count = parsePsqlCount(psql(projectName, composeFile, envFile, runtimeEnvFile, "select count(*) from agent_runtime_status where agent_id='default' and status='ok';"), "sentinel");
   if (count !== 1) {
     throw new Error("sentinel row was not preserved");
   }
 }
 
-function psql(projectName, composeFile, envFile, sql) {
+function psql(projectName, composeFile, envFile, runtimeEnvFile, sql) {
   const env = parseEnv(readFileSync(envFile, "utf8"));
-  const result = spawnSync("docker", ["compose", "-p", projectName, "--env-file", envFile, "-f", composeFile, "exec", "-T", "postgres", "psql", "-X", "-U", env.POSTGRES_USER, "-d", env.POSTGRES_DB, "-At", "-v", "ON_ERROR_STOP=1"], {
+  const result = spawnSync("docker", ["compose", "-p", projectName, "--env-file", envFile, "--env-file", runtimeEnvFile, "-f", composeFile, "exec", "-T", "postgres", "psql", "-X", "-U", env.POSTGRES_USER, "-d", env.POSTGRES_DB, "-At", "-v", "ON_ERROR_STOP=1"], {
     input: `${sql}\n`,
     encoding: "utf8",
     shell: process.platform === "win32"
@@ -345,10 +348,10 @@ function parsePsqlCount(output, label) {
   return Number(numericLines.at(-1));
 }
 
-function teardownProject(projectName, composeFile, envFile) {
+function teardownProject(projectName, composeFile, envFile, runtimeEnvFile) {
   assertSafeTeardownScope(projectName);
-  if (existsSync(composeFile) && existsSync(envFile)) {
-    run("docker", ["compose", "-p", projectName, "--env-file", envFile, "-f", composeFile, "down", "-v", "--remove-orphans", "--timeout", "20"], { allowFailure: true });
+  if (existsSync(composeFile) && existsSync(envFile) && existsSync(runtimeEnvFile)) {
+    run("docker", ["compose", "-p", projectName, "--env-file", envFile, "--env-file", runtimeEnvFile, "-f", composeFile, "down", "-v", "--remove-orphans", "--timeout", "20"], { allowFailure: true });
   }
   const containers = dockerOutput(["ps", "-a", "--filter", `label=com.docker.compose.project=${projectName}`, "-q"]).trim();
   const volumes = dockerOutput(["volume", "ls", "--filter", `label=com.docker.compose.project=${projectName}`, "-q"]).trim();

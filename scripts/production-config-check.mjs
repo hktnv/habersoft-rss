@@ -3,16 +3,18 @@ import path from "node:path";
 
 const args = parseArgs(process.argv.slice(2));
 const envFile = args["env-file"];
+const runtimeImageEnvFile = args["runtime-image-env"];
 
 if (envFile === undefined) {
   fail("production:config:check requires --env-file <path>");
 }
 
-const env = parseEnvFile(path.resolve(envFile));
 const failures = [];
+const sharedEnv = parseEnvFile(path.resolve(envFile));
+const runtimeImageEnv = runtimeImageEnvFile === undefined ? {} : parseRuntimeImageEnv(path.resolve(runtimeImageEnvFile));
+const env = { ...sharedEnv, ...runtimeImageEnv };
 
 const required = [
-  "MAIN_SERVICE_IMAGE",
   "LOG_LEVEL",
   "API_HOST_PORT",
   "POSTGRES_USER",
@@ -38,6 +40,11 @@ const required = [
   "MAINTENANCE_FAILED_JOB_RETENTION_SECONDS",
   "MAINTENANCE_FAILED_JOB_MAX_COUNT"
 ];
+
+assert(env.MAIN_SERVICE_IMAGE !== undefined && env.MAIN_SERVICE_IMAGE.trim() !== "", "MAIN_SERVICE_IMAGE is required from runtime image env");
+if (runtimeImageEnvFile !== undefined) {
+  assert(!Object.hasOwn(sharedEnv, "MAIN_SERVICE_IMAGE"), "shared env file must not define MAIN_SERVICE_IMAGE when runtime-image-env is supplied");
+}
 
 for (const name of required) {
   if (env[name] === undefined || env[name].trim() === "") {
@@ -91,8 +98,15 @@ function requireDigestPinnedImage(value) {
   }
 
   assert(!value.endsWith(":latest"), "MAIN_SERVICE_IMAGE must not use latest");
-  assert(value.includes("@sha256:"), "MAIN_SERVICE_IMAGE must be digest-pinned with @sha256:");
-  assert(/@sha256:[a-f0-9]{64}$/u.test(value), "MAIN_SERVICE_IMAGE digest must be a lowercase sha256 digest");
+  assert(/^sha256:[a-f0-9]{64}$/u.test(value) || /@sha256:[a-f0-9]{64}$/u.test(value), "MAIN_SERVICE_IMAGE must be an immutable sha256 image identity");
+}
+
+function parseRuntimeImageEnv(file) {
+  const parsed = parseEnvFile(file);
+  const keys = Object.keys(parsed);
+  assert(keys.length === 1 && keys[0] === "MAIN_SERVICE_IMAGE", "runtime-image-env must contain exactly MAIN_SERVICE_IMAGE");
+  assert(/^sha256:[a-f0-9]{64}$/u.test(parsed.MAIN_SERVICE_IMAGE ?? ""), "runtime-image-env MAIN_SERVICE_IMAGE must be sha256 image id");
+  return parsed;
 }
 
 function requireUrl(name, protocols, options = {}) {

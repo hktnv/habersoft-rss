@@ -29,6 +29,12 @@ export function compareRollbackCompatibility(previousManifest, candidateManifest
   if (previousManifest.image?.included !== true || candidateManifest.image?.included !== true) {
     failures.push("both packages must include image artifacts");
   }
+  if (previousManifest.runtime_image_env !== undefined && previousManifest.runtime_image_env?.image_id !== previousManifest.image?.id) {
+    failures.push("previous runtime image env mismatch");
+  }
+  if (candidateManifest.runtime_image_env?.image_id !== candidateManifest.image?.id) {
+    failures.push("candidate runtime image env mismatch");
+  }
 
   if (failures.length > 0) {
     throw new Error(failures.join("; "));
