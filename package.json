@@ -1,6 +1,6 @@
 {
   "name": "main-service",
-  "version": "0.1.0-ms-016",
+  "version": "0.1.0-ms-017",
   "private": true,
   "description": "rss.habersoft.com main-service tenant feed subscription API foundation",
   "license": "UNLICENSED",

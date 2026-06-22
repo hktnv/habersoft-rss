@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { validateTargetConfig } from "./staging/target-config.mjs";
-import { assertNoInsecureSshArgs, buildSshArgs, posixSingleQuote } from "./staging/ssh-client.mjs";
+import { assertNoInsecureSshArgs, buildScpDownloadArgs, buildSshArgs, posixSingleQuote } from "./staging/ssh-client.mjs";
 import {
   assertReadOnlyRemoteCommand,
   buildRemotePreflightCommand,
@@ -12,6 +12,7 @@ import {
   validatePreflightComparison,
   validatePreflightReceipt
 } from "./staging/remote-preflight.mjs";
+import { buildRemoteDrillCommand, buildRemotePrepareCommand } from "./staging/remote-drill.mjs";
 import { assertNoVolumeDeletion, releaseDir, switchCommands } from "./staging/remote-layout.mjs";
 import { validateReceipt } from "./staging/receipt.mjs";
 import { loadEnvFile, stagingEnvFromTemplate, validateStagingEnv } from "./staging/env-inputs.mjs";
@@ -53,6 +54,7 @@ try {
   assert(sshArgs.includes("PreferredAuthentications=publickey"));
   assert.throws(() => assertNoInsecureSshArgs(["-o", "StrictHostKeyChecking=no"]), /insecure|strict/u);
   assert.throws(() => assertNoInsecureSshArgs(["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=NUL"]), /insecure|strict/u);
+  assert.doesNotThrow(() => assertNoInsecureSshArgs(buildScpDownloadArgs(valid, "/opt/habersoft/rss-main-service-staging/backups/backup.dump", path.join(temp, "backup.dump"))));
 
   const remotePreflightCommand = buildRemotePreflightCommand(valid);
   assert.doesNotThrow(() => assertReadOnlyRemoteCommand(remotePreflightCommand));
@@ -71,6 +73,34 @@ try {
   const commands = switchCommands(valid.remote_base_dir, dir);
   assert.doesNotThrow(() => assertNoVolumeDeletion(commands));
   assert.throws(() => assertNoVolumeDeletion("docker compose down -v"), /delete volumes/u);
+  const remotePrepareCommand = buildRemotePrepareCommand(valid);
+  assert.match(remotePrepareCommand, /mkdir -p/u);
+  assert.doesNotThrow(() => assertNoVolumeDeletion(remotePrepareCommand));
+  const remoteDrillCommand = buildRemoteDrillCommand({
+    target: valid,
+    runId: "ms017c-11111111-1111-4111-8111-111111111111",
+    previousManifest: manifest("0.1.0-ms-016", "a".repeat(40), "sha256:" + "1".repeat(64)),
+    candidateManifest: manifest("0.1.0-ms-017", "b".repeat(40), "sha256:" + "2".repeat(64)),
+    previousPackageSha256: "3".repeat(64),
+    candidatePackageSha256: "4".repeat(64),
+    previousArchiveSha256: "5".repeat(64),
+    candidateArchiveSha256: "6".repeat(64),
+    remoteNames: {
+      previousArchive: "ms017c-previous.tar",
+      candidateArchive: "ms017c-candidate.tar",
+      previousEnv: "ms017c-previous.env",
+      candidateEnv: "ms017c-candidate.env"
+    }
+  });
+  assert.match(remoteDrillCommand, /docker load --input/u);
+  assert.match(remoteDrillCommand, /pull --policy missing postgres redis/u);
+  assert.match(remoteDrillCommand, /--pull never/u);
+  assert.match(remoteDrillCommand, /--wait --wait-timeout 180/u);
+  assert.match(remoteDrillCommand, /--force-recreate --no-deps/u);
+  assert.match(remoteDrillCommand, /pg_dump -Fc/u);
+  assert.match(remoteDrillCommand, /curl --silent --show-error --max-time 5/u);
+  assert.doesNotThrow(() => assertNoVolumeDeletion(remoteDrillCommand));
+  assert.doesNotMatch(remoteDrillCommand, /StrictHostKeyChecking=no|sshpass|docker compose down -v|--volumes|system prune|redis-cli flush/u);
 
   const receipt = validReceipt();
   assert.doesNotThrow(() => validateReceipt(receipt));
@@ -135,6 +165,10 @@ try {
   assert.doesNotThrow(() => validateStagingEnv({
     ...validEnv,
     MAIN_SERVICE_IMAGE: `registry.example.invalid/rss/main-service@sha256:${"f".repeat(64)}`
+  }, valid, "deployment-ready"));
+  assert.doesNotThrow(() => validateStagingEnv({
+    ...validEnv,
+    MAIN_SERVICE_IMAGE: `sha256:${"f".repeat(64)}`
   }, valid, "deployment-ready"));
   assert.throws(() => validateStagingEnv({ ...validEnv, UNKNOWN_APP_KEY: "1" }, valid), /unknown env key/u);
   assert.throws(() => validateStagingEnv({ ...validEnv, AGENT_KEY: "CHANGE_ME_AGENT_KEY_MINIMUM_32_BYTES" }, valid), /AGENT_KEY/u);
@@ -339,7 +373,7 @@ function validPreflightReceipt() {
     environment: "staging",
     approved: true,
     source_commit: "a".repeat(40),
-    application_version: "0.1.0-ms-016",
+    application_version: RELEASE_IDENTITY.version,
     master_release: RELEASE_IDENTITY.masterRelease,
     master_hash: RELEASE_IDENTITY.masterSha256,
     master_count: RELEASE_IDENTITY.masterActiveMarkdownCount,
@@ -389,7 +423,7 @@ function manifest(version, commit, imageId) {
     migrations: [...EXPECTED_MIGRATIONS],
     public_routes: [...EXPECTED_PUBLIC_ROUTES],
     services: [...EXPECTED_SERVICES],
-    image: { included: true, id: imageId }
+    image: { included: true, id: imageId, reference: `main-service-app:${version}` }
   };
 }
 

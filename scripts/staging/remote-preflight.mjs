@@ -353,7 +353,7 @@ export function validatePreflightReceipt(receipt) {
   assert(receipt.environment === "staging", "environment must be staging");
   assert(receipt.approved === true, "approved must be true");
   assert(/^[a-f0-9]{40}$/u.test(String(receipt.source_commit)), "source_commit is invalid");
-  assert(receipt.application_version === "0.1.0-ms-016", "application_version must remain 0.1.0-ms-016");
+  assert(receipt.application_version === RELEASE_IDENTITY.version, `application_version must be ${RELEASE_IDENTITY.version}`);
   assert(receipt.master_release === RELEASE_IDENTITY.masterRelease, "master release mismatch");
   assert(receipt.master_hash === RELEASE_IDENTITY.masterSha256, "master hash mismatch");
   assert(receipt.master_count === RELEASE_IDENTITY.masterActiveMarkdownCount, "master count mismatch");
