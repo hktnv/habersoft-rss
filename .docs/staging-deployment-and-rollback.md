@@ -14,9 +14,11 @@ Package-derived image binding: `Passed`
 
 Production IdP readiness-only proof: `Passed`
 
-Staging deployment acceptance: `Not accepted`
+Staging deployment acceptance: `Passed`
 
-Rollback drill: `Not executed`
+Rollback drill: `Passed`
+
+Roll-forward drill: `Passed`
 
 MS-017B approved staging target read-only remote preflight, target alias `habersoft-rss-staging-alias` icin 2026-06-22 UTC tarihinde iki kez basariyla calistirildi. Strict SSH host identity operator-owned pinned known_hosts ile dogrulandi ve remote environment marker exact `staging` olarak ilk semantic gate'te verified edildi.
 
@@ -42,9 +44,66 @@ MS-017C1A-3R production IdP readiness-only sonucu: active staging IdP decision `
 
 Application version remains: `0.1.0-ms-017`
 
-Application status remains: `Staging Adayi`
+Application status: `MVP Adayi - Staging Dogrulandi / Rollback Tatbikati Gecti`
 
 Master baseline: `rss-habersoft-master-v12` / `df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430` / `29`
+
+## MS-017C Full Drill Result
+
+2026-06-22 UTC tarihinde target alias `habersoft-rss-staging-alias` uzerinde full staging deployment, backup/restore, rollback ve roll-forward drill passed.
+
+Strict preflight:
+
+- architecture `linux/amd64`
+- Docker and Compose v2 available
+- project `existing-approved-staging`
+- running project containers `0`
+- API listener `0`
+- project volumes `2`
+- filesystem `read-write`
+- inventory unchanged
+- edge mode `loopback-only`
+
+Candidate identity:
+
+- version `0.1.0-ms-017`
+- source commit `074d868d09c5b3d6079803480760d9e669b51826`
+- package SHA-256 `b319c5daf031332f0a68b35774d58f537dd580cba279472a0d270b1a1c5fb082`
+- image ID `sha256:fdeb82c314b8f5af0f6e0fca572ef986d8b311449503389691950f0a4e940919`
+- runtime-image.env SHA-256 `b0dde9479c9fbe64c00f86cb439716207795f8f793df81c0fcb37f1bb449d873`
+
+Previous rollback identity:
+
+- version `0.1.0-ms-016`
+- source commit `9bed749e531fdbe435011b3948ec52982387269e`
+- package SHA-256 `fe68dd586c9c0efe105de110fee00acb6a71adb087da45a63fdc51ed32dafd0b`
+- image ID `sha256:4badab61265f0545ce945098220068238e05b1f7fda008fd1f853d75858a5b42`
+- generated runtime-image.env SHA-256 `d9885d838af2a02aabd32ea11a7703b05b4da44b55e5add6c88d7141a4dea296`
+
+Acceptance evidence:
+
+- candidate first deploy passed with two readiness rounds
+- worker scheduler `cleanup.daily` verified
+- synthetic sentinel verified with alias SHA-256 `89024679ad934d5cfa85e401c365b686c49542b712f9fd06d26f3fdbac47ff92`
+- sentinel expected counts: feeds `1`, site_feeds `1`, entries `1`, entry_details `1`, agent_feed_check_events `1`, agent_runtime_status `1`
+- staging PostgreSQL custom-format backup SHA-256 `595ee0617d86f5886aca25ae99486f064ce06e081d16fec19fec74cdd8db9bfc`
+- off-host restore verification passed
+- rollback to `0.1.0-ms-016` passed with two readiness rounds and sentinel preserved
+- roll-forward to `0.1.0-ms-017` passed with two readiness rounds and sentinel preserved
+- final active version `0.1.0-ms-017`
+- final current pointer `candidate`
+- final previous pointer `0.1.0-ms-016`
+- final services remain running
+- API loopback-only; PostgreSQL, Redis and worker have no public host ports
+
+Safety flags:
+
+- production touched: `false`
+- artifact published: `false`
+- external registry publish: `false`
+- Git tag created: `false`
+- GitHub Release created: `false`
+- DNS/TLS/CyberPanel live change: `false`
 
 ## Hazirlanan Guvenlik Kapilari
 
@@ -208,4 +267,4 @@ MS-017 completion requires:
 - candidate package `deploy/runtime-image.env`,
 - remote Docker/Compose availability through the deploy user.
 
-MS-017B read-only target preflight is verified for target alias `habersoft-rss-staging-alias`. MS-017C1A-R2 package/image binding is verified. MS-017C1A-3R production IdP readiness-only proof is passed with canonical production JWKS, but full staging deployment, backup/restore, rollback and roll-forward remain unexecuted until the bounded MS-017C drill runs with explicit candidate/previous package inputs and operator approval.
+MS-017B read-only target preflight is verified for target alias `habersoft-rss-staging-alias`. MS-017C1A-R2 package/image binding is verified. MS-017C1A-3R production IdP readiness-only proof is passed with canonical production JWKS. MS-017C full staging deployment, backup/restore, rollback and roll-forward drill is now passed with explicit candidate/previous package inputs. Production deployment, artifact publication, Git tag and GitHub Release remain unperformed.

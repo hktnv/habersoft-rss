@@ -46,11 +46,13 @@ Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Reque
 
 ## Durum
 
-Package verified. Production rollout yapilmadi. DNS/TLS/CyberPanel live configuration degistirilmedi. Staging handoff MS-017 kapsamindadir.
+Package verified. Approved staging deployment/rollback drill passed. Production rollout yapilmadi. DNS/TLS/CyberPanel live configuration degistirilmedi. Staging evidence MS-017 kapsamindadir.
 
 MS-017C1A-R2 asamasinda package-derived image binding remote config-only proof'tan gecmistir. API/worker/PostgreSQL/Redis baslatilmamis, migration/readiness retry/rollback/roll-forward veya current symlink promotion yapilmamistir. Production runtime ve edge siniri degismemistir.
 
 MS-017C1A-3R asamasinda staging target uzerinde production IdP readiness-only proof gecti. Canonical production JWKS endpoint'i strict HTTPS ile local/remote/candidate network katmanlarinda dogrulandi; preserved staging volumes uzerinde PostgreSQL, Redis, migrate no-op, API ve worker gecici olarak baslatilip iki readiness turu passed sonucuyla safe-stop edildi. Bu production rollout, full staging deployment kabul, backup/restore, rollback/roll-forward, current symlink promotion, artifact publication, Git tag veya GitHub Release anlamina gelmez.
+
+MS-017C asamasinda approved staging target `habersoft-rss-staging-alias` uzerinde full deployment, synthetic sentinel, PostgreSQL backup, off-host restore verification, rollback to `0.1.0-ms-016`, roll-forward to `0.1.0-ms-017`, final current pointer candidate promotion ve final running services acceptance passed. Final staging edge mode `loopback-only` kaldi. Bu production rollout, DNS/TLS/CyberPanel live configuration, artifact publication, Git tag veya GitHub Release anlamina gelmez.
 
 ## Guvenli Troubleshooting
 

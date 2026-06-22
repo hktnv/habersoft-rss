@@ -32,6 +32,8 @@ Redis rate-limit/job scheduler runtime state tasir. Redis kaybi canonical busine
 
 MS-016 schema/migration degistirmez. Compatible rollback onceki app image'a donusle sinirlidir. Gelecek incompatible migration iceren release icin verified PostgreSQL backup ve restore plan olmadan rollout yapilmaz.
 
-MS-017 hazirlik tooling'i staging receipt icinde backup checksum ve restore verification alanlarini zorunlu kilar. Gercek staging backup/restore bu degisiklikte yapilmamistir; onayli staging target ve external staging env gereklidir.
+MS-017 hazirlik tooling'i staging receipt icinde backup checksum ve restore verification alanlarini zorunlu kilar.
+
+MS-017C approved staging drill sirasinda target alias `habersoft-rss-staging-alias` icin PostgreSQL custom-format backup alindi ve off-host disposable PostgreSQL restore verification passed oldu. Backup SHA-256 `595ee0617d86f5886aca25ae99486f064ce06e081d16fec19fec74cdd8db9bfc`. Restore verifier six canonical business table'i, two Prisma migration kaydini, sentinel row count minimumlarini, entry/detail invariant'ini, agent event varligini ve runtime status varligini kontrol etti. Backup/metadata Git'e alinmadi; production database overwrite edilmedi.
 
 MS-017B2 local rehearsal tooling'i PostgreSQL backup ve disposable restore verification'i izole local Docker project uzerinde dener. Bu kanit production backup veya remote staging backup yerine gecmez.
