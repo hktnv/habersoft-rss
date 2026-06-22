@@ -24,6 +24,7 @@ Master baseline: `rss-habersoft-master-v12` / `df466d84859edcf17d91e797b490c0705
 
 - Target descriptor sahibi: `scripts/staging/target-config.mjs` ve `staging:inputs:*`.
 - Staging env inventory sahibi: `scripts/staging/env-inputs.mjs` ve production env template; image identity shared env sahibi degildir.
+- Contract-pinned staging IdP projection sahibi: `deploy/staging/idp-contract-policy.json` ve `scripts/staging/idp-contract-policy.mjs`.
 - Pinned known_hosts offline inspect sahibi: `scripts/staging/known-hosts.mjs`.
 - Local rehearsal evidence sahibi: [local-staging-rehearsal.md](local-staging-rehearsal.md).
 - Remote staging deployment evidence sahibi: [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md).
@@ -172,6 +173,8 @@ Bundle secret, real host/IP/user/local path, real known_hosts key, staging crede
 `staging-target.template.json` `approved=false` gelir. Operator target'i review ettikten, pinned known_hosts dosyasini hazirladiktan ve marker sozlesmesini dogruladiktan sonra external real target dosyasinda `approved=true` yapar.
 
 `staging.env.template` placeholder-only shared config/secret inventory'dir. Gercek staging secret'lari repository disinda doldurulur veya `staging:inputs:scaffold` external dosya uzerinden kullanilir. Template deployable image secmez ve `MAIN_SERVICE_IMAGE` tasimaz.
+
+External staging env exact production JWKS'i secerse, operator ayrica repository disindaki authoritative IdP authorization contract dosyasini `--idp-contract <path>` veya `STAGING_IDP_CONTRACT_FILE` ile teslim eder. Tool bu dosyanin raw ve LF-normalized SHA-256 kimligini, required Markdown alanlarini ve `STAGING_USES_PRODUCTION_IDP` kararini tracked projection ile karsilastirir. Contract path, raw Markdown ve secret degerleri handoff bundle'a veya readiness receipt'e yazilmaz.
 
 ## Package Handoff
 

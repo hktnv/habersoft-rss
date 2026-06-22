@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { RELEASE_IDENTITY } from "../release-identity.mjs";
+import { optionalContractProjection } from "./idp-contract-policy.mjs";
 
 const required = [
   "schema_version",
@@ -26,9 +27,30 @@ const required = [
   "ready_for_read_only_remote_preflight",
   "created_at"
 ];
-const allowedReadinessFields = new Set(required);
+const optional = [
+  "idp_contract_present",
+  "idp_contract_verified",
+  "idp_contract_decision",
+  "idp_contract_owner",
+  "idp_contract_environment",
+  "idp_contract_consumer",
+  "idp_contract_status",
+  "idp_contract_issuer",
+  "idp_contract_jwks",
+  "idp_contract_audience",
+  "idp_contract_scope",
+  "idp_contract_algorithm",
+  "idp_contract_token_acquisition_owner",
+  "idp_contract_raw_sha256",
+  "idp_contract_lf_normalized_sha256",
+  "idp_contract_raw_hash_match",
+  "idp_contract_normalized_hash_match",
+  "idp_contract_authorization_scope"
+];
+const allowedReadinessFields = new Set([...required, ...optional]);
 
 export function createReadinessReceipt(target, checks) {
+  const idpContract = optionalContractProjection(checks.idpContract);
   return {
     schema_version: 1,
     target_alias: target.target_alias,
@@ -50,6 +72,24 @@ export function createReadinessReceipt(target, checks) {
     remote_mutation_performed: false,
     deployment_performed: false,
     image_identity_ready: checks.imageIdentityReady === true,
+    idp_contract_present: idpContract.contract_present,
+    idp_contract_verified: idpContract.contract_verified,
+    idp_contract_decision: idpContract.decision,
+    idp_contract_owner: idpContract.owner,
+    idp_contract_environment: idpContract.environment,
+    idp_contract_consumer: idpContract.consumer,
+    idp_contract_status: idpContract.status,
+    idp_contract_issuer: idpContract.issuer,
+    idp_contract_jwks: idpContract.jwks_url,
+    idp_contract_audience: idpContract.audience,
+    idp_contract_scope: idpContract.scope,
+    idp_contract_algorithm: idpContract.algorithm,
+    idp_contract_token_acquisition_owner: idpContract.token_acquisition_owner ?? null,
+    idp_contract_raw_sha256: idpContract.raw_sha256,
+    idp_contract_lf_normalized_sha256: idpContract.lf_normalized_sha256,
+    idp_contract_raw_hash_match: idpContract.raw_hash_match,
+    idp_contract_normalized_hash_match: idpContract.normalized_hash_match,
+    idp_contract_authorization_scope: idpContract.authorization_scope,
     ready_for_read_only_remote_preflight:
       checks.targetSchemaValid === true &&
       target.approved === true &&

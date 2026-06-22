@@ -22,7 +22,7 @@ export function runRemotePreflight(args) {
   const envFile = requiredFile(args["env-file"], "env-file");
   const target = loadAndValidateTargetConfig(targetFile);
   const env = loadEnvFile(envFile);
-  validateStagingEnv(env, target, "deployment-ready");
+  validateStagingEnv(env, target, "deployment-ready", { idpContractFile: args["idp-contract"] });
   inspectKnownHostsForTarget(target);
 
   const remoteCommand = buildRemotePreflightCommand(target);

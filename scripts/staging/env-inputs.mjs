@@ -1,5 +1,11 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import {
+  CONTRACT_ERROR_CODES,
+  loadIdpContractPolicy,
+  loadVerifiedStagingIdpContract,
+  optionalContractProjection
+} from "./idp-contract-policy.mjs";
 
 const productionIdentifiers = [
   "rss.habersoft.com",
@@ -109,13 +115,15 @@ export function loadEnvFile(file) {
   return parseEnvText(readFileSync(path.resolve(file), "utf8"));
 }
 
-export function validateStagingEnv(env, target, mode = "operator-input") {
+export function validateStagingEnv(env, target, mode = "operator-input", options = {}) {
   const failures = [];
   const assert = (condition, message) => {
     if (!condition) {
       failures.push(message);
     }
   };
+  const idpContractPolicy = loadIdpContractPolicy();
+  let idpContract;
 
   for (const key of REQUIRED_ENV_KEYS) {
     assert(env[key] !== undefined && env[key].trim() !== "", `${key} is required`);
@@ -137,7 +145,8 @@ export function validateStagingEnv(env, target, mode = "operator-input") {
     assert(Number.isInteger(value) && value > 0 && value <= Number.MAX_SAFE_INTEGER, `${key} must be a positive integer`);
   }
 
-  validateComposeUrls(env, assert);
+  validateComposeUrls(env, assert, idpContractPolicy);
+  idpContract = validateStagingIdpProjection(env, idpContractPolicy, assert, options);
   requireSecret("POSTGRES_PASSWORD", env.POSTGRES_PASSWORD, 16, assert);
   requireSecret("TENANT_RATE_LIMIT_KEY_SECRET", env.TENANT_RATE_LIMIT_KEY_SECRET, 32, assert);
   requireSecret("AGENT_KEY", env.AGENT_KEY, 32, assert);
@@ -151,7 +160,8 @@ export function validateStagingEnv(env, target, mode = "operator-input") {
   for (const [key, value] of Object.entries(env)) {
     const lower = String(value).toLowerCase();
     for (const identifier of productionIdentifiers) {
-      assert(!lower.includes(identifier), `${key} must not contain production identifier`);
+      const allowedProductionJwks = key === "TENANT_AUTH_JWKS_URL" && value === idpContractPolicy.jwks_url;
+      assert(allowedProductionJwks || !lower.includes(identifier), `${key}: ${CONTRACT_ERROR_CODES.productionIdentifierForbidden}`);
     }
   }
 
@@ -164,7 +174,8 @@ export function validateStagingEnv(env, target, mode = "operator-input") {
     secretsPresent: true,
     imageIdentityReady,
     legacyImageFieldPresent: legacyImagePresent,
-    packageImageRequired: mode === "deployment-ready"
+    packageImageRequired: mode === "deployment-ready",
+    idpContract: optionalContractProjection(idpContract)
   };
 }
 
@@ -201,7 +212,7 @@ function parseEnvText(text) {
   return Object.fromEntries(entries);
 }
 
-function validateComposeUrls(env, assert) {
+function validateComposeUrls(env, assert, idpContractPolicy) {
   try {
     const parsed = new URL(env.DATABASE_URL);
     assert(parsed.protocol === "postgresql:", "DATABASE_URL must use postgresql");
@@ -225,8 +236,25 @@ function validateComposeUrls(env, assert) {
     const localFixtures = new Set(["localhost", "127.0.0.1", "::1", "tenant-auth-jwks-fixture"]);
     assert(parsed.protocol === "https:", "TENANT_AUTH_JWKS_URL must use HTTPS");
     assert(!localFixtures.has(parsed.hostname), "TENANT_AUTH_JWKS_URL must not target a local fixture");
+    assert(parsed.hostname !== "auth-staging.habersoft.com", `TENANT_AUTH_JWKS_URL: ${CONTRACT_ERROR_CODES.jwksMismatch}`);
+    if (parsed.hostname === "auth.habersoft.com") {
+      assert(env.TENANT_AUTH_JWKS_URL === idpContractPolicy.jwks_url, `TENANT_AUTH_JWKS_URL: ${CONTRACT_ERROR_CODES.jwksMismatch}`);
+    }
   } catch {
     assert(false, "TENANT_AUTH_JWKS_URL must be a valid URL");
+  }
+}
+
+function validateStagingIdpProjection(env, policy, assert, options) {
+  if (env.TENANT_AUTH_JWKS_URL !== policy.jwks_url) {
+    return undefined;
+  }
+
+  try {
+    return loadVerifiedStagingIdpContract(options);
+  } catch (error) {
+    assert(false, error.message);
+    return undefined;
   }
 }
 

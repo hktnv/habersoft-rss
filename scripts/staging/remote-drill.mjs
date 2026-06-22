@@ -37,7 +37,8 @@ export function runRemoteDrill(args) {
   const target = loadAndValidateTargetConfig(targetFile);
   const operatorEnv = loadEnvFile(envFile);
   const sharedOperatorEnv = removeRuntimeImageFromEnv(operatorEnv);
-  validateStagingEnv(sharedOperatorEnv, target, "deployment-ready");
+  const validationOptions = { idpContractFile: args["idp-contract"] };
+  validateStagingEnv(sharedOperatorEnv, target, "deployment-ready", validationOptions);
 
   const candidatePackage = requiredDirectory(args["candidate-package"] ?? args.package, "candidate-package");
   const previousPackage = requiredDirectory(args["previous-package"], "previous-package");
@@ -74,7 +75,7 @@ export function runRemoteDrill(args) {
 
     const sharedEnvFile = path.join(tempRoot, "staging.env");
     writePrivateFile(sharedEnvFile, formatEnv(sharedOperatorEnv));
-    validateStagingEnv(loadEnvFile(sharedEnvFile), target, "deployment-ready");
+    validateStagingEnv(loadEnvFile(sharedEnvFile), target, "deployment-ready", validationOptions);
 
     const remoteNames = remoteTransferNames(previousManifest, candidateManifest, runId);
     runRemotePrepare(target);

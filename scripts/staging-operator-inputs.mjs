@@ -36,7 +36,7 @@ try {
       receiptVerify();
       break;
     default:
-      fail("usage: staging-operator-inputs <scaffold|verify|known-hosts:inspect|receipt:verify>");
+      fail("usage: staging-operator-inputs <scaffold|verify|known-hosts:inspect|receipt:verify>; verify supports --idp-contract <path>");
   }
 } catch (error) {
   fail(error.message);
@@ -104,9 +104,10 @@ function verify() {
   assertExternalPath(path.resolve(target.known_hosts_file), "known_hosts_file");
   assertNotTracked(path.resolve(target.known_hosts_file), "known_hosts_file");
   const env = loadEnvFile(envFile);
-  const envModeResult = validateStagingEnv(env, target, mode);
+  const envModeResult = validateStagingEnv(env, target, mode, { idpContractFile: args["idp-contract"] });
   assertEnvFileMode(envFile);
   const knownHosts = inspectKnownHostsForTarget(target);
+  let imageIdentityReady = envModeResult.imageIdentityReady;
   if (mode === "deployment-ready") {
     if (args["runtime-image-env"] === undefined) {
       throw new Error("deployment-ready mode requires --runtime-image-env from a verified package");
@@ -114,6 +115,7 @@ function verify() {
     const runtimeImageEnv = requiredExternalPath(args["runtime-image-env"], "runtime-image-env");
     run("node", ["scripts/production-config-check.mjs", "--env-file", envFile, "--runtime-image-env", runtimeImageEnv]);
     run("node", ["scripts/production-compose-verify.mjs", "--env-file", envFile, "--runtime-image-env", runtimeImageEnv]);
+    imageIdentityReady = true;
   }
 
   const receipt = createReadinessReceipt(target, {
@@ -123,7 +125,8 @@ function verify() {
     knownHostsFilePresent: true,
     knownHostsEntryPresent: knownHosts.entry_found === true,
     remoteEnvironmentMarkerConfigured: isMarkerConfigured(target),
-    imageIdentityReady: envModeResult.imageIdentityReady
+    imageIdentityReady,
+    idpContract: envModeResult.idpContract
   });
   validateReadinessReceipt(receipt);
   const receiptFile = args.receipt === undefined
@@ -136,9 +139,15 @@ function verify() {
     mode,
     target: sanitizeTargetForReceipt(target),
     known_hosts_entry_present: true,
-    image_identity_ready: envModeResult.imageIdentityReady,
+    image_identity_ready: imageIdentityReady,
     legacy_image_field_present: envModeResult.legacyImageFieldPresent,
     package_image_required: envModeResult.packageImageRequired,
+    idp_contract_present: envModeResult.idpContract.contract_present,
+    idp_contract_verified: envModeResult.idpContract.contract_verified,
+    idp_contract_decision: envModeResult.idpContract.decision,
+    idp_contract_owner: envModeResult.idpContract.owner,
+    idp_contract_raw_sha256: envModeResult.idpContract.raw_sha256,
+    idp_contract_lf_normalized_sha256: envModeResult.idpContract.lf_normalized_sha256,
     ready_for_read_only_remote_preflight: receipt.ready_for_read_only_remote_preflight,
     host_key_trust_confirmed_by_tool: false,
     remote_environment_marker_verified: false,

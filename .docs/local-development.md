@@ -376,6 +376,7 @@ MS-017 A asamasi remote staging mutation yapmadan target safety, SSH option, rem
 npm run test:staging
 npm run staging:inputs:scaffold -- --output-dir <external-empty-directory> --target-alias <staging-alias> --ssh-host <operator-host> --ssh-port 22 --ssh-user <operator-user> --known-hosts-file <external-known-hosts-path> --marker-path /etc/habersoft/environment --remote-base-dir <staging-base-dir> --project-name <staging-project> --api-port 13000 --edge-mode loopback-only
 npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input
+npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input --idp-contract <external-staging-idp-contract.md>
 npm run staging:known-hosts:inspect -- --target <external-path>/staging-target.json
 npm run staging:handoff:generate -- --output-dir <external-empty-directory> --platform linux/amd64 --edge-mode loopback-only --marker-path <operator-marker-path> --remote-base-dir <operator-staging-base-dir> --project-name <staging-project> --api-port <staging-api-port>
 npm run staging:handoff:verify -- --bundle <external-output-directory>
@@ -390,6 +391,8 @@ npm run staging:receipt:verify -- --receipt <receipt.json>
 `deploy/staging/target.example.json` yalniz schema ornegidir. `staging:inputs:scaffold`, production env template'inin current variable inventory'sinden external `staging.env` olusturur; target default `approved=false` gelir. `--generate-staging-secrets` kullanilirse secret degerleri yalniz external env dosyasina yazilir ve console'a basilmadan kalir. Known_hosts tool tarafindan uretilmez; operator fingerprint'i host owner ile out-of-band dogrulayip pinned dosyayi kendisi hazirlar. Local readiness receipt remote preflight receipt degildir ve host trust veya marker verification iddiasi tasimaz.
 
 Gercek target, known_hosts, staging env, release package, runtime image env, backup ve receipt Git'e alinmaz. External `staging.env` shared config/secret dosyasidir ve `MAIN_SERVICE_IMAGE` tasimaz; image binding verified package `deploy/runtime-image.env` dosyasindan gelir. Onayli staging target ve remote marker yoksa `staging:deploy`, `staging:rollback` ve `staging:roll-forward` basari iddiasi uretmez.
+
+External `staging.env` exact canonical production JWKS `https://auth.habersoft.com/.well-known/jwks.json` degerini secerse, validator contract-pinned IdP authorization ister. `deploy/staging/idp-contract-policy.json` yalniz public projection/hash pin tasir; full external contract repository'ye kopyalanmaz. Bu istisna yalniz `TENANT_AUTH_JWKS_URL` icindir ve diger production identifier'lari staging config icinde reddedilmeye devam eder.
 
 `staging:rehearsal:local`, remote staging yerine gecmez. Unique local Docker project altinda previous/candidate image package'lerini, backup/restore'i ve immutable image rollback/roll-forward dry-run'ini dener. Generated package/env/backup/receipt output'u repository disinda tutulur.
 
