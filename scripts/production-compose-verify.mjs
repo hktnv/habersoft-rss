@@ -4,13 +4,19 @@ import path from "node:path";
 
 const args = parseArgs(process.argv.slice(2));
 const envFile = args["env-file"];
+const runtimeImageEnv = args["runtime-image-env"];
 const composeFile = args["compose-file"] ?? "deploy/production/compose.yaml";
 
 if (envFile === undefined) {
   fail("production:compose:verify requires --env-file <path>");
 }
 
-run("node", ["scripts/production-config-check.mjs", "--env-file", envFile]);
+run("node", [
+  "scripts/production-config-check.mjs",
+  "--env-file",
+  envFile,
+  ...(runtimeImageEnv === undefined ? [] : ["--runtime-image-env", runtimeImageEnv])
+]);
 
 const composeText = readFileSync(composeFile, "utf8");
 assertNo(composeText.includes("tenant-auth-jwks-fixture"), "production Compose must not include local JWKS fixture");
@@ -18,7 +24,8 @@ assertNo(/\bbuild\s*:/u.test(composeText), "production Compose must not build fr
 assertNo(/5432:5432|6379:6379/u.test(composeText), "production Compose must not publish database or Redis ports");
 assertYes(composeText.includes("127.0.0.1:${API_HOST_PORT"), "production API must bind to host loopback");
 
-const quiet = spawnSync("docker", ["compose", "--env-file", envFile, "-f", composeFile, "config", "--quiet"], {
+const composeEnvArgs = runtimeImageEnv === undefined ? ["--env-file", envFile] : ["--env-file", envFile, "--env-file", runtimeImageEnv];
+const quiet = spawnSync("docker", ["compose", ...composeEnvArgs, "-f", composeFile, "config", "--quiet"], {
   stdio: "inherit",
   shell: process.platform === "win32"
 });
@@ -26,7 +33,7 @@ if (quiet.status !== 0) {
   process.exit(quiet.status ?? 1);
 }
 
-const json = spawnSync("docker", ["compose", "--env-file", envFile, "-f", composeFile, "config", "--format", "json"], {
+const json = spawnSync("docker", ["compose", ...composeEnvArgs, "-f", composeFile, "config", "--format", "json"], {
   encoding: "utf8",
   shell: process.platform === "win32"
 });
@@ -39,6 +46,8 @@ const config = JSON.parse(json.stdout);
 const services = Object.keys(config.services ?? {}).sort();
 const expectedServices = ["main-service-api", "main-service-worker", "migrate", "postgres", "redis"];
 assertYes(JSON.stringify(services) === JSON.stringify(expectedServices), `production service inventory mismatch: ${services.join(", ")}`);
+const appImages = ["main-service-api", "main-service-worker", "migrate"].map((service) => config.services[service]?.image);
+assertYes(appImages.every((image) => image === appImages[0] && /^sha256:[a-f0-9]{64}$/u.test(String(image))), "application services must use the same immutable image id");
 assertYes(Object.keys(config.services["main-service-worker"].ports ?? {}).length === 0, "worker must not publish ports");
 assertYes(Object.keys(config.services.postgres.ports ?? {}).length === 0, "postgres must not publish ports");
 assertYes(Object.keys(config.services.redis.ports ?? {}).length === 0, "redis must not publish ports");

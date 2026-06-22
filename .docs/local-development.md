@@ -356,15 +356,15 @@ Production package commands generated temp paths with non-production placeholder
 
 ```powershell
 npm run test:release-packaging
-npm run production:config:check -- --env-file <temp-production-env>
-npm run production:compose:verify -- --env-file <temp-production-env>
+npm run production:config:check -- --env-file <shared-env> --runtime-image-env <release-dir>/deploy/runtime-image.env
+npm run production:compose:verify -- --env-file <shared-env> --runtime-image-env <release-dir>/deploy/runtime-image.env
 npm run release:package -- --platform linux/amd64 --output <temp-release-dir>
 npm run release:package:verify -- --package <temp-release-dir>
-npm run production:backup -- --compose-file <compose-file> --env-file <env-file> --output <temp-backup>
+npm run production:backup -- --compose-file <compose-file> --env-file <shared-env> --runtime-image-env <release-dir>/runtime-image.env --output <temp-backup>
 npm run production:restore:verify -- --backup <temp-backup>
 ```
 
-`deploy/production/compose.yaml` production topology proof'tur; local JWKS fixture icermez, DB/Redis/worker host port yayinlamaz ve `MAIN_SERVICE_IMAGE` digest pin contract'i ister. Local synthetic smoke gerekiyorsa unique Compose project, temp env ve temp output kullanilir. Destructive cleanup only that unique project, disposable restore container and temp files ile sinirlidir.
+`deploy/production/compose.yaml` production topology proof'tur; local JWKS fixture icermez, DB/Redis/worker host port yayinlamaz ve `MAIN_SERVICE_IMAGE` degerini shared env yerine package/runtime image env katmanindan ister. Local synthetic smoke gerekiyorsa unique Compose project, temp shared env, package `runtime-image.env` ve temp output kullanilir. Destructive cleanup only that unique project, disposable restore container and temp files ile sinirlidir.
 
 External registry push, DNS/TLS change, CyberPanel live config, Git tag and GitHub Release MS-016 local verification commands tarafindan yapilmaz.
 
@@ -389,7 +389,7 @@ npm run staging:receipt:verify -- --receipt <receipt.json>
 
 `deploy/staging/target.example.json` yalniz schema ornegidir. `staging:inputs:scaffold`, production env template'inin current variable inventory'sinden external `staging.env` olusturur; target default `approved=false` gelir. `--generate-staging-secrets` kullanilirse secret degerleri yalniz external env dosyasina yazilir ve console'a basilmadan kalir. Known_hosts tool tarafindan uretilmez; operator fingerprint'i host owner ile out-of-band dogrulayip pinned dosyayi kendisi hazirlar. Local readiness receipt remote preflight receipt degildir ve host trust veya marker verification iddiasi tasimaz.
 
-Gercek target, known_hosts, staging env, release package, backup ve receipt Git'e alinmaz. Onayli staging target ve remote marker yoksa `staging:deploy`, `staging:rollback` ve `staging:roll-forward` basari iddiasi uretmez.
+Gercek target, known_hosts, staging env, release package, runtime image env, backup ve receipt Git'e alinmaz. External `staging.env` shared config/secret dosyasidir ve `MAIN_SERVICE_IMAGE` tasimaz; image binding verified package `deploy/runtime-image.env` dosyasindan gelir. Onayli staging target ve remote marker yoksa `staging:deploy`, `staging:rollback` ve `staging:roll-forward` basari iddiasi uretmez.
 
 `staging:rehearsal:local`, remote staging yerine gecmez. Unique local Docker project altinda previous/candidate image package'lerini, backup/restore'i ve immutable image rollback/roll-forward dry-run'ini dener. Generated package/env/backup/receipt output'u repository disinda tutulur.
 

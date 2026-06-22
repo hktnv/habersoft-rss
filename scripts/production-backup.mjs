@@ -6,6 +6,7 @@ import path from "node:path";
 const args = parseArgs(process.argv.slice(2));
 const composeFile = args["compose-file"];
 const envFile = args["env-file"];
+const runtimeImageEnv = args["runtime-image-env"];
 const output = args.output;
 const project = args.project;
 
@@ -21,7 +22,11 @@ const composeArgs = ["compose"];
 if (project !== undefined) {
   composeArgs.push("-p", project);
 }
-composeArgs.push("--env-file", envFile, "-f", composeFile, "exec", "-T", "postgres", "pg_dump", "-Fc", "-U", env.POSTGRES_USER, "-d", env.POSTGRES_DB);
+composeArgs.push("--env-file", envFile);
+if (runtimeImageEnv !== undefined) {
+  composeArgs.push("--env-file", runtimeImageEnv);
+}
+composeArgs.push("-f", composeFile, "exec", "-T", "postgres", "pg_dump", "-Fc", "-U", env.POSTGRES_USER, "-d", env.POSTGRES_DB);
 
 const result = spawnSync("docker", composeArgs, { shell: process.platform === "win32" });
 if (result.status !== 0) {

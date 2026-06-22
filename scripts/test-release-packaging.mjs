@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import path from "node:path";
@@ -6,13 +6,15 @@ import os from "node:os";
 
 const tempRoot = mkdtempSync(path.join(os.tmpdir(), "main-service-release-packaging-"));
 const envFile = path.join(tempRoot, "production-smoke.env");
+const runtimeImageEnvFile = path.join(tempRoot, "runtime-image.env");
 const packageDir = path.join(tempRoot, "package");
+const imagePackageDir = path.join(tempRoot, "image-package");
+const testImageTag = `main-service-release-packaging-test:${Date.now()}`;
 const masterDirArgs = process.env.MASTER_DIR === undefined ? [] : ["--master-dir", process.env.MASTER_DIR];
 
 writeFileSync(
   envFile,
   [
-    "MAIN_SERVICE_IMAGE=registry.example.invalid/rss/main-service@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "LOG_LEVEL=info",
     "API_HOST_PORT=31016",
     "POSTGRES_USER=main_service",
@@ -40,10 +42,11 @@ writeFileSync(
     ""
   ].join("\n")
 );
+writeFileSync(runtimeImageEnvFile, `MAIN_SERVICE_IMAGE=sha256:${"a".repeat(64)}\n`);
 
 try {
-  run("node", ["scripts/production-config-check.mjs", "--env-file", envFile]);
-  run("node", ["scripts/production-compose-verify.mjs", "--env-file", envFile]);
+  run("node", ["scripts/production-config-check.mjs", "--env-file", envFile, "--runtime-image-env", runtimeImageEnvFile]);
+  run("node", ["scripts/production-compose-verify.mjs", "--env-file", envFile, "--runtime-image-env", runtimeImageEnvFile]);
   run("node", [
     "scripts/release-package.mjs",
     "--platform",
@@ -58,6 +61,24 @@ try {
   ]);
   run("node", ["scripts/release-package-verify.mjs", "--package", packageDir, "--allow-no-image", "true"]);
   expectFailure(["scripts/release-package-verify.mjs", "--package", packageDir], "missing image artifact");
+
+  const imageBuildDir = path.join(tempRoot, "minimal-image");
+  mkdirSync(imageBuildDir);
+  writeFileSync(path.join(imageBuildDir, "Dockerfile"), "FROM scratch\nLABEL org.opencontainers.image.title=\"main-service-release-packaging-test\"\n");
+  run("docker", ["build", "-t", testImageTag, imageBuildDir]);
+  run("node", [
+    "scripts/release-package.mjs",
+    "--platform",
+    "linux/amd64",
+    "--output",
+    imagePackageDir,
+    "--image",
+    testImageTag,
+    "--allow-dirty",
+    "true",
+    ...masterDirArgs
+  ]);
+  run("node", ["scripts/release-package-verify.mjs", "--package", imagePackageDir]);
 
   const tamperDir = clonePackage("tamper");
   writeFileSync(path.join(tamperDir, "manifest.json"), "{}\n");
@@ -91,7 +112,25 @@ try {
     provenance.signed_attestation = true;
   });
   expectFailure(["scripts/release-package-verify.mjs", "--package", falseAttestationDir, "--allow-no-image", "true"], "false signed attestation");
+
+  const missingRuntimeDir = cloneImagePackage("missing-runtime-image-env");
+  rmSync(path.join(missingRuntimeDir, "deploy", "runtime-image.env"), { force: true });
+  expectFailure(["scripts/release-package-verify.mjs", "--package", missingRuntimeDir], "missing runtime image env");
+
+  const mutableRuntimeDir = cloneImagePackage("mutable-runtime-image-env");
+  writeFileSync(path.join(mutableRuntimeDir, "deploy", "runtime-image.env"), "MAIN_SERVICE_IMAGE=main-service:latest\n");
+  rewriteChecksums(mutableRuntimeDir);
+  expectFailure(["scripts/release-package-verify.mjs", "--package", mutableRuntimeDir], "mutable runtime image env");
+
+  const masterHashRuntimeDir = cloneImagePackage("master-hash-runtime-image-env");
+  mutateRuntimeImageEnv(masterHashRuntimeDir, `sha256:df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430`, true);
+  expectFailure(["scripts/release-package-verify.mjs", "--package", masterHashRuntimeDir], "master hash runtime image env");
+
+  const wrongRuntimeDir = cloneImagePackage("wrong-runtime-image-env");
+  mutateRuntimeImageEnv(wrongRuntimeDir, `sha256:${"b".repeat(64)}`, false);
+  expectFailure(["scripts/release-package-verify.mjs", "--package", wrongRuntimeDir], "wrong runtime image env");
 } finally {
+  spawnSync("docker", ["image", "rm", "-f", testImageTag], { stdio: "ignore", shell: process.platform === "win32" });
   rmSync(tempRoot, { recursive: true, force: true });
 }
 
@@ -119,6 +158,29 @@ function clonePackage(name) {
   const destination = path.join(tempRoot, name);
   cpSync(packageDir, destination, { recursive: true });
   return destination;
+}
+
+function cloneImagePackage(name) {
+  const destination = path.join(tempRoot, name);
+  cpSync(imagePackageDir, destination, { recursive: true });
+  return destination;
+}
+
+function mutateRuntimeImageEnv(directory, imageId, alignManifestRuntime) {
+  const relativePath = "deploy/runtime-image.env";
+  writeFileSync(path.join(directory, relativePath), `MAIN_SERVICE_IMAGE=${imageId}\n`);
+  if (alignManifestRuntime) {
+    mutateJson(directory, "manifest.json", (manifest) => {
+      manifest.runtime_image_env.image_id = imageId;
+      manifest.runtime_image_env.sha256 = crypto.createHash("sha256").update(readFileSync(path.join(directory, relativePath))).digest("hex");
+    });
+    mutateJson(directory, "metadata/provenance.json", (provenance) => {
+      provenance.runtime_image_env.image_id = imageId;
+      provenance.runtime_image_env.sha256 = crypto.createHash("sha256").update(readFileSync(path.join(directory, relativePath))).digest("hex");
+    });
+    return;
+  }
+  rewriteChecksums(directory);
 }
 
 function mutateJson(directory, relativePath, mutate) {

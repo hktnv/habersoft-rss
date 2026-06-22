@@ -16,7 +16,7 @@ import {
   EXPECTED_SERVICES,
   RELEASE_IDENTITY
 } from "./release-identity.mjs";
-import { INCOMPLETE_IMAGE_MARKER, REQUIRED_ENV_KEYS } from "./staging/env-inputs.mjs";
+import { REQUIRED_ENV_KEYS } from "./staging/env-inputs.mjs";
 
 export const EXPECTED_BUNDLE_FILES = Object.freeze([
   "checksums.sha256",
@@ -324,7 +324,6 @@ function createTargetTemplate(params) {
 
 function createEnvTemplate(params) {
   const values = {
-    MAIN_SERVICE_IMAGE: INCOMPLETE_IMAGE_MARKER,
     LOG_LEVEL: "info",
     API_HOST_PORT: String(params.apiPort),
     POSTGRES_USER: "main_service_staging",
@@ -606,7 +605,7 @@ function validateTargetTemplate(target, host, manifest) {
 function validateEnvTemplate(text, manifest) {
   const env = parseEnvText(text);
   assertSameArray(Object.keys(env), [...REQUIRED_ENV_KEYS], "staging env template key inventory mismatch");
-  assert(env.MAIN_SERVICE_IMAGE === INCOMPLETE_IMAGE_MARKER, "env template must not select an image");
+  assert(env.MAIN_SERVICE_IMAGE === undefined, "env template must not carry MAIN_SERVICE_IMAGE");
   assert(env.API_HOST_PORT === String(manifest.generated_parameters.api_port), "env template API port mismatch");
   assert(env.POSTGRES_USER === "main_service_staging", "POSTGRES_USER must be staging-specific");
   assert(env.POSTGRES_DB === "main_service_staging", "POSTGRES_DB must be staging-specific");

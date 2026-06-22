@@ -14,6 +14,7 @@ import {
   TENANT_AUTH_REHEARSAL_MODE,
   validateRehearsalReceipt
 } from "./staging/local-rehearsal.mjs";
+import { formatRuntimeImageEnv, parseRuntimeImageEnvText } from "./runtime-image-env.mjs";
 import { EXPECTED_MIGRATIONS, EXPECTED_PUBLIC_ROUTES, EXPECTED_SERVICES, RELEASE_IDENTITY } from "./release-identity.mjs";
 
 const temp = mkdtempSync(path.join(os.tmpdir(), "main-service-staging-rehearsal-tests-"));
@@ -44,12 +45,12 @@ try {
 
   const secrets = generateRehearsalSecrets();
   const env = buildRehearsalEnv({
-    imageId: "sha256:" + "3".repeat(64),
     apiPort: 13000,
     projectName,
     secrets
   });
-  assert.equal(env.MAIN_SERVICE_IMAGE, "sha256:" + "3".repeat(64));
+  assert.equal(env.MAIN_SERVICE_IMAGE, undefined);
+  assert.equal(parseRuntimeImageEnvText(formatRuntimeImageEnv("sha256:" + "3".repeat(64))).imageId, "sha256:" + "3".repeat(64));
   assert.equal(env.API_HOST_PORT, "13000");
   assert.equal(env.DATABASE_URL.includes(secrets.postgresPassword), true);
   assert.equal(env.TENANT_AUTH_JWKS_URL.startsWith("https://"), true);
@@ -78,7 +79,8 @@ function manifest(sourceCommit, imageId) {
     migrations: [...EXPECTED_MIGRATIONS],
     public_routes: [...EXPECTED_PUBLIC_ROUTES],
     services: [...EXPECTED_SERVICES],
-    image: { included: true, id: imageId }
+    image: { included: true, id: imageId },
+    runtime_image_env: { included: true, path: "deploy/runtime-image.env", key: "MAIN_SERVICE_IMAGE", image_id: imageId, sha256: "9".repeat(64) }
   };
 }
 

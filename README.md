@@ -10,4 +10,4 @@ Application version: `0.1.0-ms-017`.
 Application status: `Staging Adayi`.
 Master baseline: `rss-habersoft-master-v12`.
 
-Staging Adayi status'u production deploy yapildigi anlamina gelmez. MS-017C candidate package ve approved staging drill kapisini hedefler; production rollout, registry publish, Git tag, GitHub Release, DNS/TLS/CyberPanel live change yapmaz. Public route inventory, schema ve migrations degismemistir.
+Staging Adayi status'u production deploy yapildigi anlamina gelmez. MS-017C candidate package ve approved staging drill kapisini hedefler; production rollout, registry publish, Git tag, GitHub Release, DNS/TLS/CyberPanel live change yapmaz. MS-017C1A-R2 ile image identity manual shared env input'u olmaktan cikarilip release package `runtime-image.env` artifact'ine baglandi; staging HTTPS JWKS edge ve authoritative IdP contract'i hala ayrik blocker'dir. Public route inventory, schema ve migrations degismemistir.

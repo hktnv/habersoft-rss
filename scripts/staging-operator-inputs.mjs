@@ -108,8 +108,12 @@ function verify() {
   assertEnvFileMode(envFile);
   const knownHosts = inspectKnownHostsForTarget(target);
   if (mode === "deployment-ready") {
-    run("node", ["scripts/production-config-check.mjs", "--env-file", envFile]);
-    run("node", ["scripts/production-compose-verify.mjs", "--env-file", envFile]);
+    if (args["runtime-image-env"] === undefined) {
+      throw new Error("deployment-ready mode requires --runtime-image-env from a verified package");
+    }
+    const runtimeImageEnv = requiredExternalPath(args["runtime-image-env"], "runtime-image-env");
+    run("node", ["scripts/production-config-check.mjs", "--env-file", envFile, "--runtime-image-env", runtimeImageEnv]);
+    run("node", ["scripts/production-compose-verify.mjs", "--env-file", envFile, "--runtime-image-env", runtimeImageEnv]);
   }
 
   const receipt = createReadinessReceipt(target, {
@@ -133,6 +137,8 @@ function verify() {
     target: sanitizeTargetForReceipt(target),
     known_hosts_entry_present: true,
     image_identity_ready: envModeResult.imageIdentityReady,
+    legacy_image_field_present: envModeResult.legacyImageFieldPresent,
+    package_image_required: envModeResult.packageImageRequired,
     ready_for_read_only_remote_preflight: receipt.ready_for_read_only_remote_preflight,
     host_key_trust_confirmed_by_tool: false,
     remote_environment_marker_verified: false,

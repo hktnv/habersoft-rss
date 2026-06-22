@@ -10,26 +10,26 @@ Degisim nedeni yalniz staging host prerequisite'leri, operator sorumlulugu, hand
 
 Local isolated staging rehearsal: `Passed`
 
-Remote staging preflight: `Not executed`
+Remote staging preflight: `Passed`
 
 Remote staging deployment: `Not executed`
 
 Production deployment: `Not executed`
 
-Application version: `0.1.0-ms-016`
+Application version: `0.1.0-ms-017`
 
 Master baseline: `rss-habersoft-master-v12` / `df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430` / `29`
 
 ## Sahiplik Siniri
 
 - Target descriptor sahibi: `scripts/staging/target-config.mjs` ve `staging:inputs:*`.
-- Staging env inventory sahibi: `scripts/staging/env-inputs.mjs` ve production env template.
+- Staging env inventory sahibi: `scripts/staging/env-inputs.mjs` ve production env template; image identity shared env sahibi degildir.
 - Pinned known_hosts offline inspect sahibi: `scripts/staging/known-hosts.mjs`.
 - Local rehearsal evidence sahibi: [local-staging-rehearsal.md](local-staging-rehearsal.md).
 - Remote staging deployment evidence sahibi: [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md).
 - Host provisioning handoff sahibi: bu belge, `deploy/staging/*handoff*`, `scripts/staging-operator-handoff.mjs` ve `test:staging:handoff`.
 
-Handoff bundle yeni canonical target/env sahibi olmaz, release package'i yeniden tanimlamaz ve deployment runbook'unu kopyalamaz.
+Handoff bundle yeni canonical target/env sahibi olmaz, release package'i yeniden tanimlamaz ve deployment runbook'unu kopyalamaz. Deployable image binding verified release package `deploy/runtime-image.env` tarafindan saglanir.
 
 ## Official Source Check
 
@@ -48,7 +48,7 @@ Generated `host-requirements.json` su non-secret sozlesmeyi tasir:
 
 - `environment=staging`.
 - `application=main-service`.
-- `application_version=0.1.0-ms-016`.
+- `application_version=0.1.0-ms-017`.
 - master release/hash/count exact v12.
 - `required_platform=linux/amd64`.
 - Linux host.
@@ -171,13 +171,13 @@ Bundle secret, real host/IP/user/local path, real known_hosts key, staging crede
 
 `staging-target.template.json` `approved=false` gelir. Operator target'i review ettikten, pinned known_hosts dosyasini hazirladiktan ve marker sozlesmesini dogruladiktan sonra external real target dosyasinda `approved=true` yapar.
 
-`staging.env.template` placeholder-only inventory'dir. Gercek staging secret'lari repository disinda doldurulur veya `staging:inputs:scaffold` external dosya uzerinden kullanilir. Template deployable image secmez.
+`staging.env.template` placeholder-only shared config/secret inventory'dir. Gercek staging secret'lari repository disinda doldurulur veya `staging:inputs:scaffold` external dosya uzerinden kullanilir. Template deployable image secmez ve `MAIN_SERVICE_IMAGE` tasimaz.
 
 ## Package Handoff
 
 Handoff bundle release package uretmez, image transfer etmez ve external registry publish yapmaz. Candidate package gerektigi nokta remote read-only preflight'tan sonraki bounded deployment hazirligidir.
 
-Package identity sahibi [release-packaging.md](release-packaging.md) belgesidir. Handoff bundle yalniz operator'a hangi package verifier kapilarinin gerekli oldugunu soyler.
+Package identity sahibi [release-packaging.md](release-packaging.md) belgesidir. Handoff bundle yalniz operator'a hangi package verifier kapilarinin gerekli oldugunu soyler. Staging deployment-ready input set'i shared `staging.env` yaninda package `deploy/runtime-image.env` dosyasini da gerektirir.
 
 ## Local Rehearsal Evidence
 

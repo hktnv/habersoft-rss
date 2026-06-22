@@ -88,11 +88,14 @@ try {
     remoteNames: {
       previousArchive: "ms017c-previous.tar",
       candidateArchive: "ms017c-candidate.tar",
-      previousEnv: "ms017c-previous.env",
-      candidateEnv: "ms017c-candidate.env"
+      sharedEnv: "ms017c-staging.env"
     }
   });
   assert.match(remoteDrillCommand, /docker load --input/u);
+  assert.match(remoteDrillCommand, /runtime-image\.env/u);
+  assert.match(remoteDrillCommand, /shared\/staging\.env/u);
+  assert.match(remoteDrillCommand, /contains-runtime-image/u);
+  assert.match(remoteDrillCommand, /--env-file "\$env_file" --env-file "\$runtime_env"/u);
   assert.match(remoteDrillCommand, /pull --policy missing postgres redis/u);
   assert.match(remoteDrillCommand, /--pull never/u);
   assert.match(remoteDrillCommand, /--wait --wait-timeout 180/u);
@@ -161,15 +164,14 @@ try {
   });
   const operatorEnvResult = validateStagingEnv(validEnv, valid, "operator-input");
   assert.equal(operatorEnvResult.imageIdentityReady, false);
-  assert.throws(() => validateStagingEnv(validEnv, valid, "deployment-ready"), /MAIN_SERVICE_IMAGE/u);
-  assert.doesNotThrow(() => validateStagingEnv({
-    ...validEnv,
-    MAIN_SERVICE_IMAGE: `registry.example.invalid/rss/main-service@sha256:${"f".repeat(64)}`
-  }, valid, "deployment-ready"));
-  assert.doesNotThrow(() => validateStagingEnv({
+  assert.equal(operatorEnvResult.legacyImageFieldPresent, false);
+  const deploymentEnvResult = validateStagingEnv(validEnv, valid, "deployment-ready");
+  assert.equal(deploymentEnvResult.packageImageRequired, true);
+  const legacyImageEnvResult = validateStagingEnv({
     ...validEnv,
     MAIN_SERVICE_IMAGE: `sha256:${"f".repeat(64)}`
-  }, valid, "deployment-ready"));
+  }, valid, "deployment-ready");
+  assert.equal(legacyImageEnvResult.legacyImageFieldPresent, true);
   assert.throws(() => validateStagingEnv({ ...validEnv, UNKNOWN_APP_KEY: "1" }, valid), /unknown env key/u);
   assert.throws(() => validateStagingEnv({ ...validEnv, AGENT_KEY: "CHANGE_ME_AGENT_KEY_MINIMUM_32_BYTES" }, valid), /AGENT_KEY/u);
   assert.throws(() => validateStagingEnv({ ...validEnv, TENANT_AUTH_JWKS_URL: "http://tenant-auth-jwks-fixture:3080/.well-known/jwks.json" }, valid), /JWKS/u);
@@ -212,7 +214,7 @@ try {
   assert.equal(existsSync(scaffoldKnownHosts), false);
   const scaffoldTarget = JSON.parse(readFileSync(path.join(scaffoldDir, "staging-target.json"), "utf8"));
   assert.equal(scaffoldTarget.approved, false);
-  assert.equal(loadEnvFile(path.join(scaffoldDir, "staging.env")).MAIN_SERVICE_IMAGE.includes("PACKAGE_NOT_SELECTED"), true);
+  assert.equal(loadEnvFile(path.join(scaffoldDir, "staging.env")).MAIN_SERVICE_IMAGE, undefined);
   assert.doesNotThrow(() => validateReadinessReceipt(loadReadinessReceipt(path.join(scaffoldDir, "staging-input-readiness.json"))));
   const repeatedScaffold = runNode(["scripts/staging-operator-inputs.mjs", "scaffold",
     "--output-dir", scaffoldDir,
@@ -276,6 +278,9 @@ try {
   })));
   const verifyResult = runNode(["scripts/staging-operator-inputs.mjs", "verify", "--target", verifyTargetFile, "--env-file", verifyEnvFile]);
   assert.equal(verifyResult.status, 0, verifyResult.stderr);
+  const missingRuntimeResult = runNode(["scripts/staging-operator-inputs.mjs", "verify", "--target", verifyTargetFile, "--env-file", verifyEnvFile, "--mode", "deployment-ready"]);
+  assert.notEqual(missingRuntimeResult.status, 0);
+  assert.match(missingRuntimeResult.stderr, /runtime-image-env/u);
   const readiness = loadReadinessReceipt(path.join(verifyDir, "staging-input-readiness.json"));
   assert.equal(readiness.ready_for_read_only_remote_preflight, true);
   assert.equal(readiness.host_key_trust_confirmed_by_tool, false);
@@ -423,7 +428,8 @@ function manifest(version, commit, imageId) {
     migrations: [...EXPECTED_MIGRATIONS],
     public_routes: [...EXPECTED_PUBLIC_ROUTES],
     services: [...EXPECTED_SERVICES],
-    image: { included: true, id: imageId, reference: `main-service-app:${version}` }
+    image: { included: true, id: imageId, reference: `main-service-app:${version}` },
+    runtime_image_env: { included: true, path: "deploy/runtime-image.env", key: "MAIN_SERVICE_IMAGE", image_id: imageId, sha256: "9".repeat(64) }
   };
 }
 

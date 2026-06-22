@@ -9,10 +9,10 @@ Bu belge production PostgreSQL backup prerequisite'ini, backup artifact/metadata
 Backup custom-format `pg_dump -Fc` artifact'idir. Script:
 
 ```powershell
-npm run production:backup -- --compose-file <compose-file> --env-file <env-file> --output <temp-backup>
+npm run production:backup -- --compose-file <compose-file> --env-file <shared-env> --runtime-image-env <release-dir>/runtime-image.env --output <temp-backup>
 ```
 
-Script backup dump ile birlikte `<temp-backup>.metadata.json` uretir. Metadata checksum, format, database adi ve timestamp tasir; password yazmaz.
+Script backup dump ile birlikte `<temp-backup>.metadata.json` uretir. Metadata checksum, format, database adi ve timestamp tasir; password yazmaz. `--runtime-image-env` Compose interpolation icin package-derived image identity katmanini ekler; backup icinde image veya secret saklanmaz.
 
 Backup output production host disina tasinmalidir. Gercek backup path, retention schedule ve off-host transfer operasyonel runbook kapsamindadir; bu repository secret veya production dump saklamaz.
 
