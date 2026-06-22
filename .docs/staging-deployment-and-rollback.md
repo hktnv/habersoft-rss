@@ -34,6 +34,8 @@ MS-017C1A-R input-integrity sonucu: rotated staging credential set dogrulandi, f
 
 MS-017C1A-R2 package image-binding sonucu: `MAIN_SERVICE_IMAGE` shared `staging.env` sahibi olmaktan cikarildi. Candidate package `074d868d09c5b3d6079803480760d9e669b51826` kaynagindan uretildi, `deploy/runtime-image.env` package artifact'i olarak dogrulandi ve remote host'ta loaded image ID ile birebir eslesti. Remote shared env atomik olarak yenilendi ve `MAIN_SERVICE_IMAGE` icermedigi dogrulandi; release-local `runtime-image.env` dosyalari previous/candidate image ID'lerinden uretildi. Compose config resolution sirasi `previous -> candidate -> previous -> candidate` olarak iki env dosyasi ile gecti. API/worker/PostgreSQL/Redis baslatilmadi, migration/readiness retry/sentinel/backup/rollback/roll-forward/current symlink promotion yapilmadi.
 
+MS-017C1A-3V contract-pinned validator sonucu: authoritative external staging authorization contract accepted durumundadir ve decision exact `STAGING_USES_PRODUCTION_IDP` olarak pinlenmistir. `scripts/staging/env-inputs.mjs`, yalniz `TENANT_AUTH_JWKS_URL=https://auth.habersoft.com/.well-known/jwks.json` alanina, `deploy/staging/idp-contract-policy.json` projection'i ile hash/field-verified external contract saglandiginda izin verir. Bu genel production identifier bypass'i degildir; `auth-staging.habersoft.com`, HTTP/local fixture ve diger alanlardaki production identifier'lar rejected kalir. Real `staging.env` mutate edilmedi, remote readiness proof calistirilmadi ve application auth runtime degismedi.
+
 Application version remains: `0.1.0-ms-017`
 
 Application status remains: `Staging Adayi`
@@ -59,6 +61,7 @@ MS-017B1 asamasi gercek host veya secret uydurmadan, operator'un gerekli externa
 ```powershell
 npm run staging:inputs:scaffold -- --output-dir <external-empty-directory> --target-alias <staging-alias> --ssh-host <operator-host> --ssh-port 22 --ssh-user <operator-user> --known-hosts-file <external-known-hosts-path> --marker-path /etc/habersoft/environment --remote-base-dir <staging-base-dir> --project-name <staging-project> --api-port 13000 --edge-mode loopback-only
 npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input
+npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input --idp-contract <external-staging-idp-contract.md>
 npm run staging:known-hosts:inspect -- --target <external-path>/staging-target.json
 ```
 
@@ -80,6 +83,8 @@ Target descriptor scaffold'ta `approved=false` gelir. Operator dosyayi inceledik
 `staging-input-readiness.json` local readiness receipt'tir; remote preflight receipt degildir. Bu receipt `host_key_trust_confirmed_by_tool=false`, `remote_environment_marker_verified=false`, `remote_contact_performed=false`, `remote_mutation_performed=false` ve `deployment_performed=false` alanlarini tasir.
 
 `operator-input` mode image/package identity'nin shared env tarafindan secilmedigini `image_identity_ready=false` olarak siniflandirir ve read-only remote preflight icin input hazirligini dogrulayabilir. `deployment-ready` mode shared env yaninda verified package `deploy/runtime-image.env` dosyasini `--runtime-image-env` ile ister; shared env icinde `MAIN_SERVICE_IMAGE` bulunursa fail-fast olur.
+
+Staging env canonical production IdP JWKS kullanacaksa `--idp-contract <external-staging-idp-contract.md>` zorunludur. Tool explicit CLI path'i veya `STAGING_IDP_CONTRACT_FILE` pointer'ini okur; dosya repository'ye kopyalanmaz, receipt'e path veya raw Markdown yazilmaz. Receipt yalniz safe contract projection alanlarini, raw/normalized SHA-256 match sonucunu ve no-remote/no-mutation flag'lerini tasir.
 
 Known_hosts inspect komutu offline calisir; `ssh-keyscan` kullanmaz, network'e cikmaz, dosyayi degistirmez ve fingerprint'i yalniz operator'un out-of-band karsilastirmasi icin gosterir.
 
@@ -171,12 +176,13 @@ Receipt host/IP, username, known_hosts path, DB URL, JWT, Agent key, rate-limit 
 ```powershell
 npm run staging:inputs:scaffold -- --output-dir <external-empty-directory> --target-alias <staging-alias> --ssh-host <operator-host> --ssh-port 22 --ssh-user <operator-user> --known-hosts-file <external-known-hosts-path> --marker-path /etc/habersoft/environment --remote-base-dir <staging-base-dir> --project-name <staging-project> --api-port 13000 --edge-mode loopback-only
 npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input
-npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode deployment-ready --runtime-image-env <candidate-package>/deploy/runtime-image.env
+npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input --idp-contract <external-staging-idp-contract.md>
+npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode deployment-ready --runtime-image-env <candidate-package>/deploy/runtime-image.env --idp-contract <external-staging-idp-contract.md>
 npm run staging:known-hosts:inspect -- --target <external-path>/staging-target.json
-npm run staging:preflight -- --target $env:STAGING_TARGET_FILE --env-file $env:STAGING_ENV_FILE --receipt <external-preflight-run-1-receipt>
-npm run staging:preflight -- --target $env:STAGING_TARGET_FILE --env-file $env:STAGING_ENV_FILE --receipt <external-preflight-run-2-receipt>
+npm run staging:preflight -- --target $env:STAGING_TARGET_FILE --env-file $env:STAGING_ENV_FILE --idp-contract $env:STAGING_IDP_CONTRACT_FILE --receipt <external-preflight-run-1-receipt>
+npm run staging:preflight -- --target $env:STAGING_TARGET_FILE --env-file $env:STAGING_ENV_FILE --idp-contract $env:STAGING_IDP_CONTRACT_FILE --receipt <external-preflight-run-2-receipt>
 node scripts/staging-deployment.mjs receipt:compare --receipt-a <external-preflight-run-1-receipt> --receipt-b <external-preflight-run-2-receipt> --output <external-preflight-comparison-receipt>
-npm run staging:deploy -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <candidate-package> --confirm-environment staging
+npm run staging:deploy -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <candidate-package> --idp-contract <external-staging-idp-contract.md> --confirm-environment staging
 npm run staging:rollback -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <previous-package> --confirm-release 0.1.0-ms-016
 npm run staging:roll-forward -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <candidate-package> --confirm-release 0.1.0-ms-017
 npm run staging:receipt:verify -- --receipt <receipt.json>
@@ -192,6 +198,7 @@ MS-017 completion requires:
 - pinned known_hosts file for the target,
 - pre-created remote environment marker with exact `staging` value,
 - external staging env file without `MAIN_SERVICE_IMAGE`,
+- external staging IdP authorization contract when the shared env selects canonical production JWKS,
 - previous and candidate image-included release packages,
 - candidate package `deploy/runtime-image.env`,
 - remote Docker/Compose availability through the deploy user.

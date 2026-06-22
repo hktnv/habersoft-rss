@@ -73,6 +73,8 @@ Credential hygiene: staging credential set MS-017C1A-R kapsaminda rotate edilip 
 
 MS-017C1A-R2 sonucunda package-derived image binding de dogrulandi ve shared staging env image secmez hale geldi. Staging HTTPS JWKS edge, issuer/audience/scope/token acquisition ve authoritative IdP ownership contract'i eksik kaldigi icin tenantAuth readiness retry hala bloke durumdadir.
 
+MS-017C1A-3V sonucunda external staging authorization contract accepted ve hash-pinned olarak local validator tarafindan okunabilir hale geldi. Contract decision `STAGING_USES_PRODUCTION_IDP` oldugu icin staging input validator yalniz exact `TENANT_AUTH_JWKS_URL=https://auth.habersoft.com/.well-known/jwks.json` degerini verified contract ile kabul eder. Bu runtime tenant auth allowlist'ini genisletmez, issuer/audience/scope/RS256 kurallarini degistirmez ve tenantAuth readiness passed iddiasi uretmez. Remote readiness-only proof henuz calistirilmamistir.
+
 ## Local Fixture
 
 Compose default topolojisinde `tenant-auth-jwks-fixture` servisi kullanilir. Bu servis:
