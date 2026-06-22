@@ -3,7 +3,7 @@
 ## Uygulama ve Repository Siniri
 
 - Uygulama kimligi: `main-service`
-- Repository yolu: `C:\Users\EVO-MRDM\Desktop\habersoft-auth\rss-habersoft-com\main-service`
+- Repository siniri: bu `main-service` application repository'si
 - Canonical repository remote: `https://github.com/hktnv/habersoft-rss`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
@@ -16,6 +16,10 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | Belge | Sorumluluk |
 |---|---|
 | [README.md](README.md) | Repository-local PROD dokumantasyon girisi, envanter ve uyum kaydi. |
+| [service-handbook/README.md](service-handbook/README.md) | Sade servis el kitabi girisi, aktorler ve okuma sirasi. |
+| [service-handbook/main-servis-kilavuzu.md](service-handbook/main-servis-kilavuzu.md) | Main-service runtime rolleri, veri iliskileri, port modeli ve operasyon sinirlari. |
+| [service-handbook/agent-servis-kilavuzu.md](service-handbook/agent-servis-kilavuzu.md) | Agent entegrasyon akisi, auth siniri, idempotency ve yapmamasi gerekenler. |
+| [service-handbook/tenant-servis-kilavuzu.md](service-handbook/tenant-servis-kilavuzu.md) | Tenant kimligi, izolasyon, JWT/JWKS ve public API kullanim ozeti. |
 | [local-development.md](local-development.md) | Gercek yerel container gelistirme, calistirma, local JWKS fixture ve dogrulama komutlari. |
 | [database-schema.md](database-schema.md) | MS-002 canonical PostgreSQL business schema, migration ve DB test gercegi. |
 | [tenant-authentication.md](tenant-authentication.md) | MS-003 tenant RS256 JWT/JWKS dogrulama altyapisi, readiness ve sinirlar. |
@@ -38,6 +42,18 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md) | MS-017 staging target preflight, deployment/rollback tatbikati icin target safety, SSH, receipt ve remote staging operasyon gercegi. |
 | [staging-host-provisioning.md](staging-host-provisioning.md) | MS-017B3 staging host prerequisite, operator responsibility, handoff bundle artifact model and external input contract. |
 | [local-staging-rehearsal.md](local-staging-rehearsal.md) | MS-017B2 izole local Docker rehearsal, package/image rollback dry-run, backup/restore ve remote staging'den ayrim. |
+| [production-rollout-runbook.md](production-rollout-runbook.md) | Kontrollu production rollout, kabul, rollback ve blocked-handoff proseduru. |
+
+## Yeni Baslayanlar Icin Okuma Yolu
+
+1. [service-handbook/README.md](service-handbook/README.md)
+2. [service-handbook/main-servis-kilavuzu.md](service-handbook/main-servis-kilavuzu.md)
+3. [service-handbook/agent-servis-kilavuzu.md](service-handbook/agent-servis-kilavuzu.md)
+4. [service-handbook/tenant-servis-kilavuzu.md](service-handbook/tenant-servis-kilavuzu.md)
+5. [production-deployment.md](production-deployment.md)
+6. [release-packaging.md](release-packaging.md)
+7. [backup-and-restore.md](backup-and-restore.md)
+8. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
 
 ## Okuma Sirasi
 
@@ -63,8 +79,9 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 20. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
 21. [staging-host-provisioning.md](staging-host-provisioning.md)
 22. [local-staging-rehearsal.md](local-staging-rehearsal.md)
-23. [database-schema.md](database-schema.md)
-24. Repository kok [README.md](../README.md)
+23. [production-rollout-runbook.md](production-rollout-runbook.md)
+24. [database-schema.md](database-schema.md)
+25. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 

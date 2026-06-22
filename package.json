@@ -60,6 +60,7 @@
     "test:staging:handoff": "node scripts/test-staging-handoff.mjs",
     "test:staging:rehearsal": "node scripts/test-staging-rehearsal.mjs",
     "test:mvp-acceptance": "node scripts/mvp-acceptance.mjs",
+    "docs:verify": "node scripts/docs-verify.mjs",
     "test:db": "npm run test:db:tenant-feeds && npm run test:db:schema && npm run test:db:tenant-entries && npm run test:db:tenant-entry-detail && npm run test:db:agent-heartbeat && npm run test:db:agent-due-feeds && npm run test:db:agent-new-guids && npm run test:db:agent-entries && npm run test:db:agent-feed-check-results && npm run test:db:cleanup && npm run test:queue",
     "test:db:schema": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/schema.integration.spec.ts",
     "test:db:tenant-entries": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand --runTestsByPath test/database/tenant-entries.integration.spec.ts",
