@@ -6,9 +6,17 @@ Bu belge MS-017 kapsaminda gercek staging deployment, target safety gate, immuta
 
 ## Durum
 
-Status: `Not executed`
+Remote staging preflight: `Passed`
 
-MS-017 remote staging deployment ve rollback tatbikati bu degisiklikte yapilmadi. Onayli staging target descriptor, pinned SSH known_hosts dosyasi ve remote staging environment marker'i active workspace'te bulunmadigi icin remote mutation gate kapali tutuldu.
+Staging deployment: `Not executed`
+
+Rollback drill: `Not executed`
+
+MS-017B approved staging target read-only remote preflight, target alias `habersoft-rss-staging-alias` icin 2026-06-22 UTC tarihinde iki kez basariyla calistirildi. Strict SSH host identity operator-owned pinned known_hosts ile dogrulandi ve remote environment marker exact `staging` olarak ilk semantic gate'te verified edildi.
+
+Remote host Linux `linux/amd64` olarak siniflandirildi; Docker Engine ve Docker Compose v2 noninteractive olarak available. Target project state `absent`, API port state `available`, base-dir state `existing-empty-approved`, filesystem state `read-write`, edge mode `loopback-only` / edge check `not_exercised`. Iki run icin before/after target-relevant inventory unchanged ve external preflight receipts + comparison verifier passed.
+
+MS-017 remote staging deployment, package/image transfer, Docker resource mutation, rollback, roll-forward, production deployment, artifact publication, Git tag, GitHub Release, DNS/TLS/CyberPanel live change bu degisiklikte yapilmadi.
 
 Application version remains: `0.1.0-ms-016`
 
@@ -21,12 +29,12 @@ Master baseline: `rss-habersoft-master-v12` / `df466d84859edcf17d91e797b490c0705
 MS-017 A asamasi yalniz local hazirlik ekler:
 
 - `deploy/staging/target.example.json` staging target schema ornegi.
-- `npm run staging:preflight` target descriptor ve strict SSH option dogrulama girisi.
+- `npm run staging:preflight` approved target icin strict SSH host identity, marker-first remote gate, read-only host/Docker/project/port/base-dir/disk preflight ve secret-free external receipt uretimi.
 - `npm run staging:deploy`, `npm run staging:rollback`, `npm run staging:roll-forward` mutating aksiyonlari icin explicit target/env/package/confirmation guard'lari.
 - `npm run staging:receipt:verify` secret-free receipt schema dogrulama.
 - `npm run test:staging` target, SSH, remote layout, receipt ve rollback compatibility unit kontrolleri.
 
-Mutating staging command'lari hazirlik modunda remote marker ve host identity preflight kaniti olmadan fail-fast olur. Bu durum staging deployment basarisi sayilmaz.
+Mutating staging command'lari remote marker ve host identity preflight kaniti olmadan fail-fast olur. MS-017B preflight pass kaniti staging deployment basarisi sayilmaz; deployment MS-017C'ye kalir.
 
 ## Operator Input Preparation Kit
 
@@ -59,7 +67,7 @@ Target descriptor scaffold'ta `approved=false` gelir. Operator dosyayi inceledik
 
 Known_hosts inspect komutu offline calisir; `ssh-keyscan` kullanmaz, network'e cikmaz, dosyayi degistirmez ve fingerprint'i yalniz operator'un out-of-band karsilastirmasi icin gosterir.
 
-MS-017B1 sonunda application version `0.1.0-ms-016` olarak kalir. Staging deployment, rollback, roll-forward, package/image transfer ve remote preflight hala yapilmamistir. Siradaki bounded adim MS-017B approved staging target read-only remote preflight'tir.
+MS-017B1 sonunda application version `0.1.0-ms-016` olarak kalir. Staging deployment, rollback, roll-forward, package/image transfer ve remote preflight bu asamada yapilmamistir.
 
 ## Local Rehearsal Ayrimi
 
@@ -110,6 +118,12 @@ SSH options:
 BatchMode=yes
 StrictHostKeyChecking=yes
 UserKnownHostsFile=<known_hosts_file>
+PasswordAuthentication=no
+KbdInteractiveAuthentication=no
+PreferredAuthentications=publickey
+ForwardAgent=no
+ClearAllForwardings=yes
+RequestTTY=no
 ConnectTimeout=10
 ServerAliveInterval=10
 ServerAliveCountMax=3
@@ -118,6 +132,8 @@ ServerAliveCountMax=3
 Host-key mismatch, missing marker veya marker mismatch blocker'dir.
 
 ## Receipt
+
+MS-017B preflight receipts repository disinda olusturulur ve Git'e alinmaz. Sanitized doc summary yalniz target alias, UTC date, host-key/marker verification class, architecture, Docker/Compose readiness, project/port/base-dir/filesystem/capacity class, edge class, repeated-run result, inventory unchanged ve no-mutation flags tasir.
 
 Gercek tatbikat sonunda raw `staging-deployment-receipt.json` Git'e alinmaz. Sanitized doc summary su alanlari tasimalidir:
 
@@ -140,7 +156,9 @@ Receipt host/IP, username, known_hosts path, DB URL, JWT, Agent key, rate-limit 
 npm run staging:inputs:scaffold -- --output-dir <external-empty-directory> --target-alias <staging-alias> --ssh-host <operator-host> --ssh-port 22 --ssh-user <operator-user> --known-hosts-file <external-known-hosts-path> --marker-path /etc/habersoft/environment --remote-base-dir <staging-base-dir> --project-name <staging-project> --api-port 13000 --edge-mode loopback-only
 npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input
 npm run staging:known-hosts:inspect -- --target <external-path>/staging-target.json
-npm run staging:preflight -- --target <external-path>/staging-target.json
+npm run staging:preflight -- --target $env:STAGING_TARGET_FILE --env-file $env:STAGING_ENV_FILE --receipt <external-preflight-run-1-receipt>
+npm run staging:preflight -- --target $env:STAGING_TARGET_FILE --env-file $env:STAGING_ENV_FILE --receipt <external-preflight-run-2-receipt>
+node scripts/staging-deployment.mjs receipt:compare --receipt-a <external-preflight-run-1-receipt> --receipt-b <external-preflight-run-2-receipt> --output <external-preflight-comparison-receipt>
 npm run staging:deploy -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <candidate-package> --confirm-environment staging
 npm run staging:rollback -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <previous-package> --confirm-release 0.1.0-ms-016
 npm run staging:roll-forward -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <candidate-package> --confirm-release 0.1.0-ms-017
@@ -160,4 +178,4 @@ MS-017 completion requires:
 - previous and candidate image-included release packages,
 - remote Docker/Compose availability through the deploy user.
 
-Until these exist, staging target, deployment, rollback and roll-forward remain unverified.
+MS-017B read-only target preflight is verified for target alias `habersoft-rss-staging-alias`. Staging deployment, rollback and roll-forward remain unverified until MS-017C executes with explicit candidate/previous package inputs and operator approval.

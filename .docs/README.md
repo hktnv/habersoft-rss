@@ -35,7 +35,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [production-deployment.md](production-deployment.md) | MS-016 single-host production Compose topology, edge/vhost, service/network/port/volume/startup/readiness ve deploy edilmemislik durumu. |
 | [release-packaging.md](release-packaging.md) | MS-016 release package command, artifact inventory, manifest/checksum/SBOM/provenance, image identity, verifier ve publication/deployment ayrimi. |
 | [backup-and-restore.md](backup-and-restore.md) | MS-016 PostgreSQL backup prerequisite, checksum metadata, disposable restore verification, Redis siniri ve rollback data-protection gate'i. |
-| [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md) | MS-017 staging deployment/rollback tatbikati icin target safety, SSH, receipt ve blocked-before-remote-staging operasyon gercegi. |
+| [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md) | MS-017 staging target preflight, deployment/rollback tatbikati icin target safety, SSH, receipt ve remote staging operasyon gercegi. |
 | [staging-host-provisioning.md](staging-host-provisioning.md) | MS-017B3 staging host prerequisite, operator responsibility, handoff bundle artifact model and external input contract. |
 | [local-staging-rehearsal.md](local-staging-rehearsal.md) | MS-017B2 izole local Docker rehearsal, package/image rollback dry-run, backup/restore ve remote staging'den ayrim. |
 
@@ -85,13 +85,15 @@ v11 etki notu: MS-014 uygulamasi v11 master cleanup, retention ve job-runner soz
 
 v12 etki notu: MS-016 production deployment karari master `23-uretim-deployment-gorunumu.md` ile kapanmistir. Release package identity canonical master hash ile hizalanmistir; staging-handoff paketi image artifact dahil edildiginde dogrulanir. Production deploy, registry publish, DNS/TLS/CyberPanel live change, Git tag ve GitHub Release yapilmamistir.
 
-MS-017 hazirlik notu: Staging target descriptor, pinned SSH known_hosts ve remote staging marker active workspace'te bulunmadigi icin remote staging deployment yapilmamistir. Hazirlik tooling'i [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md) dosyasinda belgelenir; uygulama surumu ve status `0.1.0-ms-016` / `MVP Adayi - Deployment Karari Kesin / Release Paketi Dogrulandi` olarak kalir.
+MS-017 hazirlik notu: Staging deployment yapilmamistir. Hazirlik ve preflight tooling'i [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md) dosyasinda belgelenir; uygulama surumu ve status `0.1.0-ms-016` / `MVP Adayi - Deployment Karari Kesin / Release Paketi Dogrulandi` olarak kalir.
 
 MS-017B1 notu: Staging operator input tooling prepared. Operator external target/env/known_hosts girdilerini local-only scaffold ve verify komutlariyla hazirlayabilir. Remote staging preflight not executed; staging deployment still not executed.
 
 MS-017B2 evidence notu: Local isolated staging rehearsal passed with previous source `9bed749e531fdbe435011b3948ec52982387269e` and runtime candidate source `b992e77353aef6138afef19620a9d38835f93266`. Local rollback dry-run, roll-forward, backup/restore, scheduler and teardown verification passed. Remote staging preflight not executed; remote staging deployment not executed; application version remains `0.1.0-ms-016`.
 
 MS-017B3 handoff notu: Staging host provisioning contract and operator handoff bundle generator/verifier prepared. Bundle output is external, secret-free and machine-verifiable; it does not generate real target/env/known_hosts, create a remote marker, contact SSH/network, transfer package/image, mutate Docker resources or deploy staging/production. Remote staging preflight remains not executed.
+
+MS-017B approved target preflight notu: Target alias `habersoft-rss-staging-alias` icin read-only remote staging preflight 2026-06-22 UTC tarihinde iki kez passed. Strict SSH host identity, environment marker, Linux `linux/amd64`, Docker/Compose readiness, project `absent`, API port `available`, base-dir `existing-empty-approved`, filesystem `read-write`, loopback-only edge mode ve unchanged target inventory kanitlandi. Staging deployment, package/image transfer, rollback/roll-forward, production deployment ve artifact publication yapilmadi.
 
 ## Sabit Runtime ve Altyapi Surumleri
 
