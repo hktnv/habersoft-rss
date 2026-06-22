@@ -22,6 +22,10 @@ MS-017C1 root cause: `OPERATOR_JWKS_CONFIG_INVALID`. Operator-provided JWKS conf
 
 MS-017C1 remote failed-state recheck: marker verified, project containers `0`, running containers `0`, API port `available`, project volumes `2`, release layout present, candidate/previous release dirs identifiable, `current` symlink absent/not promoted ve active healthy version absent. Temporary no-secret target-project network probe'u sonrasinda project network inventory before/after restored.
 
+MS-017C1A staging IdP decision gate: `auth-staging.habersoft.com` icin operator tarafindan gosterilen JWKS kaniti yalniz HTTP port 3000 upstream'in `{ "keys": [...] }` biciminde RS256 public JWKS sundugunu kanitlar. Local operator network bu hostu cozemedi; approved remote host HTTP port 3000 uzerinden valid JWKS gordu; HTTPS explicit port TLS handshake failed, HTTPS edge 443 unavailable ve candidate image default network `auth-staging` DNS'ini cozemedi. Canonical production IdP `https://auth.habersoft.com/.well-known/jwks.json` local, remote host ve candidate image tarafinda HTTPS/JWKS shape kontrollerinden gecti.
+
+MS-017C1A decision outcome: `AUTH_STAGING_HTTP_UPSTREAM_ONLY`. Staging issuer/audience/scope/token-acquisition contract bulunmadi; HTTPS edge ve staging IdP ownership operator/auth-service tarafinda pending. Ayrica external `staging.env` paylasim kanali nedeniyle staging credentials exposed kabul edilir ve `POSTGRES_PASSWORD`, `DATABASE_URL` credential component'i, `TENANT_RATE_LIMIT_KEY_SECRET` ve `AGENT_KEY` rotate edilmeden readiness retry yapilmaz. Bu task staging env rewrite, secret rotation, app project start, migration, sentinel, backup/restore, rollback/roll-forward veya current symlink promotion yapmadi.
+
 Application version remains: `0.1.0-ms-017`
 
 Application status remains: `Staging Adayi`
