@@ -1,8 +1,14 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { loadAndValidateTargetConfig, sanitizeTargetForReceipt } from "./staging/target-config.mjs";
-import { assertNoInsecureSshArgs, buildScpArgs, buildSshArgs, posixSingleQuote } from "./staging/ssh-client.mjs";
+import { assertNoInsecureSshArgs, buildScpArgs } from "./staging/ssh-client.mjs";
 import { loadReceipt, validateReceipt } from "./staging/receipt.mjs";
+import {
+  validatePreflightComparison,
+  validatePreflightReceipt,
+  runRemotePreflight,
+  writePreflightComparison
+} from "./staging/remote-preflight.mjs";
 
 const [command, ...rawArgs] = process.argv.slice(2);
 const args = parseArgs(rawArgs);
@@ -27,35 +33,33 @@ try {
     case "receipt:verify":
       receiptVerify();
       break;
+    case "receipt:compare":
+      receiptCompare();
+      break;
     default:
-      fail("usage: staging-deployment <preflight|deploy|verify|rollback|roll-forward|receipt:verify>");
+      fail("usage: staging-deployment <preflight|deploy|verify|rollback|roll-forward|receipt:verify|receipt:compare>");
   }
 } catch (error) {
   fail(error.message);
 }
 
 function preflight() {
-  const target = loadAndValidateTargetConfig(args.target);
-  const markerCommand = [
-    "set -eu",
-    `test ! -L ${posixSingleQuote(target.remote_environment_marker_path)}`,
-    `test "$(cat ${posixSingleQuote(target.remote_environment_marker_path)})" = ${posixSingleQuote(target.remote_environment_marker_value)}`,
-    "hostname",
-    "uname -a",
-    "date -u +%Y-%m-%dT%H:%M:%SZ",
-    "id",
-    "docker version --format '{{.Server.Version}}'",
-    "docker compose version",
-    "df -Pk ."
-  ].join(" && ");
-  const sshArgs = buildSshArgs(target, markerCommand);
-  assertNoInsecureSshArgs(sshArgs);
+  const { receipt, receiptFile } = runRemotePreflight(args);
   console.log(JSON.stringify({
-    status: "target-config-valid",
-    target: sanitizeTargetForReceipt(target),
-    read_only_preflight_required: true,
-    ssh_options_verified: true,
-    remote_mutation: false
+    status: "remote-staging-readonly-preflight-passed",
+    target_alias: receipt.target_alias,
+    environment_marker_verified: receipt.environment_marker_verified,
+    remote_architecture: receipt.remote_architecture,
+    docker_available: receipt.docker_available,
+    compose_v2_available: receipt.compose_v2_available,
+    project_state: receipt.project_state,
+    api_port_state: receipt.api_port_state,
+    base_dir_state: receipt.base_dir_state,
+    filesystem_state: receipt.filesystem_state,
+    edge_mode: receipt.edge_mode,
+    inventory_unchanged: receipt.inventory_unchanged,
+    remote_mutation: false,
+    receipt_file: path.basename(receiptFile)
   }, null, 2));
 }
 
@@ -86,8 +90,26 @@ function guardedMutation(action, confirmName, confirmValue) {
 
 function receiptVerify() {
   const receipt = loadReceipt(args.receipt);
+  if (receipt.receipt_type === "remote-staging-readonly-preflight") {
+    validatePreflightReceipt(receipt);
+    console.log("staging-preflight-receipt-verify: ok");
+    return;
+  }
+  if (receipt.receipt_type === "remote-staging-readonly-preflight-comparison") {
+    validatePreflightComparison(receipt);
+    console.log("staging-preflight-comparison-verify: ok");
+    return;
+  }
   validateReceipt(receipt);
   console.log("staging-receipt-verify: ok");
+}
+
+function receiptCompare() {
+  const { output } = writePreflightComparison(args);
+  console.log(JSON.stringify({
+    status: "staging-preflight-comparison-verified",
+    comparison_file: path.basename(output)
+  }, null, 2));
 }
 
 function requireExistingFile(file, name) {

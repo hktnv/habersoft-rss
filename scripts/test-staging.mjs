@@ -5,6 +5,13 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { validateTargetConfig } from "./staging/target-config.mjs";
 import { assertNoInsecureSshArgs, buildSshArgs, posixSingleQuote } from "./staging/ssh-client.mjs";
+import {
+  assertReadOnlyRemoteCommand,
+  buildRemotePreflightCommand,
+  createPreflightComparison,
+  validatePreflightComparison,
+  validatePreflightReceipt
+} from "./staging/remote-preflight.mjs";
 import { assertNoVolumeDeletion, releaseDir, switchCommands } from "./staging/remote-layout.mjs";
 import { validateReceipt } from "./staging/receipt.mjs";
 import { loadEnvFile, stagingEnvFromTemplate, validateStagingEnv } from "./staging/env-inputs.mjs";
@@ -41,7 +48,23 @@ try {
   assert.doesNotThrow(() => assertNoInsecureSshArgs(sshArgs));
   assert(sshArgs.includes("BatchMode=yes"));
   assert(sshArgs.includes("StrictHostKeyChecking=yes"));
+  assert(sshArgs.includes("PasswordAuthentication=no"));
+  assert(sshArgs.includes("KbdInteractiveAuthentication=no"));
+  assert(sshArgs.includes("PreferredAuthentications=publickey"));
   assert.throws(() => assertNoInsecureSshArgs(["-o", "StrictHostKeyChecking=no"]), /insecure|strict/u);
+  assert.throws(() => assertNoInsecureSshArgs(["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=NUL"]), /insecure|strict/u);
+
+  const remotePreflightCommand = buildRemotePreflightCommand(valid);
+  assert.doesNotThrow(() => assertReadOnlyRemoteCommand(remotePreflightCommand));
+  assert(remotePreflightCommand.indexOf("marker_path=") < remotePreflightCommand.indexOf("collect_inventory before"));
+  assert.match(remotePreflightCommand, /docker version --format/u);
+  assert.match(remotePreflightCommand, /docker compose version --short/u);
+  assert.doesNotMatch(remotePreflightCommand, /\bdocker\s+(?:pull|load|run|create|start|stop|restart|rm)\b/u);
+  assert.doesNotMatch(remotePreflightCommand, /\bdocker\s+compose\s+(?:up|down|run)\b/u);
+  assert.throws(() => assertReadOnlyRemoteCommand(buildRemotePreflightCommand({
+    ...valid,
+    compose_project_name: "habersoft-rss-staging'; touch /tmp/nope; '"
+  })), /forbidden token/u);
 
   const dir = releaseDir(valid.remote_base_dir, "0.1.0-ms-017", "a".repeat(40));
   assert(dir.includes("/releases/0.1.0-ms-017-"));
@@ -57,6 +80,44 @@ try {
   expectReceiptFailure({ production_touched: true }, "production_touched");
   expectReceiptFailure({ token: "Bearer abc.def.ghi" }, "secret-like receipt field");
   expectReceiptFailure({ started_at: "2026-06-21T12:00:00.000Z", finished_at: "2026-06-21T11:00:00.000Z" }, "started_at");
+
+  const preflightReceipt = validPreflightReceipt();
+  assert.doesNotThrow(() => validatePreflightReceipt(preflightReceipt));
+  assert.throws(() => validatePreflightReceipt({ ...preflightReceipt, clock_skew_seconds: 31 }), /clock skew/u);
+  assert.throws(() => validatePreflightReceipt({ ...preflightReceipt, api_port_state: "wildcard-or-public-listener" }), /API port/u);
+  assert.throws(() => validatePreflightReceipt({ ...preflightReceipt, ssh_host: "staging.example.invalid" }), /forbidden receipt field/u);
+  const preflightReceiptFile = path.join(temp, "preflight-receipt.json");
+  writeFileSync(preflightReceiptFile, `${JSON.stringify(preflightReceipt, null, 2)}\n`);
+  const preflightVerifyResult = runNode(["scripts/staging-deployment.mjs", "receipt:verify", "--receipt", preflightReceiptFile]);
+  assert.equal(preflightVerifyResult.status, 0, preflightVerifyResult.stderr);
+  assert.match(preflightVerifyResult.stdout, /staging-preflight-receipt-verify: ok/u);
+
+  const secondPreflightReceipt = {
+    ...preflightReceipt,
+    run_id: "ms-017b-22222222-2222-4222-8222-222222222222",
+    clock_skew_seconds: 4,
+    disk_free_bytes: preflightReceipt.disk_free_bytes - 1024,
+    started_at: "2026-06-21T10:03:00.000Z",
+    finished_at: "2026-06-21T10:04:00.000Z"
+  };
+  assert.doesNotThrow(() => validatePreflightReceipt(secondPreflightReceipt));
+  const comparison = createPreflightComparison(preflightReceipt, secondPreflightReceipt);
+  assert.doesNotThrow(() => validatePreflightComparison(comparison));
+  const secondPreflightReceiptFile = path.join(temp, "preflight-receipt-2.json");
+  const comparisonFile = path.join(temp, "preflight-comparison.json");
+  writeFileSync(secondPreflightReceiptFile, `${JSON.stringify(secondPreflightReceipt, null, 2)}\n`);
+  const compareResult = runNode(["scripts/staging-deployment.mjs", "receipt:compare",
+    "--receipt-a", preflightReceiptFile,
+    "--receipt-b", secondPreflightReceiptFile,
+    "--output", comparisonFile
+  ]);
+  assert.equal(compareResult.status, 0, compareResult.stderr);
+  const comparisonVerifyResult = runNode(["scripts/staging-deployment.mjs", "receipt:verify", "--receipt", comparisonFile]);
+  assert.equal(comparisonVerifyResult.status, 0, comparisonVerifyResult.stderr);
+  assert.throws(() => createPreflightComparison(preflightReceipt, {
+    ...secondPreflightReceipt,
+    project_state: "existing-approved-staging"
+  }), /stable fields/u);
 
   const previous = manifest("0.1.0-ms-016", "a".repeat(40), "sha256:" + "1".repeat(64));
   const candidate = manifest("0.1.0-ms-017", "b".repeat(40), "sha256:" + "2".repeat(64));
@@ -266,6 +327,51 @@ function validReceipt() {
     external_registry_publish: false,
     git_tag_created: false,
     github_release_created: false
+  };
+}
+
+function validPreflightReceipt() {
+  return {
+    schema_version: 1,
+    receipt_type: "remote-staging-readonly-preflight",
+    run_id: "ms-017b-11111111-1111-4111-8111-111111111111",
+    target_alias: "rss-main-service-staging-1",
+    environment: "staging",
+    approved: true,
+    source_commit: "a".repeat(40),
+    application_version: "0.1.0-ms-016",
+    master_release: RELEASE_IDENTITY.masterRelease,
+    master_hash: RELEASE_IDENTITY.masterSha256,
+    master_count: RELEASE_IDENTITY.masterActiveMarkdownCount,
+    host_key_verified: true,
+    environment_marker_verified: true,
+    remote_architecture: "linux/amd64",
+    clock_skew_seconds: 2,
+    docker_available: true,
+    compose_v2_available: true,
+    docker_noninteractive: true,
+    project_state: "absent",
+    api_port_state: "available",
+    base_dir_state: "absent-parent-ready",
+    filesystem_state: "read-write",
+    disk_free_bytes: 1024 * 1024 * 1024,
+    capacity_status: "recorded_for_MS-017C",
+    edge_mode: "loopback-only",
+    edge_check: "not_exercised",
+    before_inventory_sha256: "f".repeat(64),
+    after_inventory_sha256: "f".repeat(64),
+    inventory_unchanged: true,
+    remote_mutation_performed: false,
+    package_transfer_performed: false,
+    image_transfer_performed: false,
+    deployment_performed: false,
+    production_touched: false,
+    dns_changed: false,
+    tls_changed: false,
+    cyberpanel_changed: false,
+    artifact_published: false,
+    started_at: "2026-06-21T10:00:00.000Z",
+    finished_at: "2026-06-21T10:01:00.000Z"
   };
 }
 
