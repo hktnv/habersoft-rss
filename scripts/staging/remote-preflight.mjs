@@ -271,6 +271,15 @@ export function createPreflightReceipt({ target, startedAt, finishedAt, localBef
     docker_available: fields.docker_version_status === "ok" && fields.docker_info_status === "ok",
     compose_v2_available: fields.compose_version_status === "ok",
     docker_noninteractive: fields.docker_version_status === "ok" && fields.docker_info_status === "ok",
+    project_container_total: beforeInventory.project_container_total,
+    project_container_running: beforeInventory.project_container_running,
+    project_published_count: beforeInventory.project_published_count,
+    project_volume_count: beforeInventory.project_volume_count,
+    project_network_count: beforeInventory.project_network_count,
+    api_port_listener_count: beforeInventory.port_listener_count,
+    api_port_loopback_count: beforeInventory.port_loopback_count,
+    api_port_wildcard_count: beforeInventory.port_wildcard_count,
+    api_port_other_count: beforeInventory.port_other_count,
     project_state: projectState,
     api_port_state: apiPortState,
     base_dir_state: baseDirState,
@@ -323,6 +332,15 @@ export function validatePreflightReceipt(receipt) {
     "docker_available",
     "compose_v2_available",
     "docker_noninteractive",
+    "project_container_total",
+    "project_container_running",
+    "project_published_count",
+    "project_volume_count",
+    "project_network_count",
+    "api_port_listener_count",
+    "api_port_loopback_count",
+    "api_port_wildcard_count",
+    "api_port_other_count",
     "project_state",
     "api_port_state",
     "base_dir_state",
@@ -364,6 +382,19 @@ export function validatePreflightReceipt(receipt) {
   assert(receipt.docker_available === true, "Docker must be available");
   assert(receipt.compose_v2_available === true, "Docker Compose v2 must be available");
   assert(receipt.docker_noninteractive === true, "Docker must be noninteractive");
+  for (const field of [
+    "project_container_total",
+    "project_container_running",
+    "project_published_count",
+    "project_volume_count",
+    "project_network_count",
+    "api_port_listener_count",
+    "api_port_loopback_count",
+    "api_port_wildcard_count",
+    "api_port_other_count"
+  ]) {
+    assert(Number.isSafeInteger(receipt[field]) && receipt[field] >= 0, `${field} must be a non-negative integer`);
+  }
   assert(passProjectStates.has(receipt.project_state), "project state is not a pass state");
   assert(passApiPortStates.has(receipt.api_port_state), "API port state is not a pass state");
   assert(passBaseDirStates.has(receipt.base_dir_state), "base directory state is not a pass state");
@@ -417,6 +448,15 @@ export function createPreflightComparison(receiptA, receiptB) {
     "docker_available",
     "compose_v2_available",
     "docker_noninteractive",
+    "project_container_total",
+    "project_container_running",
+    "project_published_count",
+    "project_volume_count",
+    "project_network_count",
+    "api_port_listener_count",
+    "api_port_loopback_count",
+    "api_port_wildcard_count",
+    "api_port_other_count",
     "project_state",
     "api_port_state",
     "base_dir_state",

@@ -77,6 +77,8 @@ MS-017C1A-3V sonucunda external staging authorization contract accepted ve hash-
 
 MS-017C1A-3R readiness-only sonucunda canonical production JWKS endpoint'i local host, remote host, candidate image default bridge ve candidate image target project network katmanlarinda strict HTTPS/JWKS proof'tan gecti. API iki readiness turunda `tenantAuth=up`, `postgres=up`, `redis=up` dondu. Worker process'i TenantAuthModule veya JWKS lifecycle baslatmadi. Bu proof full staging deployment kabulune, backup/restore'a, rollback/roll-forward tatbikatina, current symlink promotion'a veya production deployment'a esdeger degildir.
 
+MS-017C full staging drill sonucunda ayni `STAGING_USES_PRODUCTION_IDP` contract'i ve canonical production JWKS URL'i ile candidate deploy, rollback ve roll-forward fazlarinda readiness passed oldu. Candidate ve rollback/roll-forward fazlarinda Tenant API unauth smoke `401`, Agent unauth smoke `401`, unknown route `404` sinirlari korundu; worker process'i TenantAuthModule veya JWKS lifecycle baslatmadi. Production deployment veya auth-service token minting claim'i yapilmaz.
+
 ## Local Fixture
 
 Compose default topolojisinde `tenant-auth-jwks-fixture` servisi kullanilir. Bu servis:

@@ -61,10 +61,12 @@ Default verifier staging-handoff icin `main-service-image.tar` ister. Hizli loca
 
 MS-017C1A-R2 image identity gate'i package-owned runtime image env modeliyle gecti. Commit `074d868d09c5b3d6079803480760d9e669b51826` icin candidate package, loaded image ID `sha256:fdeb82c314b8f5af0f6e0fca572ef986d8b311449503389691950f0a4e940919` ve runtime env checksum `b0dde9479c9fbe64c00f86cb439716207795f8f793df81c0fcb37f1bb449d873` ile local ve remote config-only proof'tan gecti. Remote proof app stack baslatmadi, migration/readiness retry yapmadi ve artifact publish etmedi. Bkz. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md).
 
+MS-017C full staging drill, ayni candidate package'i SHA-256 `b319c5daf031332f0a68b35774d58f537dd580cba279472a0d270b1a1c5fb082` ve image ID `sha256:fdeb82c314b8f5af0f6e0fca572ef986d8b311449503389691950f0a4e940919` ile remote loaded image olarak dogruladi. Previous rollback package `0.1.0-ms-016` source `9bed749e531fdbe435011b3948ec52982387269e`, package SHA-256 `fe68dd586c9c0efe105de110fee00acb6a71adb087da45a63fdc51ed32dafd0b` ve image ID `sha256:4badab61265f0545ce945098220068238e05b1f7fda008fd1f853d75858a5b42` ile dogrulandi. Drill artifact publication, external registry push, Git tag veya GitHub Release olusturmadi.
+
 MS-017B2 local rehearsal tooling'i previous ve candidate image-included package'leri izole local Docker project altinda kullanir. Application version ayni kalabilir; rollback identity source commit ve image ID ile ayrilir. Bkz. [local-staging-rehearsal.md](local-staging-rehearsal.md).
 
 MS-017B3 operator handoff bundle package uretmez veya image tasimaz; yalniz staging host prerequisite ve package handoff requirement'larini secret-free sozlesme olarak verir. Bkz. [staging-host-provisioning.md](staging-host-provisioning.md).
 
 ## Publication Ayrimi
 
-MS-017 package uretir ve dogrular. External registry publish, Docker Hub/GHCR push, Git tag, GitHub Release ve production deployment yapmaz.
+MS-017 package uretir, dogrular ve approved staging drill icinde kullanabilir. External registry publish, Docker Hub/GHCR push, Git tag, GitHub Release ve production deployment yapmaz.

@@ -4,7 +4,7 @@
 
 MS-015, `main-service` repository'sinin mevcut MVP davranisini release-blocker kapilarindan gecirir. MS-016 sonrasi deployment karari kapatilmis ve release package dogrulanmistir. `MVP Adayi`, production'a deploy edildi, admin/frontend tamamlandi veya bagimsiz Agent/Tenant uygulamalari release-ready anlamina gelmez.
 
-Application version: `0.1.0-ms-016`
+Application version: `0.1.0-ms-017`
 
 Master baseline:
 
@@ -76,8 +76,8 @@ Residual non-blocker is a bounded item outside the current MVP repository accept
 Known residual non-blockers:
 
 - production deployment decision is closed; rollout is not performed,
-- release identity alignment is verified; actual staging/production rollout is not performed,
-- MS-017 staging target/preflight and production IdP readiness-only proof passed, but full staging deployment, backup/restore, rollback and roll-forward drills are not yet accepted,
+- release identity alignment is verified; production rollout is not performed,
+- MS-017 staging target/preflight, production IdP readiness-only proof, full staging deployment, backup/restore, rollback and roll-forward drills passed on approved staging,
 - external registry publication is not performed,
 - production edge DNS/TLS/CyberPanel live configuration is not changed,
 - admin/frontend is not implemented,
@@ -107,8 +107,8 @@ If any required gate fails after a later change, the `MVP Adayi` claim is invali
 
 ## Acceptance Result
 
-Status: `MVP Adayi`
+Status: `MVP Adayi - Staging Dogrulandi / Rollback Tatbikati Gecti`
 
-Decision: `MVP Kabul Kapisi Gecti`
+Decision: `MVP Kabul Kapisi ve MS-017C Staging Drill Gecti`
 
-Acceptance date: `2026-06-21`
+Acceptance date: `2026-06-22`

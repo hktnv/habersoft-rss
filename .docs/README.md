@@ -7,7 +7,7 @@
 - Canonical repository remote: `https://github.com/hktnv/habersoft-rss`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
-- Uygulama surumu/durum: `0.1.0-ms-017` / `Staging Adayi`
+- Uygulama surumu/durum: `0.1.0-ms-017` / `MVP Adayi - Staging Dogrulandi / Rollback Tatbikati Gecti`
 
 Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application repository siniridir. Merkezi master ve DEV alt dokumanlar bu repository'ye kopyalanmaz.
 
@@ -77,15 +77,15 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 - Master baseline: `rss-habersoft-master-v12`
 - Master agac ozeti SHA-256: `df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
-- Uyum durumu: `Staging Adayi`
+- Uyum durumu: `MVP Adayi - Staging Dogrulandi / Rollback Tatbikati Gecti`
 
-`Staging Adayi`, MS-017C candidate package ve approved staging drill hazirlik durumudur. Production rollout, artifact publication, Git tag, GitHub Release, Agent application readiness veya Tenant application readiness iddiasi degildir.
+`MVP Adayi - Staging Dogrulandi / Rollback Tatbikati Gecti`, approved staging target uzerinde MS-017C deployment, backup/restore, rollback ve roll-forward drill'inin gectigini belirtir. Production rollout, artifact publication, Git tag, GitHub Release, Agent application readiness veya Tenant application readiness iddiasi degildir.
 
 v11 etki notu: MS-014 uygulamasi v11 master cleanup, retention ve job-runner sozlesmeleriyle uyumludur. `POST /agent/feed-check-results` response'u MS-013'te v11 dort-sayac sozlesmesini `accepted`, `feed_state_updated`, `idempotent_replay_count` ve `out_of_order_result_count` olarak uygulamaya devam eder.
 
 v12 etki notu: MS-016 production deployment karari master `23-uretim-deployment-gorunumu.md` ile kapanmistir. Release package identity canonical master hash ile hizalanmistir; staging-handoff paketi image artifact dahil edildiginde dogrulanir. Production deploy, registry publish, DNS/TLS/CyberPanel live change, Git tag ve GitHub Release yapilmamistir.
 
-MS-017C candidate notu: Approved staging target preflight kaniti uzerinden `0.1.0-ms-017` / `Staging Adayi` commit'i hazirlanir. Staging deployment, rollback ve roll-forward evidence commit'i ancak remote drill full success sonrasi yazilir.
+MS-017C candidate notu: Approved staging target preflight kaniti uzerinden `0.1.0-ms-017` candidate package'i tam staging drill icin kullanilir. Staging deployment, rollback ve roll-forward evidence commit'i remote drill full success sonrasi yazilir.
 
 MS-017C1 incident notu: Ilk approved staging candidate attempt, migrate success ve `/health/live` 200 sonrasinda `/health/ready` 503 / tenantAuth `down` ile durdu. Root cause `OPERATOR_JWKS_CONFIG_INVALID`: external staging env JWKS endpoint'i HTTPS ve canonical path tasidi, fakat canonical auth hostname sinirinda degildi ve local/remote host/candidate image network probe'larinda DNS failure verdi. Canonical auth JWKS endpoint ayni katmanlarda HTTPS/TLS/JSON/RS256 shape kontrollerinden gecti. Repository source fix gerekmedi; full staging deployment, sentinel, backup, rollback, roll-forward, production deployment, artifact publication, Git tag ve GitHub Release yapilmadi.
 
@@ -98,6 +98,8 @@ MS-017C1A-R2 package image-binding notu: `MAIN_SERVICE_IMAGE` shared staging env
 MS-017C1A-3V contract-pinned validator notu: External staging authorization contract accepted ve `STAGING_USES_PRODUCTION_IDP` karari raw/normalized SHA-256 pinleriyle local validator'a baglandi. `TENANT_AUTH_JWKS_URL=https://auth.habersoft.com/.well-known/jwks.json` staging'de yalniz verified contract ile kabul edilir; `auth-staging.habersoft.com`, HTTP/local fixture ve diger alanlardaki production identifier'lar rejected kalir. Runtime auth source, application version ve master baseline degismedi. Real staging env mutation, remote readiness-only proof, full staging deployment, production deployment ve artifact publication yapilmadi.
 
 MS-017C1A-3R production IdP readiness-only notu: Active staging IdP decision `STAGING_USES_PRODUCTION_IDP` olarak dogrulandi ve canonical production JWKS `https://auth.habersoft.com/.well-known/jwks.json` local host, remote host, candidate image default bridge ve target project network katmanlarinda strict HTTPS/JWKS proof'tan gecti. Candidate source `074d868d09c5b3d6079803480760d9e669b51826`, package SHA-256 `b319c5daf031332f0a68b35774d58f537dd580cba279472a0d270b1a1c5fb082`, image ID `sha256:fdeb82c314b8f5af0f6e0fca572ef986d8b311449503389691950f0a4e940919` ve runtime-image.env SHA-256 `b0dde9479c9fbe64c00f86cb439716207795f8f793df81c0fcb37f1bb449d873` ile dogrulandi. Preserved PostgreSQL/Redis volumes uzerinde migrate no-op, API readiness iki tur, `tenantAuth=up/postgres=up/redis=up`, worker isolation ve auth boundary smoke passed. Full staging deployment kabul edilmedi; sentinel, backup/restore, rollback/roll-forward, current symlink promotion, production deployment ve artifact publication yapilmadi. Final active staging service `none`, volumes preserved.
+
+MS-017C full staging drill notu: 2026-06-22 UTC tarihinde target alias `habersoft-rss-staging-alias` uzerinde strict preflight passed: Linux `linux/amd64`, Docker/Compose ready, project `existing-approved-staging`, running containers `0`, API listener `0`, volumes `2`, filesystem `read-write`, inventory unchanged. Candidate `0.1.0-ms-017` source `074d868d09c5b3d6079803480760d9e669b51826`, package SHA-256 `b319c5daf031332f0a68b35774d58f537dd580cba279472a0d270b1a1c5fb082`, image ID `sha256:fdeb82c314b8f5af0f6e0fca572ef986d8b311449503389691950f0a4e940919` ve runtime-image.env SHA-256 `b0dde9479c9fbe64c00f86cb439716207795f8f793df81c0fcb37f1bb449d873` ile deployed edildi. Previous rollback target `0.1.0-ms-016` source `9bed749e531fdbe435011b3948ec52982387269e`, package SHA-256 `fe68dd586c9c0efe105de110fee00acb6a71adb087da45a63fdc51ed32dafd0b`, image ID `sha256:4badab61265f0545ce945098220068238e05b1f7fda008fd1f853d75858a5b42` ve generated runtime-image.env SHA-256 `d9885d838af2a02aabd32ea11a7703b05b4da44b55e5add6c88d7141a4dea296` ile verified oldu. Synthetic sentinel alias SHA-256 `89024679ad934d5cfa85e401c365b686c49542b712f9fd06d26f3fdbac47ff92`, expected table counts `1/1/1/1/1/1`, backup SHA-256 `595ee0617d86f5886aca25ae99486f064ce06e081d16fec19fec74cdd8db9bfc`, off-host restore verification, rollback readiness `2`, roll-forward readiness `2`, final `current=candidate`, `previous=0.1.0-ms-016`, final active version `0.1.0-ms-017`, final services running and loopback-only public port policy passed. Production deployment, artifact publication, Git tag, GitHub Release, DNS/TLS/CyberPanel live change yapilmadi.
 
 MS-017B1 notu: Staging operator input tooling prepared. Operator external target/env/known_hosts girdilerini local-only scaffold ve verify komutlariyla hazirlayabilir. Remote staging preflight not executed; staging deployment still not executed.
 

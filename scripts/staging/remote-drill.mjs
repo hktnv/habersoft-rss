@@ -14,9 +14,10 @@ import os from "node:os";
 import path from "node:path";
 import { EXPECTED_MIGRATIONS, EXPECTED_SERVICES, RELEASE_IDENTITY } from "../release-identity.mjs";
 import { loadEnvFile, validateStagingEnv, formatEnv, removeRuntimeImageFromEnv } from "./env-inputs.mjs";
+import { loadVerifiedStagingIdpContract } from "./idp-contract-policy.mjs";
 import { loadReceipt, validateReceipt } from "./receipt.mjs";
 import { compareRollbackCompatibility, loadManifest } from "./package-pair.mjs";
-import { assertNoVolumeDeletion, assertPathInsideBase, releaseDir, switchCommands } from "./remote-layout.mjs";
+import { assertNoVolumeDeletion, assertPathInsideBase, releaseDir } from "./remote-layout.mjs";
 import { validatePreflightReceipt } from "./remote-preflight.mjs";
 import {
   assertNoInsecureSshArgs,
@@ -39,6 +40,7 @@ export function runRemoteDrill(args) {
   const sharedOperatorEnv = removeRuntimeImageFromEnv(operatorEnv);
   const validationOptions = { idpContractFile: args["idp-contract"] };
   validateStagingEnv(sharedOperatorEnv, target, "deployment-ready", validationOptions);
+  const idpContract = loadVerifiedStagingIdpContract(validationOptions);
 
   const candidatePackage = requiredDirectory(args["candidate-package"] ?? args.package, "candidate-package");
   const previousPackage = requiredDirectory(args["previous-package"], "previous-package");
@@ -46,6 +48,8 @@ export function runRemoteDrill(args) {
   const previousManifest = loadManifest(previousPackage);
   validateManifests(previousManifest, candidateManifest);
   const compatibility = compareRollbackCompatibility(previousManifest, candidateManifest);
+  const candidateRuntimeImageEnvSha256 = requiredRuntimeImageEnvSha(candidateManifest, "candidate");
+  const previousRuntimeImageEnvSha256 = previousManifest.runtime_image_env?.sha256 ?? runtimeImageEnvSha(previousManifest.image.id);
 
   const preflightReceipt = args["preflight-receipt"] === undefined ? undefined : loadReceipt(args["preflight-receipt"]);
   if (preflightReceipt !== undefined) {
@@ -112,7 +116,20 @@ export function runRemoteDrill(args) {
       format: "pg_dump custom",
       postgres_image: "postgres:17.9-bookworm",
       created_at: new Date().toISOString(),
-      sha256: localBackupSha256
+      sha256: localBackupSha256,
+      environment: "staging",
+      target_alias: target.target_alias,
+      candidate_version: candidateManifest.version,
+      candidate_source_commit: candidateManifest.source_commit,
+      master_release: RELEASE_IDENTITY.masterRelease,
+      master_hash: RELEASE_IDENTITY.masterSha256,
+      master_count: RELEASE_IDENTITY.masterActiveMarkdownCount,
+      migration_inventory: [...EXPECTED_MIGRATIONS],
+      package_sha256: candidatePackageSha256,
+      sentinel: {
+        alias_sha256: remoteFields.sentinel_alias_sha256,
+        expected_counts: sentinelExpectedCounts()
+      }
     }, 0o644);
     runRestoreVerification(backupFile);
 
@@ -122,33 +139,62 @@ export function runRemoteDrill(args) {
       receipt_type: "remote-staging-deployment-rollback-drill",
       target_alias: target.target_alias,
       environment: "staging",
+      contract_decision: idpContract.decision,
+      contract_owner: idpContract.owner,
+      contract_raw_sha256: idpContract.raw_sha256,
+      contract_normalized_sha256: idpContract.lf_normalized_sha256,
+      application_version: RELEASE_IDENTITY.version,
       environment_marker_verified: true,
       edge_mode: target.edge_mode,
       started_at: startedAt.toISOString(),
       finished_at: finishedAt.toISOString(),
+      candidate_source_commit: candidateManifest.source_commit,
       deployed_candidate_version: candidateManifest.version,
       deployed_candidate_commit: candidateManifest.source_commit,
       candidate_package_sha256: candidatePackageSha256,
       candidate_image_id: candidateManifest.image.id,
+      candidate_runtime_image_env_sha256: candidateRuntimeImageEnvSha256,
       previous_version: previousManifest.version,
+      previous_source_commit: previousManifest.source_commit,
       previous_commit: previousManifest.source_commit,
       previous_package_sha256: previousPackageSha256,
       previous_image_id: previousManifest.image.id,
+      previous_runtime_image_env_sha256: previousRuntimeImageEnvSha256,
       master_release: RELEASE_IDENTITY.masterRelease,
       master_hash: RELEASE_IDENTITY.masterSha256,
       master_count: RELEASE_IDENTITY.masterActiveMarkdownCount,
       migration_inventory: [...EXPECTED_MIGRATIONS],
+      strict_preflight_passed: preflightReceipt !== undefined,
+      capacity_gate_passed: true,
+      package_pair_compatibility_passed: true,
       backup_sha256: localBackupSha256,
+      backup_verified: true,
       restore_verified: true,
+      off_host_restore_verified: true,
+      candidate_first_deploy_passed: remoteFields.candidate_deploy_verified === "true",
+      candidate_initial_readiness_checks: Number(remoteFields.candidate_initial_readiness_checks),
       candidate_deploy_verified: remoteFields.candidate_deploy_verified === "true",
       rollback_verified: remoteFields.rollback_verified === "true",
+      rollback_readiness_checks: Number(remoteFields.rollback_readiness_checks),
+      rollback_sentinel_preserved: remoteFields.rollback_sentinel_preserved === "true",
       roll_forward_verified: remoteFields.roll_forward_verified === "true",
+      roll_forward_readiness_checks: Number(remoteFields.roll_forward_readiness_checks),
+      roll_forward_sentinel_preserved: remoteFields.roll_forward_sentinel_preserved === "true",
       final_active_version: remoteFields.final_active_version,
+      final_active_source_commit: candidateManifest.source_commit,
       worker_scheduler_verified: remoteFields.worker_scheduler_verified === "true",
+      sentinel_verified: remoteFields.sentinel_verified === "true",
+      sentinel_alias_sha256: remoteFields.sentinel_alias_sha256,
+      sentinel_expected_counts: sentinelExpectedCounts(),
+      current_pointer: remoteFields.current_pointer,
+      previous_pointer: remoteFields.previous_pointer,
+      final_services_running: remoteFields.final_services_running === "true",
       public_ports_verified: remoteFields.public_ports_verified === "true",
+      edge_integration: "not_exercised",
       package_pair_compatibility: compatibility,
       sentinel_record_count: Number(remoteFields.sentinel_record_count),
       production_touched: false,
+      artifact_published: false,
       dns_changed: false,
       tls_changed: false,
       cyberpanel_changed: false,
@@ -188,10 +234,10 @@ export function buildRemoteDrillCommand({
   const baseDir = normalizePosixPath(target.remote_base_dir);
   const previousDir = releaseDir(baseDir, previousManifest.version, previousManifest.source_commit);
   const candidateDir = releaseDir(baseDir, candidateManifest.version, candidateManifest.source_commit);
-  const previousSwitch = switchCommands(baseDir, previousDir).join("\n");
-  const candidateSwitch = switchCommands(baseDir, candidateDir).join("\n");
   const backupPath = joinPosix(baseDir, "backups", `${runId}.dump`);
   const sharedEnv = joinPosix(baseDir, "shared", "staging.env");
+  const previousRuntimeSha256 = previousManifest.runtime_image_env?.sha256 ?? runtimeImageEnvSha(previousManifest.image.id);
+  const candidateRuntimeSha256 = requiredRuntimeImageEnvSha(candidateManifest, "candidate");
 
   for (const remotePath of [
     previousDir,
@@ -208,6 +254,7 @@ export function buildRemoteDrillCommand({
 
   return [
     "set -eu",
+    `run_id=${posixSingleQuote(runId)}`,
     `base_dir=${posixSingleQuote(baseDir)}`,
     `compose_project=${posixSingleQuote(target.compose_project_name)}`,
     `api_port=${posixSingleQuote(String(target.api_host_port))}`,
@@ -229,6 +276,8 @@ export function buildRemoteDrillCommand({
     `candidate_image_ref=${posixSingleQuote(candidateManifest.image.reference)}`,
     `previous_image_id=${posixSingleQuote(previousManifest.image.id)}`,
     `candidate_image_id=${posixSingleQuote(candidateManifest.image.id)}`,
+    `previous_runtime_env_sha256=${posixSingleQuote(previousRuntimeSha256)}`,
+    `candidate_runtime_env_sha256=${posixSingleQuote(candidateRuntimeSha256)}`,
     `previous_version=${posixSingleQuote(previousManifest.version)}`,
     `candidate_version=${posixSingleQuote(candidateManifest.version)}`,
     `backup_file=${posixSingleQuote(backupPath)}`,
@@ -245,24 +294,32 @@ export function buildRemoteDrillCommand({
     "  mv -f \"$shared_env_incoming\" \"$shared_env\"",
     "  chmod 600 \"$shared_env\"",
     "}",
-    "extract_release() {",
+    "ensure_release() {",
     "  role=$1 archive=$2 archive_sha=$3 release_dir=$4 package_sha=$5",
-    "  [ -f \"$archive\" ] || fail \"$role\" archive-missing",
-    "  [ ! -e \"$release_dir\" ] || fail \"$role\" release-dir-exists",
-    "  mkdir -p \"$release_dir\"",
-    "  verify_sha \"$archive\" \"$archive_sha\" \"$role-transfer\"",
-    "  tar -xf \"$archive\" --strip-components=1 -C \"$release_dir\"",
+    "  if [ -e \"$release_dir\" ]; then",
+    "    [ -d \"$release_dir\" ] && [ ! -L \"$release_dir\" ] || fail \"$role\" release-dir-unsafe",
+    "  else",
+    "    [ -f \"$archive\" ] || fail \"$role\" archive-missing",
+    "    verify_sha \"$archive\" \"$archive_sha\" \"$role-transfer\"",
+    "    tmp_release=\"$release_dir.tmp.$$\"",
+    "    rm -rf \"$tmp_release\"",
+    "    mkdir -p \"$tmp_release\"",
+    "    tar -xf \"$archive\" --strip-components=1 -C \"$tmp_release\"",
+    "    mv -T \"$tmp_release\" \"$release_dir\"",
+    "  fi",
+    "  [ -f \"$release_dir/checksums.sha256\" ] || fail \"$role\" package-checksums-missing",
     "  (cd \"$release_dir\" && sha256sum -c checksums.sha256 >/dev/null) || fail \"$role\" package-checksum-failed",
     "  verify_sha \"$release_dir/checksums.sha256\" \"$package_sha\" \"$role-package\"",
     "}",
     "load_image() {",
-    "  role=$1 release_dir=$2 image_ref=$3 expected_image=$4 runtime_env=$5 package_runtime_env=$6",
+    "  role=$1 release_dir=$2 image_ref=$3 expected_image=$4 runtime_env=$5 package_runtime_env=$6 expected_runtime_sha=$7",
     "  if [ \"$role\" = candidate ]; then [ -f \"$package_runtime_env\" ] || fail \"$role\" package-runtime-image-env-missing; fi",
     "  docker load --input \"$release_dir/main-service-image.tar\" >/dev/null",
     "  actual=$(docker image inspect --format '{{.Id}}' \"$image_ref\" 2>/dev/null) || fail \"$role\" image-inspect-failed",
     "  [ \"$actual\" = \"$expected_image\" ] || fail \"$role\" image-id-mismatch",
     "  printf 'MAIN_SERVICE_IMAGE=%s\\n' \"$actual\" > \"$runtime_env\"",
     "  chmod 644 \"$runtime_env\"",
+    "  verify_sha \"$runtime_env\" \"$expected_runtime_sha\" \"$role-runtime-image-env\"",
     "  if [ -f \"$package_runtime_env\" ]; then cmp -s \"$runtime_env\" \"$package_runtime_env\" || fail \"$role\" runtime-image-env-mismatch; fi",
     "}",
     "compose_cmd() { env_file=$1; runtime_env=$2; compose_file=$3; shift 3; docker compose -p \"$compose_project\" --env-file \"$env_file\" --env-file \"$runtime_env\" -f \"$compose_file\" \"$@\"; }",
@@ -272,7 +329,14 @@ export function buildRemoteDrillCommand({
     "  services=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" config --services | sort | tr '\\n' ',')",
     "  [ \"$services\" = 'main-service-api,main-service-worker,migrate,postgres,redis,' ] || fail compose service-inventory-mismatch",
     "  compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" pull --policy missing postgres redis >/dev/null",
-    "  compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" up -d --no-build --pull never --wait --wait-timeout 180 >/dev/null",
+    "  compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" up -d --no-build --pull never --wait --wait-timeout 180 postgres redis >/dev/null",
+    "  sync_postgres_password \"$env_file\" \"$runtime_env\" \"$compose_file\"",
+    "  compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" up --no-build --pull never --force-recreate --no-deps migrate >/dev/null",
+    "  compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" up -d --no-build --pull never --force-recreate --no-deps --wait --wait-timeout 180 main-service-api main-service-worker >/dev/null",
+    "}",
+    "sync_postgres_password() {",
+    "  env_file=$1 runtime_env=$2 compose_file=$3",
+    "  printf '%s\\n' 'ALTER ROLE :\"role\" WITH PASSWORD :'\\''newpass'\\'';' | compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" exec -T postgres sh -lc 'psql -X -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -v ON_ERROR_STOP=1 -v role=\"$POSTGRES_USER\" -v newpass=\"$POSTGRES_PASSWORD\"' >/dev/null || fail postgres role-sync-failed",
     "}",
     "compose_switch_app() {",
     "  env_file=$1 runtime_env=$2 compose_file=$3",
@@ -282,7 +346,7 @@ export function buildRemoteDrillCommand({
     "verify_ports() {",
     "  for service in postgres redis main-service-worker; do",
     "    ports=$(docker ps --filter \"label=com.docker.compose.project=$compose_project\" --filter \"label=com.docker.compose.service=$service\" --format '{{.Ports}}')",
-    "    [ -z \"$ports\" ] || fail ports public-data-or-worker-port",
+    "    case \"$ports\" in *'->'*) fail ports public-data-or-worker-port ;; esac",
     "  done",
     "  api_ports=$(docker ps --filter \"label=com.docker.compose.project=$compose_project\" --filter 'label=com.docker.compose.service=main-service-api' --format '{{.Ports}}')",
     "  case \"$api_ports\" in *\"127.0.0.1:$api_port->3000/tcp\"*) ;; *) fail ports api-loopback-missing ;; esac",
@@ -298,6 +362,15 @@ export function buildRemoteDrillCommand({
     "    sleep 1",
     "  done",
     "  fail api readiness-timeout",
+    "}",
+    "verify_readiness_rounds() {",
+    "  env_file=$1 runtime_env=$2 compose_file=$3 phase=$4",
+    "  wait_api /health/live",
+    "  wait_api /health/ready",
+    "  sleep 35",
+    "  wait_api /health/live",
+    "  wait_api /health/ready",
+    "  emit \"${phase}_readiness_checks\" 2",
     "}",
     "psql_count() {",
     "  env_file=$1 runtime_env=$2 compose_file=$3 sql=$4",
@@ -317,7 +390,8 @@ export function buildRemoteDrillCommand({
     "  output=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" exec -T main-service-worker npm run worker:health)",
     "  case \"$output\" in *'\"scheduler_id\":\"cleanup.daily\"'* ) ;; *) fail worker scheduler-missing ;; esac",
     "  case \"$output\" in *'\"global_concurrency\":1'* ) ;; *) fail worker global-concurrency-missing ;; esac",
-    "  case \"$output\" in *'\"local_concurrency\":1'* ) ;; *) fail worker local-concurrency-missing ;; esac",
+    "  local_output=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" exec -T main-service-worker node -e \"const r=require('./dist/maintenance/maintenance.registry.js'); if (r.MAINTENANCE_WORKER_CONCURRENCY !== 1) process.exit(1); console.log('local_concurrency=1');\") || fail worker local-concurrency-missing",
+    "  case \"$local_output\" in *'local_concurrency=1'* ) ;; *) fail worker local-concurrency-missing ;; esac",
     "}",
     "verify_migrations() {",
     "  env_file=$1 runtime_env=$2 compose_file=$3",
@@ -329,6 +403,10 @@ export function buildRemoteDrillCommand({
     "agent_tenant_smoke() {",
     "  env_file=$1 runtime_env=$2 compose_file=$3",
     "  output=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" exec -T main-service-api node - <<'NODE'",
+    "const unknown = await fetch('http://127.0.0.1:3000/__ms017c_not_found');",
+    "if (unknown.status !== 404) throw new Error(`unknown route ${unknown.status}`);",
+    "const unauthAgent = await fetch('http://127.0.0.1:3000/agent/feeds/due?limit=1');",
+    "if (unauthAgent.status !== 401) throw new Error(`agent unauth status ${unauthAgent.status}`);",
     "const heartbeat = await fetch('http://127.0.0.1:3000/agent/heartbeat', {",
     "  method: 'POST',",
     "  headers: { 'content-type': 'application/json', 'X-Agent-Key': process.env.AGENT_KEY },",
@@ -351,47 +429,137 @@ export function buildRemoteDrillCommand({
     ")",
     "  case \"$output\" in *'agent_tenant_smoke=ok'* ) ;; *) fail smoke agent-tenant-smoke-failed ;; esac",
     "}",
-    "verify_sentinel() {",
+    "create_sentinel() {",
     "  env_file=$1 runtime_env=$2 compose_file=$3",
-    "  count=$(psql_count \"$env_file\" \"$runtime_env\" \"$compose_file\" \"select count(*) from agent_runtime_status where agent_id='default' and status='ok';\" | tr -d '\\r')",
-    "  [ \"$count\" = 1 ] || fail sentinel count-mismatch",
+    "  sentinel_alias=\"ms017c-${run_id}\"",
+    "  sentinel_alias_sha256=$(printf '%s' \"$sentinel_alias\" | sha256sum | awk '{print $1}')",
+    "  sentinel_url=\"https://${sentinel_alias}.invalid/feed.xml\"",
+    "  site_client_id=\"${sentinel_alias}-site\"",
+    "  entry_guid=\"${sentinel_alias}-entry-guid\"",
+    "  entry_url=\"https://${sentinel_alias}.invalid/entry\"",
+    "  check_id=\"${sentinel_alias}-check\"",
+    "  sentinel_sql=$(cat <<SQL",
+    "BEGIN;",
+    "WITH feed_row AS (",
+    "  INSERT INTO feeds (url, title, active, subscriber_count, last_checked_at, last_new_entry_at, last_http_status, error_count, next_check_at, created_at)",
+    "  VALUES ('$sentinel_url', 'MS-017C synthetic feed', true, 1, now(), now(), 200, 0, now() + interval '1 day', now())",
+    "  ON CONFLICT (url) DO UPDATE SET subscriber_count = 1, active = true, last_checked_at = EXCLUDED.last_checked_at, last_new_entry_at = EXCLUDED.last_new_entry_at",
+    "  RETURNING id",
+    "), feed_selected AS (",
+    "  SELECT id FROM feed_row",
+    "  UNION ALL SELECT id FROM feeds WHERE url = '$sentinel_url'",
+    "  LIMIT 1",
+    "), site_insert AS (",
+    "  INSERT INTO site_feeds (site_client_id, feed_id, created_at)",
+    "  SELECT '$site_client_id', id, now() FROM feed_selected",
+    "  ON CONFLICT DO NOTHING",
+    "), entry_row AS (",
+    "  INSERT INTO entries (feed_id, guid, url, title, summary, published_at, first_seen_at, detail_extraction_status, detail_extraction_attempted_at, detail_extraction_finalized_at, has_detail, created_at)",
+    "  SELECT id, '$entry_guid', '$entry_url', 'MS-017C synthetic entry', 'synthetic non-production sentinel', now(), now(), 'ok', now(), now(), true, now() FROM feed_selected",
+    "  ON CONFLICT (feed_id, guid) DO UPDATE SET has_detail = true, detail_extraction_status = 'ok', detail_extraction_attempted_at = now(), detail_extraction_finalized_at = now(), detail_extraction_error_code = NULL",
+    "  RETURNING id, feed_id, effective_at",
+    "), entry_selected AS (",
+    "  SELECT id, feed_id, effective_at FROM entry_row",
+    "  UNION ALL SELECT e.id, e.feed_id, e.effective_at FROM entries e JOIN feed_selected f ON e.feed_id = f.id WHERE e.guid = '$entry_guid'",
+    "  LIMIT 1",
+    "), detail_insert AS (",
+    "  INSERT INTO entry_details (entry_id, feed_id, effective_at, detail, detail_length, created_at)",
+    "  SELECT id, feed_id, effective_at, 'synthetic non-production sentinel detail', length('synthetic non-production sentinel detail'), now() FROM entry_selected",
+    "  ON CONFLICT (entry_id) DO UPDATE SET detail = EXCLUDED.detail, detail_length = EXCLUDED.detail_length, effective_at = EXCLUDED.effective_at",
+    "), event_insert AS (",
+    "  INSERT INTO agent_feed_check_events (check_id, feed_id, checked_at, http_status, outcome, entries_submitted_count, entries_saved_count, tier_attempted, feed_title, created_at)",
+    "  SELECT '$check_id', id, now(), 200, 'entries_found', 1, 1, 1, 'MS-017C synthetic feed', now() FROM feed_selected",
+    "  ON CONFLICT (check_id) DO UPDATE SET checked_at = EXCLUDED.checked_at, http_status = EXCLUDED.http_status, outcome = EXCLUDED.outcome, entries_submitted_count = 1, entries_saved_count = 1",
+    ")",
+    "UPDATE feeds SET subscriber_count = (SELECT count(*) FROM site_feeds WHERE feed_id = feeds.id) WHERE url = '$sentinel_url';",
+    "COMMIT;",
+    "SQL",
+    ")",
+    "  printf '%s\\n' \"$sentinel_sql\" | compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" exec -T postgres sh -lc 'psql -q -X -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -v ON_ERROR_STOP=1' >/dev/null || fail sentinel create-failed",
+    "}",
+    "verify_sentinel() {",
+    "  env_file=$1 runtime_env=$2 compose_file=$3 phase=$4",
+    "  feed_count=$(psql_count \"$env_file\" \"$runtime_env\" \"$compose_file\" \"select count(*) from feeds where url='https://${sentinel_alias}.invalid/feed.xml';\" | tr -d '\\r')",
+    "  site_feed_count=$(psql_count \"$env_file\" \"$runtime_env\" \"$compose_file\" \"select count(*) from site_feeds where site_client_id='${sentinel_alias}-site';\" | tr -d '\\r')",
+    "  entry_count=$(psql_count \"$env_file\" \"$runtime_env\" \"$compose_file\" \"select count(*) from entries where guid='${sentinel_alias}-entry-guid' and has_detail=true;\" | tr -d '\\r')",
+    "  detail_count=$(psql_count \"$env_file\" \"$runtime_env\" \"$compose_file\" \"select count(*) from entry_details d join entries e on e.id=d.entry_id and e.feed_id=d.feed_id where e.guid='${sentinel_alias}-entry-guid' and e.has_detail=true;\" | tr -d '\\r')",
+    "  event_count=$(psql_count \"$env_file\" \"$runtime_env\" \"$compose_file\" \"select count(*) from agent_feed_check_events where check_id='${sentinel_alias}-check' and outcome='entries_found';\" | tr -d '\\r')",
+    "  runtime_count=$(psql_count \"$env_file\" \"$runtime_env\" \"$compose_file\" \"select count(*) from agent_runtime_status where agent_id='default' and status='ok';\" | tr -d '\\r')",
+    "  [ \"$feed_count\" = 1 ] || fail sentinel feed-count-mismatch",
+    "  [ \"$site_feed_count\" = 1 ] || fail sentinel site-feed-count-mismatch",
+    "  [ \"$entry_count\" = 1 ] || fail sentinel entry-count-mismatch",
+    "  [ \"$detail_count\" = 1 ] || fail sentinel detail-count-mismatch",
+    "  [ \"$event_count\" = 1 ] || fail sentinel event-count-mismatch",
+    "  [ \"$runtime_count\" = 1 ] || fail sentinel runtime-count-mismatch",
+    "  sentinel_total=$((feed_count + site_feed_count + entry_count + detail_count + event_count + runtime_count))",
+    "  emit \"${phase}_sentinel_preserved\" true",
     "}",
     "verify_active_version() {",
     "  env_file=$1 runtime_env=$2 compose_file=$3 expected_version=$4",
     "  version=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" exec -T main-service-api node -p \"require('./package.json').version\" | tr -d '\\r')",
     "  [ \"$version\" = \"$expected_version\" ] || fail version active-version-mismatch",
     "}",
+    "set_pointers() {",
+    "  current_target=$1 previous_target=$2",
+    "  [ -d \"$current_target\" ] && [ -d \"$previous_target\" ] || fail pointer release-missing",
+    "  case \"$current_target\" in \"$base_dir\"/releases/*) ;; *) fail pointer current-escapes ;; esac",
+    "  case \"$previous_target\" in \"$base_dir\"/releases/*) ;; *) fail pointer previous-escapes ;; esac",
+    "  ln -sfn \"$current_target\" \"$base_dir/current.next\"",
+    "  mv -Tf \"$base_dir/current.next\" \"$base_dir/current\"",
+    "  ln -sfn \"$previous_target\" \"$base_dir/previous.next\"",
+    "  mv -Tf \"$base_dir/previous.next\" \"$base_dir/previous\"",
+    "  [ \"$(readlink \"$base_dir/current\")\" = \"$current_target\" ] || fail pointer current-mismatch",
+    "  [ \"$(readlink \"$base_dir/previous\")\" = \"$previous_target\" ] || fail pointer previous-mismatch",
+    "}",
+    "verify_final_running() {",
+    "  env_file=$1 runtime_env=$2 compose_file=$3",
+    "  for service in postgres redis main-service-api main-service-worker; do",
+    "    container=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" ps -q \"$service\")",
+    "    [ -n \"$container\" ] || fail final-running \"$service-missing\"",
+    "    running=$(docker inspect -f '{{.State.Running}}' \"$container\" 2>/dev/null || printf false)",
+    "    [ \"$running\" = true ] || fail final-running \"$service-not-running\"",
+    "  done",
+    "  sleep 10",
+    "  for service in postgres redis main-service-api main-service-worker; do",
+    "    container=$(compose_cmd \"$env_file\" \"$runtime_env\" \"$compose_file\" ps -q \"$service\")",
+    "    [ -n \"$container\" ] || fail final-running \"$service-missing-second\"",
+    "    running=$(docker inspect -f '{{.State.Running}}' \"$container\" 2>/dev/null || printf false)",
+    "    [ \"$running\" = true ] || fail final-running \"$service-not-running-second\"",
+    "  done",
+    "}",
     "verify_phase() {",
-    "  env_file=$1 runtime_env=$2 compose_file=$3 expected_image=$4 expected_version=$5",
+    "  env_file=$1 runtime_env=$2 compose_file=$3 expected_image=$4 expected_version=$5 phase=$6",
     "  verify_images \"$env_file\" \"$runtime_env\" \"$compose_file\" \"$expected_image\"",
-    "  wait_api /health/live",
-    "  wait_api /health/ready",
+    "  verify_readiness_rounds \"$env_file\" \"$runtime_env\" \"$compose_file\" \"$phase\"",
     "  verify_worker \"$env_file\" \"$runtime_env\" \"$compose_file\"",
     "  verify_migrations \"$env_file\" \"$runtime_env\" \"$compose_file\"",
     "  agent_tenant_smoke \"$env_file\" \"$runtime_env\" \"$compose_file\"",
-    "  verify_sentinel \"$env_file\" \"$runtime_env\" \"$compose_file\"",
     "  verify_ports",
     "  verify_active_version \"$env_file\" \"$runtime_env\" \"$compose_file\" \"$expected_version\"",
     "}",
     "install_shared_env",
-    "extract_release previous \"$previous_archive\" \"$previous_archive_sha256\" \"$previous_dir\" \"$previous_package_sha256\"",
-    "extract_release candidate \"$candidate_archive\" \"$candidate_archive_sha256\" \"$candidate_dir\" \"$candidate_package_sha256\"",
+    "ensure_release previous \"$previous_archive\" \"$previous_archive_sha256\" \"$previous_dir\" \"$previous_package_sha256\"",
+    "ensure_release candidate \"$candidate_archive\" \"$candidate_archive_sha256\" \"$candidate_dir\" \"$candidate_package_sha256\"",
     "previous_compose=\"$previous_dir/deploy/production/compose.yaml\"",
     "candidate_compose=\"$candidate_dir/deploy/production/compose.yaml\"",
-    "load_image previous \"$previous_dir\" \"$previous_image_ref\" \"$previous_image_id\" \"$previous_runtime_env\" \"$previous_package_runtime_env\"",
-    "load_image candidate \"$candidate_dir\" \"$candidate_image_ref\" \"$candidate_image_id\" \"$candidate_runtime_env\" \"$candidate_package_runtime_env\"",
+    "load_image previous \"$previous_dir\" \"$previous_image_ref\" \"$previous_image_id\" \"$previous_runtime_env\" \"$previous_package_runtime_env\" \"$previous_runtime_env_sha256\"",
+    "load_image candidate \"$candidate_dir\" \"$candidate_image_ref\" \"$candidate_image_id\" \"$candidate_runtime_env\" \"$candidate_package_runtime_env\" \"$candidate_runtime_env_sha256\"",
     "compose_up_initial \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\"",
-    "verify_phase \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" \"$candidate_image_id\" \"$candidate_version\"",
-    candidateSwitch,
+    "verify_phase \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" \"$candidate_image_id\" \"$candidate_version\" candidate_initial",
+    "set_pointers \"$candidate_dir\" \"$previous_dir\"",
+    "create_sentinel \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\"",
+    "verify_sentinel \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" candidate_initial",
     "compose_cmd \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" exec -T postgres sh -lc 'pg_dump -Fc -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"' > \"$backup_file\"",
     "backup_sha256=$(sha256sum \"$backup_file\" | awk '{print $1}')",
     "compose_switch_app \"$shared_env\" \"$previous_runtime_env\" \"$previous_compose\"",
-    "verify_phase \"$shared_env\" \"$previous_runtime_env\" \"$previous_compose\" \"$previous_image_id\" \"$previous_version\"",
-    previousSwitch,
+    "verify_phase \"$shared_env\" \"$previous_runtime_env\" \"$previous_compose\" \"$previous_image_id\" \"$previous_version\" rollback",
+    "verify_sentinel \"$shared_env\" \"$previous_runtime_env\" \"$previous_compose\" rollback",
+    "set_pointers \"$previous_dir\" \"$candidate_dir\"",
     "compose_switch_app \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\"",
-    "verify_phase \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" \"$candidate_image_id\" \"$candidate_version\"",
-    candidateSwitch,
-    "sentinel_count=$(psql_count \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" \"select count(*) from agent_runtime_status where agent_id='default' and status='ok';\" | tr -d '\\r')",
+    "verify_phase \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" \"$candidate_image_id\" \"$candidate_version\" roll_forward",
+    "verify_sentinel \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\" roll_forward",
+    "set_pointers \"$candidate_dir\" \"$previous_dir\"",
+    "verify_final_running \"$shared_env\" \"$candidate_runtime_env\" \"$candidate_compose\"",
     "emit status remote-staging-drill-passed",
     "emit previous_transfer_verified true",
     "emit candidate_transfer_verified true",
@@ -403,9 +571,14 @@ export function buildRemoteDrillCommand({
     "emit final_active_version \"$candidate_version\"",
     "emit worker_scheduler_verified true",
     "emit public_ports_verified true",
-    "emit sentinel_record_count \"$sentinel_count\"",
+    "emit sentinel_verified true",
+    "emit sentinel_alias_sha256 \"$sentinel_alias_sha256\"",
+    "emit sentinel_record_count \"$sentinel_total\"",
     "emit backup_sha256 \"$backup_sha256\"",
     "emit backup_artifact \"$backup_file\"",
+    "emit current_pointer candidate",
+    "emit previous_pointer \"$previous_version\"",
+    "emit final_services_running true",
     "emit production_touched false",
     "emit external_registry_publish false"
   ].join("\n");
@@ -522,11 +695,16 @@ function validateManifests(previousManifest, candidateManifest) {
   assert(JSON.stringify(candidateManifest.services) === JSON.stringify(EXPECTED_SERVICES), "candidate service inventory mismatch");
 }
 
-function assertPreflightReady(receipt, target) {
+export function assertPreflightReady(receipt, target) {
   assert(receipt.target_alias === target.target_alias, "preflight target alias mismatch");
-  assert(receipt.project_state === "absent", "preflight project state must be absent before first deployment");
-  assert(receipt.api_port_state === "available", "preflight API port must be available before first deployment");
-  assert(receipt.base_dir_state === "existing-empty-approved" || receipt.base_dir_state === "absent-parent-ready", "preflight base dir must be empty or absent-parent-ready before package transfer");
+  assert(receipt.project_state === "absent" || receipt.project_state === "existing-approved-staging", "preflight project state must be absent or approved staging");
+  assert(receipt.api_port_state === "available", "preflight API port must be available before deployment drill");
+  assert(receipt.base_dir_state === "existing-empty-approved" || receipt.base_dir_state === "absent-parent-ready" || receipt.base_dir_state === "existing-approved-staging", "preflight base dir must be empty, absent-parent-ready, or approved staging");
+  if (receipt.project_state === "existing-approved-staging") {
+    assert(receipt.project_container_running === 0, "preflight existing staging must have zero running containers");
+    assert(receipt.api_port_listener_count === 0, "preflight existing staging must have no API listener");
+    assert(receipt.project_volume_count >= 2, "preflight existing staging must preserve expected data volumes");
+  }
   assert(receipt.inventory_unchanged === true, "preflight inventory must be unchanged");
   assert(receipt.remote_mutation_performed === false, "preflight must be read-only");
 }
@@ -626,6 +804,27 @@ function writeJson(file, value, mode) {
 
 function packageSha256(packageDir) {
   return sha256File(path.join(packageDir, "checksums.sha256"));
+}
+
+function requiredRuntimeImageEnvSha(manifest, role) {
+  const value = manifest.runtime_image_env?.sha256;
+  assert(/^[a-f0-9]{64}$/u.test(String(value)), `${role} runtime image env checksum is invalid`);
+  return value;
+}
+
+function runtimeImageEnvSha(imageId) {
+  return crypto.createHash("sha256").update(`MAIN_SERVICE_IMAGE=${imageId}\n`).digest("hex");
+}
+
+function sentinelExpectedCounts() {
+  return {
+    feeds: 1,
+    site_feeds: 1,
+    entries: 1,
+    entry_details: 1,
+    agent_feed_check_events: 1,
+    agent_runtime_status: 1
+  };
 }
 
 function sha256File(file) {
