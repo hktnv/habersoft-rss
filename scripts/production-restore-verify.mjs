@@ -13,8 +13,9 @@ if (backup === undefined) {
 const backupPath = path.resolve(backup);
 const metadataPath = `${backupPath}.metadata.json`;
 const backupBytes = readFileSync(backupPath);
+let metadata;
 if (existsSync(metadataPath)) {
-  const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
+  metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
   if (metadata.sha256 !== sha256(backupBytes)) {
     fail("backup checksum mismatch");
   }
@@ -27,6 +28,7 @@ if (backupBytes.subarray(0, 5).toString("ascii") !== "PGDMP") {
 const name = `main-service-restore-verify-${Date.now()}`;
 const password = "restore_verify_password";
 
+let restoreFailure;
 try {
   run("docker", [
     "run",
@@ -43,13 +45,15 @@ try {
   ]);
   waitForPostgres(name);
   run("docker", ["cp", backupPath, `${name}:/tmp/backup.dump`]);
-  run("docker", ["exec", "-e", `PGPASSWORD=${password}`, name, "pg_restore", "--no-owner", "--exit-on-error", "-U", "restore_verify", "-d", "restore_verify", "/tmp/backup.dump"]);
+  run("docker", ["exec", "-e", `PGPASSWORD=${password}`, name, "pg_restore", "--no-owner", "--exit-on-error", "-h", "127.0.0.1", "-U", "restore_verify", "-d", "restore_verify", "/tmp/backup.dump"]);
   const tables = dockerOutput([
     "exec",
     "-e",
     `PGPASSWORD=${password}`,
     name,
     "psql",
+    "-h",
+    "127.0.0.1",
     "-U",
     "restore_verify",
     "-d",
@@ -63,6 +67,8 @@ try {
     `PGPASSWORD=${password}`,
     name,
     "psql",
+    "-h",
+    "127.0.0.1",
     "-U",
     "restore_verify",
     "-d",
@@ -71,11 +77,54 @@ try {
     "select count(*) from _prisma_migrations where migration_name in ('20260620000000_initial_empty','20260620001000_canonical_business_schema');"
   ]);
   if (tables.trim() !== "6" || migrations.trim() !== "2") {
-    fail(`restore catalog mismatch: tables=${tables.trim()} migrations=${migrations.trim()}`);
+    throw new Error(`restore catalog mismatch: tables=${tables.trim()} migrations=${migrations.trim()}`);
   }
+  verifySentinelRows(name, password, metadata);
   console.log("production-restore-verify: ok");
+} catch (error) {
+  restoreFailure = error;
 } finally {
   spawnSync("docker", ["rm", "-f", name], { stdio: "ignore", shell: false });
+}
+if (restoreFailure !== undefined) {
+  fail(restoreFailure.message);
+}
+
+function verifySentinelRows(containerName, password, backupMetadata) {
+  const expected = backupMetadata?.sentinel?.expected_counts;
+  if (expected === undefined) {
+    return;
+  }
+  const checks = [
+    ["feeds", "select count(*) from feeds;", expected.feeds],
+    ["site_feeds", "select count(*) from site_feeds;", expected.site_feeds],
+    ["entries", "select count(*) from entries;", expected.entries],
+    ["entry_details", "select count(*) from entry_details;", expected.entry_details],
+    ["agent_feed_check_events", "select count(*) from agent_feed_check_events;", expected.agent_feed_check_events],
+    ["agent_runtime_status", "select count(*) from agent_runtime_status where status='ok';", expected.agent_runtime_status],
+    ["entry_detail_invariant", "select count(*) from entries e join entry_details d on d.entry_id=e.id and d.feed_id=e.feed_id where e.has_detail=true;", 1],
+    ["agent_event_present", "select count(*) from agent_feed_check_events where outcome='entries_found';", 1]
+  ];
+  for (const [label, sql, minimum] of checks) {
+    const actual = Number(dockerOutput([
+      "exec",
+      "-e",
+      `PGPASSWORD=${password}`,
+      containerName,
+      "psql",
+      "-h",
+      "127.0.0.1",
+      "-U",
+      "restore_verify",
+      "-d",
+      "restore_verify",
+      "-Atc",
+      sql
+    ]).trim());
+    if (!Number.isFinite(actual) || actual < Number(minimum)) {
+      throw new Error(`restore sentinel mismatch: ${label}=${actual}`);
+    }
+  }
 }
 
 function waitForPostgres(containerName) {
@@ -86,6 +135,8 @@ function waitForPostgres(containerName) {
       "PGPASSWORD=restore_verify_password",
       containerName,
       "psql",
+      "-h",
+      "127.0.0.1",
       "-U",
       "restore_verify",
       "-d",
@@ -107,8 +158,7 @@ function waitForPostgres(containerName) {
 function dockerOutput(args) {
   const result = spawnSync("docker", args, { encoding: "utf8", shell: false });
   if (result.status !== 0) {
-    process.stderr.write(result.stderr);
-    process.exit(result.status ?? 1);
+    throw new Error(result.stderr.trim() || "docker output command failed");
   }
   return result.stdout;
 }
@@ -116,7 +166,7 @@ function dockerOutput(args) {
 function run(command, args) {
   const result = spawnSync(command, args, { stdio: "inherit", shell: false });
   if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+    throw new Error(`${command} ${args[0] ?? ""} failed`);
   }
 }
 

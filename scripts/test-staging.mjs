@@ -12,7 +12,7 @@ import {
   validatePreflightComparison,
   validatePreflightReceipt
 } from "./staging/remote-preflight.mjs";
-import { buildRemoteDrillCommand, buildRemotePrepareCommand } from "./staging/remote-drill.mjs";
+import { assertPreflightReady, buildRemoteDrillCommand, buildRemotePrepareCommand } from "./staging/remote-drill.mjs";
 import {
   buildProductionIdpReadinessCommand,
   validateProductionIdpReadinessReceipt
@@ -101,6 +101,10 @@ try {
     }
   });
   assert.match(remoteDrillCommand, /docker load --input/u);
+  assert.match(remoteDrillCommand, /ensure_release/u);
+  assert.match(remoteDrillCommand, /create_sentinel/u);
+  assert.match(remoteDrillCommand, /sentinel_alias_sha256/u);
+  assert.match(remoteDrillCommand, /set_pointers "\$candidate_dir" "\$previous_dir"/u);
   assert.match(remoteDrillCommand, /runtime-image\.env/u);
   assert.match(remoteDrillCommand, /shared\/staging\.env/u);
   assert.match(remoteDrillCommand, /contains-runtime-image/u);
@@ -145,6 +149,33 @@ try {
 
   const preflightReceipt = validPreflightReceipt();
   assert.doesNotThrow(() => validatePreflightReceipt(preflightReceipt));
+  assert.doesNotThrow(() => assertPreflightReady(preflightReceipt, valid));
+  assert.doesNotThrow(() => assertPreflightReady({
+    ...preflightReceipt,
+    project_state: "existing-approved-staging",
+    base_dir_state: "existing-approved-staging",
+    project_container_total: 5,
+    project_container_running: 0,
+    project_published_count: 0,
+    project_volume_count: 2,
+    project_network_count: 1,
+    api_port_listener_count: 0
+  }, valid));
+  assert.throws(() => assertPreflightReady({
+    ...preflightReceipt,
+    project_state: "existing-approved-staging",
+    base_dir_state: "existing-approved-staging",
+    project_container_running: 1,
+    project_volume_count: 2
+  }, valid), /zero running/u);
+  assert.throws(() => assertPreflightReady({
+    ...preflightReceipt,
+    project_state: "existing-approved-staging",
+    base_dir_state: "existing-approved-staging",
+    project_container_running: 0,
+    api_port_listener_count: 1,
+    project_volume_count: 2
+  }, valid), /no API listener/u);
   assert.throws(() => validatePreflightReceipt({ ...preflightReceipt, clock_skew_seconds: 31 }), /clock skew/u);
   assert.throws(() => validatePreflightReceipt({ ...preflightReceipt, api_port_state: "wildcard-or-public-listener" }), /API port/u);
   assert.throws(() => validatePreflightReceipt({ ...preflightReceipt, ssh_host: "staging.example.invalid" }), /forbidden receipt field/u);
@@ -482,31 +513,67 @@ function validReceipt() {
     schema_version: 1,
     target_alias: "rss-main-service-staging-1",
     environment: "staging",
+    contract_decision: "STAGING_USES_PRODUCTION_IDP",
+    contract_owner: "Habersoft RSS Operator Ekibi",
+    contract_raw_sha256: "a".repeat(64),
+    contract_normalized_sha256: "b".repeat(64),
+    application_version: RELEASE_IDENTITY.version,
     environment_marker_verified: true,
     edge_mode: "loopback-only",
     started_at: "2026-06-21T10:00:00.000Z",
     finished_at: "2026-06-21T11:00:00.000Z",
+    candidate_source_commit: "b".repeat(40),
     deployed_candidate_version: "0.1.0-ms-017",
     deployed_candidate_commit: "b".repeat(40),
     candidate_package_sha256: "c".repeat(64),
     candidate_image_id: "sha256:" + "2".repeat(64),
+    candidate_runtime_image_env_sha256: "4".repeat(64),
     previous_version: "0.1.0-ms-016",
+    previous_source_commit: "a".repeat(40),
     previous_commit: "a".repeat(40),
     previous_package_sha256: "d".repeat(64),
     previous_image_id: "sha256:" + "1".repeat(64),
+    previous_runtime_image_env_sha256: "5".repeat(64),
     master_release: RELEASE_IDENTITY.masterRelease,
     master_hash: RELEASE_IDENTITY.masterSha256,
     master_count: RELEASE_IDENTITY.masterActiveMarkdownCount,
     migration_inventory: [...EXPECTED_MIGRATIONS],
+    strict_preflight_passed: true,
+    capacity_gate_passed: true,
+    package_pair_compatibility_passed: true,
     backup_sha256: "e".repeat(64),
+    backup_verified: true,
     restore_verified: true,
+    off_host_restore_verified: true,
+    candidate_first_deploy_passed: true,
+    candidate_initial_readiness_checks: 2,
     candidate_deploy_verified: true,
     rollback_verified: true,
+    rollback_readiness_checks: 2,
+    rollback_sentinel_preserved: true,
     roll_forward_verified: true,
+    roll_forward_readiness_checks: 2,
+    roll_forward_sentinel_preserved: true,
     final_active_version: "0.1.0-ms-017",
+    final_active_source_commit: "b".repeat(40),
     worker_scheduler_verified: true,
+    sentinel_verified: true,
+    sentinel_alias_sha256: "6".repeat(64),
+    sentinel_expected_counts: {
+      feeds: 1,
+      site_feeds: 1,
+      entries: 1,
+      entry_details: 1,
+      agent_feed_check_events: 1,
+      agent_runtime_status: 1
+    },
+    current_pointer: "candidate",
+    previous_pointer: "0.1.0-ms-016",
+    final_services_running: true,
     public_ports_verified: true,
+    edge_integration: "not_exercised",
     production_touched: false,
+    artifact_published: false,
     dns_changed: false,
     tls_changed: false,
     cyberpanel_changed: false,
@@ -536,6 +603,15 @@ function validPreflightReceipt() {
     docker_available: true,
     compose_v2_available: true,
     docker_noninteractive: true,
+    project_container_total: 0,
+    project_container_running: 0,
+    project_published_count: 0,
+    project_volume_count: 0,
+    project_network_count: 0,
+    api_port_listener_count: 0,
+    api_port_loopback_count: 0,
+    api_port_wildcard_count: 0,
+    api_port_other_count: 0,
     project_state: "absent",
     api_port_state: "available",
     base_dir_state: "absent-parent-ready",
