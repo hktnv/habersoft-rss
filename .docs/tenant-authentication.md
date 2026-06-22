@@ -69,9 +69,9 @@ Root cause `OPERATOR_JWKS_CONFIG_INVALID` olarak siniflandirildi: staging extern
 
 MS-017C1A staging IdP karar kapisi bu sonuca ek sinir koyar: `auth-staging.habersoft.com` su an main-service icin approved HTTPS IdP contract'i degil, remote host tarafindan HTTP port 3000 uzerinden erisilebilen upstream JWKS uygulamasi olarak siniflandirildi. Staging issuer, audience, scope, token acquisition ve key rotation sozlesmesi authoritative olarak saglanmadan main-service issuer/JWKS allowlist'i genisletilmez.
 
-Credential hygiene: external staging env degeri onayli secret kanali disinda paylasildigi icin staging secrets rotate edilmeden JWKS readiness retry yapilmaz. Bu kural tenantAuth readiness davranisini degistirmez; HTTP JWKS, TLS bypass, local fixture veya stale/empty cache kabul edilmez.
+Credential hygiene: staging credential set MS-017C1A-R kapsaminda rotate edilip remote canonical env uzerinde dogrulandi; onceki exposure denylist artik readiness retry icin bagimsiz blocker degildir. Bu kural tenantAuth readiness davranisini degistirmez; HTTP JWKS, TLS bypass, local fixture veya stale/empty cache kabul edilmez.
 
-MS-017C1A-R sonucunda rotated staging credential set dogrulandi ve remote canonical env atomik olarak yenilendi. Bu yalniz credential hygiene gate'ini kapatir; staging HTTPS JWKS edge, issuer/audience/scope/token acquisition ve authoritative IdP ownership contract'i eksik kaldigi icin tenantAuth readiness retry hala bloke durumdadir.
+MS-017C1A-R2 sonucunda package-derived image binding de dogrulandi ve shared staging env image secmez hale geldi. Staging HTTPS JWKS edge, issuer/audience/scope/token acquisition ve authoritative IdP ownership contract'i eksik kaldigi icin tenantAuth readiness retry hala bloke durumdadir.
 
 ## Local Fixture
 

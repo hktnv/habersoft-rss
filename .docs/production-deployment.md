@@ -8,7 +8,7 @@ Bu belge MS-016 ile uygulanmis production deployment package'inin single-host Co
 
 - Master Deployment View: `../../.md/master/23-uretim-deployment-gorunumu.md`
 - Main-service DEV leaf: `../../.md/sub-docs/main-service/13-uretim-deployment-ve-release-paketleme-tasarimi.md`
-- Application version: `0.1.0-ms-016`
+- Application version: `0.1.0-ms-017`
 - Master baseline: `rss-habersoft-master-v12`
 - Master SHA-256: `df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430`
 
@@ -25,6 +25,10 @@ Production Compose service inventory:
 - `main-service-worker`
 
 `tenant-auth-jwks-fixture`, source bind mount, debug/admin/dashboard service, public PostgreSQL portu, public Redis portu ve public worker portu production Compose icinde yoktur.
+
+## Config ve Image Identity
+
+Shared env dosyasi config ve secret inventory'sini tasir; `MAIN_SERVICE_IMAGE` shared env icinde bulunmaz. Release package image artifact'i load/inspect edildikten sonra `runtime-image.env` icine `MAIN_SERVICE_IMAGE=sha256:<loaded-image-id>` olarak yazilir. Compose her zaman shared env ve release-local runtime image env dosyasini birlikte alir.
 
 ## Network ve Portlar
 
@@ -44,7 +48,7 @@ Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Reque
 
 Package verified. Production rollout yapilmadi. DNS/TLS/CyberPanel live configuration degistirilmedi. Staging handoff MS-017 kapsamindadir.
 
-MS-017 A asamasinda staging safety tooling hazirlanmistir, ancak onayli staging target/host-key/marker bulunmadigi icin staging deployment veya rollback tatbikati yapilmamistir. Production runtime ve edge siniri degismemistir.
+MS-017C1A-R2 asamasinda package-derived image binding remote config-only proof'tan gecmistir. API/worker/PostgreSQL/Redis baslatilmamis, migration/readiness retry/rollback/roll-forward veya current symlink promotion yapilmamistir. Production runtime ve edge siniri degismemistir.
 
 ## Guvenli Troubleshooting
 

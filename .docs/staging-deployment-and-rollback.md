@@ -10,6 +10,8 @@ Remote staging preflight: `Passed`
 
 First candidate staging attempt: `Failed at tenant JWKS readiness`
 
+Package-derived image binding: `Passed`
+
 Staging deployment acceptance: `Not accepted`
 
 Rollback drill: `Not executed`
@@ -24,11 +26,13 @@ MS-017C1 remote failed-state recheck: marker verified, project containers `0`, r
 
 MS-017C1A staging IdP decision gate: `auth-staging.habersoft.com` icin operator tarafindan gosterilen JWKS kaniti yalniz HTTP port 3000 upstream'in `{ "keys": [...] }` biciminde RS256 public JWKS sundugunu kanitlar. Local operator network bu hostu cozemedi; approved remote host HTTP port 3000 uzerinden valid JWKS gordu; HTTPS explicit port TLS handshake failed, HTTPS edge 443 unavailable ve candidate image default network `auth-staging` DNS'ini cozemedi. Canonical production IdP `https://auth.habersoft.com/.well-known/jwks.json` local, remote host ve candidate image tarafinda HTTPS/JWKS shape kontrollerinden gecti.
 
-MS-017C1A decision outcome: `AUTH_STAGING_HTTP_UPSTREAM_ONLY`. Staging issuer/audience/scope/token-acquisition contract bulunmadi; HTTPS edge ve staging IdP ownership operator/auth-service tarafinda pending. Ayrica external `staging.env` paylasim kanali nedeniyle staging credentials exposed kabul edilir ve `POSTGRES_PASSWORD`, `DATABASE_URL` credential component'i, `TENANT_RATE_LIMIT_KEY_SECRET` ve `AGENT_KEY` rotate edilmeden readiness retry yapilmaz. Bu task staging env rewrite, secret rotation, app project start, migration, sentinel, backup/restore, rollback/roll-forward veya current symlink promotion yapmadi.
+MS-017C1A decision outcome: `AUTH_STAGING_HTTP_UPSTREAM_ONLY`. Staging issuer/audience/scope/token-acquisition contract bulunmadi; HTTPS edge ve staging IdP ownership operator/auth-service tarafinda pending. Bu task staging env rewrite, secret rotation, app project start, migration, sentinel, backup/restore, rollback/roll-forward veya current symlink promotion yapmadi.
 
 MS-017C1A-R credential rotation gate: rotated external staging credential set no-disclosure denylist proof'tan gecti. Local ve remote canonical env kontrolleri DB credential component'i, tenant rate-limit HMAC secret'i ve Agent key icin onceki compromised degerlerin artik bulunmadigini; `POSTGRES_PASSWORD` ile `DATABASE_URL` password component'inin tutarli oldugunu dogruladi. Canonical release env atomik olarak yenilendi ve mode `0600` olarak dogrulandi. Preserved PostgreSQL volume, yalniz `postgres` servisi gecici baslatilarak rotated role credential ile TCP auth uzerinden read-only `select 1` kanitini verdi; API, worker ve Redis baslatilmadi. Migration, sentinel, backup, rollback, roll-forward, `current` symlink promotion, production deployment veya artifact publication yapilmadi.
 
-MS-017C1A-R input-integrity sonucu: `MAIN_SERVICE_IMAGE` halen MS-017 candidate image identity yerine master documentation hash class'i olarak siniflandi ve operator duzeltmesi bekliyor. Staging IdP/JWKS karari degismedi: `AUTH_STAGING_HTTP_UPSTREAM_ONLY`; HTTPS JWKS edge ve authoritative staging IdP contract eksik oldugu icin remote readiness retry ve full staging deployment yapilmadi.
+MS-017C1A-R input-integrity sonucu: rotated staging credential set dogrulandi, fakat `MAIN_SERVICE_IMAGE` halen shared staging env icinde operator-managed input olarak kaldigi icin image identity gate'i kapanmamisti. Staging IdP/JWKS karari degismedi: `AUTH_STAGING_HTTP_UPSTREAM_ONLY`; HTTPS JWKS edge ve authoritative staging IdP contract eksik oldugu icin remote readiness retry ve full staging deployment yapilmadi.
+
+MS-017C1A-R2 package image-binding sonucu: `MAIN_SERVICE_IMAGE` shared `staging.env` sahibi olmaktan cikarildi. Candidate package `074d868d09c5b3d6079803480760d9e669b51826` kaynagindan uretildi, `deploy/runtime-image.env` package artifact'i olarak dogrulandi ve remote host'ta loaded image ID ile birebir eslesti. Remote shared env atomik olarak yenilendi ve `MAIN_SERVICE_IMAGE` icermedigi dogrulandi; release-local `runtime-image.env` dosyalari previous/candidate image ID'lerinden uretildi. Compose config resolution sirasi `previous -> candidate -> previous -> candidate` olarak iki env dosyasi ile gecti. API/worker/PostgreSQL/Redis baslatilmadi, migration/readiness retry/sentinel/backup/rollback/roll-forward/current symlink promotion yapilmadi.
 
 Application version remains: `0.1.0-ms-017`
 
@@ -75,7 +79,7 @@ Target descriptor scaffold'ta `approved=false` gelir. Operator dosyayi inceledik
 
 `staging-input-readiness.json` local readiness receipt'tir; remote preflight receipt degildir. Bu receipt `host_key_trust_confirmed_by_tool=false`, `remote_environment_marker_verified=false`, `remote_contact_performed=false`, `remote_mutation_performed=false` ve `deployment_performed=false` alanlarini tasir.
 
-`operator-input` mode image/package identity hazir olmadigini `image_identity_ready=false` olarak siniflandirabilir ve yine de read-only remote preflight icin input hazirligini dogrulayabilir. `deployment-ready` mode immutable digest-pinned `MAIN_SERVICE_IMAGE` ve existing production config/Compose verifier kapilarini ister.
+`operator-input` mode image/package identity'nin shared env tarafindan secilmedigini `image_identity_ready=false` olarak siniflandirir ve read-only remote preflight icin input hazirligini dogrulayabilir. `deployment-ready` mode shared env yaninda verified package `deploy/runtime-image.env` dosyasini `--runtime-image-env` ile ister; shared env icinde `MAIN_SERVICE_IMAGE` bulunursa fail-fast olur.
 
 Known_hosts inspect komutu offline calisir; `ssh-keyscan` kullanmaz, network'e cikmaz, dosyayi degistirmez ve fingerprint'i yalniz operator'un out-of-band karsilastirmasi icin gosterir.
 
@@ -167,6 +171,7 @@ Receipt host/IP, username, known_hosts path, DB URL, JWT, Agent key, rate-limit 
 ```powershell
 npm run staging:inputs:scaffold -- --output-dir <external-empty-directory> --target-alias <staging-alias> --ssh-host <operator-host> --ssh-port 22 --ssh-user <operator-user> --known-hosts-file <external-known-hosts-path> --marker-path /etc/habersoft/environment --remote-base-dir <staging-base-dir> --project-name <staging-project> --api-port 13000 --edge-mode loopback-only
 npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode operator-input
+npm run staging:inputs:verify -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --mode deployment-ready --runtime-image-env <candidate-package>/deploy/runtime-image.env
 npm run staging:known-hosts:inspect -- --target <external-path>/staging-target.json
 npm run staging:preflight -- --target $env:STAGING_TARGET_FILE --env-file $env:STAGING_ENV_FILE --receipt <external-preflight-run-1-receipt>
 npm run staging:preflight -- --target $env:STAGING_TARGET_FILE --env-file $env:STAGING_ENV_FILE --receipt <external-preflight-run-2-receipt>
@@ -186,8 +191,9 @@ MS-017 completion requires:
 - approved non-production staging target descriptor,
 - pinned known_hosts file for the target,
 - pre-created remote environment marker with exact `staging` value,
-- external staging env file,
+- external staging env file without `MAIN_SERVICE_IMAGE`,
 - previous and candidate image-included release packages,
+- candidate package `deploy/runtime-image.env`,
 - remote Docker/Compose availability through the deploy user.
 
-MS-017B read-only target preflight is verified for target alias `habersoft-rss-staging-alias`. Staging deployment, rollback and roll-forward remain unverified until MS-017C executes with explicit candidate/previous package inputs and operator approval.
+MS-017B read-only target preflight is verified for target alias `habersoft-rss-staging-alias`. MS-017C1A-R2 package/image binding is verified without starting the stack. Staging deployment, rollback and roll-forward remain unverified until the IdP/JWKS blocker is resolved and MS-017C executes with explicit candidate/previous package inputs and operator approval.
