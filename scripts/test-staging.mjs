@@ -13,6 +13,10 @@ import {
   validatePreflightReceipt
 } from "./staging/remote-preflight.mjs";
 import { buildRemoteDrillCommand, buildRemotePrepareCommand } from "./staging/remote-drill.mjs";
+import {
+  buildProductionIdpReadinessCommand,
+  validateProductionIdpReadinessReceipt
+} from "./staging/production-idp-readiness.mjs";
 import { assertNoVolumeDeletion, releaseDir, switchCommands } from "./staging/remote-layout.mjs";
 import { validateReceipt } from "./staging/receipt.mjs";
 import { loadEnvFile, stagingEnvFromTemplate, validateStagingEnv } from "./staging/env-inputs.mjs";
@@ -110,6 +114,26 @@ try {
   assert.doesNotThrow(() => assertNoVolumeDeletion(remoteDrillCommand));
   assert.doesNotMatch(remoteDrillCommand, /StrictHostKeyChecking=no|sshpass|docker compose down -v|--volumes|system prune|redis-cli flush/u);
 
+  const productionIdpCommand = buildProductionIdpReadinessCommand({
+    target: valid,
+    manifest: productionIdpManifest(),
+    candidatePackageSha256: "b319c5daf031332f0a68b35774d58f537dd580cba279472a0d270b1a1c5fb082",
+    archiveSha256: "7".repeat(64),
+    remoteNames: {
+      candidateArchive: "ms017c1a3r-candidate.tar",
+      sharedEnv: "ms017c1a3r-staging.env"
+    }
+  });
+  assert(productionIdpCommand.indexOf("marker_path=") < productionIdpCommand.indexOf("collect_counts before"));
+  assert.match(productionIdpCommand, /https:\/\/auth\.habersoft\.com\/\.well-known\/jwks\.json/u);
+  assert.match(productionIdpCommand, /probe_candidate_jwks bridge candidate_default_network/u);
+  assert.match(productionIdpCommand, /probe_candidate_jwks "\$\{compose_project\}_default" candidate_project_network/u);
+  assert.match(productionIdpCommand, /chmod 600 "\$shared_tmp"/u);
+  assert.match(productionIdpCommand, /safe_stop/u);
+  assert.match(productionIdpCommand, /worker tenant-auth-env-present/u);
+  assert.doesNotThrow(() => assertNoVolumeDeletion(productionIdpCommand));
+  assert.doesNotMatch(productionIdpCommand, /docker compose down -v|--volumes|system prune|redis-cli flush|pg_dump|pg_restore|ln -sfn/u);
+
   const receipt = validReceipt();
   assert.doesNotThrow(() => validateReceipt(receipt));
   expectReceiptFailure({ master_hash: "bad" }, "master hash");
@@ -156,6 +180,19 @@ try {
     ...secondPreflightReceipt,
     project_state: "existing-approved-staging"
   }), /stable fields/u);
+
+  const productionIdpReceipt = validProductionIdpReadinessReceipt();
+  assert.doesNotThrow(() => validateProductionIdpReadinessReceipt(productionIdpReceipt));
+  assert.throws(() => validateProductionIdpReadinessReceipt({ ...productionIdpReceipt, sentinel_written: true }), /sentinel_written/u);
+  assert.throws(() => validateProductionIdpReadinessReceipt({
+    ...productionIdpReceipt,
+    candidate_project_network_jwks_probe: { ...productionIdpReceipt.candidate_project_network_jwks_probe, status: "failed" }
+  }), /candidate project network JWKS/u);
+  const productionIdpReceiptFile = path.join(temp, "production-idp-readiness-receipt.json");
+  writeFileSync(productionIdpReceiptFile, `${JSON.stringify(productionIdpReceipt, null, 2)}\n`);
+  const productionIdpVerifyResult = runNode(["scripts/staging-deployment.mjs", "receipt:verify", "--receipt", productionIdpReceiptFile]);
+  assert.equal(productionIdpVerifyResult.status, 0, productionIdpVerifyResult.stderr);
+  assert.match(productionIdpVerifyResult.stdout, /production-idp-readiness-receipt-verify: ok/u);
 
   const previous = manifest("0.1.0-ms-016", "a".repeat(40), "sha256:" + "1".repeat(64));
   const candidate = manifest("0.1.0-ms-017", "b".repeat(40), "sha256:" + "2".repeat(64));
@@ -540,6 +577,123 @@ function manifest(version, commit, imageId) {
     services: [...EXPECTED_SERVICES],
     image: { included: true, id: imageId, reference: `main-service-app:${version}` },
     runtime_image_env: { included: true, path: "deploy/runtime-image.env", key: "MAIN_SERVICE_IMAGE", image_id: imageId, sha256: "9".repeat(64) }
+  };
+}
+
+function productionIdpManifest() {
+  return {
+    version: RELEASE_IDENTITY.version,
+    status: "Staging Adayi",
+    source_commit: "074d868d09c5b3d6079803480760d9e669b51826",
+    master_release: RELEASE_IDENTITY.masterRelease,
+    master_sha256: RELEASE_IDENTITY.masterSha256,
+    master_active_markdown_count: RELEASE_IDENTITY.masterActiveMarkdownCount,
+    migrations: [...EXPECTED_MIGRATIONS],
+    public_routes: [...EXPECTED_PUBLIC_ROUTES],
+    services: [...EXPECTED_SERVICES],
+    image: {
+      included: true,
+      id: "sha256:fdeb82c314b8f5af0f6e0fca572ef986d8b311449503389691950f0a4e940919",
+      reference: "main-service-app:0.1.0-ms-017"
+    },
+    runtime_image_env: {
+      included: true,
+      path: "deploy/runtime-image.env",
+      key: "MAIN_SERVICE_IMAGE",
+      image_id: "sha256:fdeb82c314b8f5af0f6e0fca572ef986d8b311449503389691950f0a4e940919",
+      sha256: "b0dde9479c9fbe64c00f86cb439716207795f8f793df81c0fcb37f1bb449d873"
+    }
+  };
+}
+
+function validProductionIdpReadinessReceipt() {
+  return {
+    schema_version: 1,
+    receipt_type: "remote-production-idp-readiness-only",
+    target_alias: "rss-main-service-staging-1",
+    environment: "staging",
+    edge_mode: "loopback-only",
+    started_at: "2026-06-22T10:00:00.000Z",
+    finished_at: "2026-06-22T10:02:00.000Z",
+    idp_decision: "STAGING_USES_PRODUCTION_IDP",
+    idp_issuer: "https://auth.habersoft.com",
+    idp_jwks_url: "https://auth.habersoft.com/.well-known/jwks.json",
+    contract_owner: "Habersoft RSS Operatör Ekibi",
+    contract_status: "ONAYLANDI & AKTİF",
+    contract_raw_sha256: "ba83f81e86502c93b5f54e5b50bc178df295305ecd840d51d6a1a0f8da7935aa",
+    contract_lf_normalized_sha256: "e8c3746dd58b1ba511c6a3c09eac574fa0a73017fca7524ae8657ac4b6839a60",
+    candidate_version: RELEASE_IDENTITY.version,
+    candidate_source_commit: "074d868d09c5b3d6079803480760d9e669b51826",
+    candidate_package_sha256: "b319c5daf031332f0a68b35774d58f537dd580cba279472a0d270b1a1c5fb082",
+    candidate_image_id: "sha256:fdeb82c314b8f5af0f6e0fca572ef986d8b311449503389691950f0a4e940919",
+    runtime_image_env_sha256: "b0dde9479c9fbe64c00f86cb439716207795f8f793df81c0fcb37f1bb449d873",
+    master_release: RELEASE_IDENTITY.masterRelease,
+    master_hash: RELEASE_IDENTITY.masterSha256,
+    master_count: RELEASE_IDENTITY.masterActiveMarkdownCount,
+    local_jwks_probe: { status: "ok", https: true, http_status: 200, key_count: 1, rs256_key_count: 1 },
+    remote_host_jwks_probe: { status: "ok", http_status: 200, bytes: 442, key_count: 1, rs256_key_count: 1 },
+    candidate_default_network_jwks_probe: { status: "ok", key_count: 1, rs256_key_count: 1 },
+    candidate_project_network_jwks_probe: { status: "ok", key_count: 1, rs256_key_count: 1 },
+    remote_shared_env_update: {
+      updated: true,
+      mode: "600",
+      main_service_image_absent: true,
+      jwks_url_verified: true
+    },
+    data_services: {
+      postgres: "up",
+      redis: "up",
+      postgres_role_synchronized: true,
+      volumes_preserved: true,
+      final_project_volume_count: 2
+    },
+    migrate_noop_verified: true,
+    migration_count: EXPECTED_MIGRATIONS.length,
+    migration_inventory: [...EXPECTED_MIGRATIONS],
+    api_readiness: {
+      rounds: [1, 2].map((round) => ({
+        round,
+        live_status: 200,
+        ready_status: 200,
+        postgres: "up",
+        redis: "up",
+        tenant_auth: "up"
+      }))
+    },
+    worker_role_isolation: {
+      worker_health_verified: true,
+      scheduler_verified: true,
+      global_concurrency: 1,
+      local_concurrency: 1,
+      tenant_auth_env_absent: true,
+      tenant_auth_logs_absent: true,
+      raw_key_material_logs_absent: true
+    },
+    auth_boundary_smoke: {
+      unknown_route_status: 404,
+      tenant_unauth_status: 401,
+      agent_unauth_status: 401
+    },
+    safe_stop: {
+      final_running_project_containers: 0,
+      final_api_port_listeners: 0,
+      current_symlink_promoted: false,
+      final_active_staging_service: "none",
+      volumes_preserved: true
+    },
+    sentinel_written: false,
+    backup_restore_performed: false,
+    rollback_performed: false,
+    roll_forward_performed: false,
+    current_symlink_promoted: false,
+    final_active_staging_service: "none",
+    production_touched: false,
+    artifact_published: false,
+    git_tag_created: false,
+    github_release_created: false,
+    dns_changed: false,
+    tls_changed: false,
+    cyberpanel_changed: false
   };
 }
 

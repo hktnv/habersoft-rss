@@ -26,6 +26,7 @@
     "production:smoke": "node scripts/production-smoke.mjs",
     "staging:preflight": "node scripts/staging-deployment.mjs preflight",
     "staging:deploy": "node scripts/staging-deployment.mjs deploy",
+    "staging:production-idp-readiness": "node scripts/staging-deployment.mjs production-idp-readiness",
     "staging:verify": "node scripts/staging-deployment.mjs verify",
     "staging:rollback": "node scripts/staging-deployment.mjs rollback",
     "staging:roll-forward": "node scripts/staging-deployment.mjs roll-forward",

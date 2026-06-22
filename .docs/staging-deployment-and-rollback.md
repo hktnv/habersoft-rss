@@ -12,6 +12,8 @@ First candidate staging attempt: `Failed at tenant JWKS readiness`
 
 Package-derived image binding: `Passed`
 
+Production IdP readiness-only proof: `Passed`
+
 Staging deployment acceptance: `Not accepted`
 
 Rollback drill: `Not executed`
@@ -35,6 +37,8 @@ MS-017C1A-R input-integrity sonucu: rotated staging credential set dogrulandi, f
 MS-017C1A-R2 package image-binding sonucu: `MAIN_SERVICE_IMAGE` shared `staging.env` sahibi olmaktan cikarildi. Candidate package `074d868d09c5b3d6079803480760d9e669b51826` kaynagindan uretildi, `deploy/runtime-image.env` package artifact'i olarak dogrulandi ve remote host'ta loaded image ID ile birebir eslesti. Remote shared env atomik olarak yenilendi ve `MAIN_SERVICE_IMAGE` icermedigi dogrulandi; release-local `runtime-image.env` dosyalari previous/candidate image ID'lerinden uretildi. Compose config resolution sirasi `previous -> candidate -> previous -> candidate` olarak iki env dosyasi ile gecti. API/worker/PostgreSQL/Redis baslatilmadi, migration/readiness retry/sentinel/backup/rollback/roll-forward/current symlink promotion yapilmadi.
 
 MS-017C1A-3V contract-pinned validator sonucu: authoritative external staging authorization contract accepted durumundadir ve decision exact `STAGING_USES_PRODUCTION_IDP` olarak pinlenmistir. `scripts/staging/env-inputs.mjs`, yalniz `TENANT_AUTH_JWKS_URL=https://auth.habersoft.com/.well-known/jwks.json` alanina, `deploy/staging/idp-contract-policy.json` projection'i ile hash/field-verified external contract saglandiginda izin verir. Bu genel production identifier bypass'i degildir; `auth-staging.habersoft.com`, HTTP/local fixture ve diger alanlardaki production identifier'lar rejected kalir. Real `staging.env` mutate edilmedi, remote readiness proof calistirilmadi ve application auth runtime degismedi.
+
+MS-017C1A-3R production IdP readiness-only sonucu: active staging IdP decision `STAGING_USES_PRODUCTION_IDP` olarak kaldi ve selected IdP `https://auth.habersoft.com` oldu. Canonical production JWKS `https://auth.habersoft.com/.well-known/jwks.json` local host, remote host, candidate image default bridge network ve candidate image target project network katmanlarinda strict HTTPS/JWKS shape proof'tan gecti. Candidate identity source commit `074d868d09c5b3d6079803480760d9e669b51826`, package SHA-256 `b319c5daf031332f0a68b35774d58f537dd580cba279472a0d270b1a1c5fb082`, image ID `sha256:fdeb82c314b8f5af0f6e0fca572ef986d8b311449503389691950f0a4e940919` ve runtime-image.env SHA-256 `b0dde9479c9fbe64c00f86cb439716207795f8f793df81c0fcb37f1bb449d873` ile dogrulandi. Remote shared staging env atomik olarak yenilendi, mode `0600` dogrulandi ve `MAIN_SERVICE_IMAGE` shared env icinde bulunmadi. Preserved PostgreSQL/Redis volumes uzerinde PostgreSQL, Redis, migrate current/no-op, API ve worker gecici olarak baslatildi; `/health/live` ve `/health/ready` iki tur 200 dondu ve readiness govdesinde `tenantAuth=up`, `postgres=up`, `redis=up` kanitlandi. Worker tenant-auth/JWKS lifecycle baslatmadi, scheduler/worker health dogrulandi ve non-mutating auth boundary smoke `404/401/401` ile gecti. Sentinel yazilmadi, backup/restore yapilmadi, rollback/roll-forward denenmedi, `current` symlink promote edilmedi, full staging deployment kabul edilmedi, production deployment ve artifact publication yapilmadi. Final active staging service `none`, running project container `0`, API listener `0` ve volumes preserved olarak kapandi.
 
 Application version remains: `0.1.0-ms-017`
 
@@ -182,6 +186,7 @@ npm run staging:known-hosts:inspect -- --target <external-path>/staging-target.j
 npm run staging:preflight -- --target $env:STAGING_TARGET_FILE --env-file $env:STAGING_ENV_FILE --idp-contract $env:STAGING_IDP_CONTRACT_FILE --receipt <external-preflight-run-1-receipt>
 npm run staging:preflight -- --target $env:STAGING_TARGET_FILE --env-file $env:STAGING_ENV_FILE --idp-contract $env:STAGING_IDP_CONTRACT_FILE --receipt <external-preflight-run-2-receipt>
 node scripts/staging-deployment.mjs receipt:compare --receipt-a <external-preflight-run-1-receipt> --receipt-b <external-preflight-run-2-receipt> --output <external-preflight-comparison-receipt>
+npm run staging:production-idp-readiness -- --target $env:STAGING_TARGET_FILE --env-file $env:STAGING_ENV_FILE --candidate-package <candidate-package> --candidate-package-sha256 <candidate-package-sha256> --preflight-receipt <external-preflight-receipt> --idp-contract $env:STAGING_IDP_CONTRACT_FILE --receipt <external-readiness-receipt>
 npm run staging:deploy -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <candidate-package> --idp-contract <external-staging-idp-contract.md> --confirm-environment staging
 npm run staging:rollback -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <previous-package> --confirm-release 0.1.0-ms-016
 npm run staging:roll-forward -- --target <external-path>/staging-target.json --env-file <external-path>/staging.env --package <candidate-package> --confirm-release 0.1.0-ms-017
@@ -203,4 +208,4 @@ MS-017 completion requires:
 - candidate package `deploy/runtime-image.env`,
 - remote Docker/Compose availability through the deploy user.
 
-MS-017B read-only target preflight is verified for target alias `habersoft-rss-staging-alias`. MS-017C1A-R2 package/image binding is verified without starting the stack. Staging deployment, rollback and roll-forward remain unverified until the IdP/JWKS blocker is resolved and MS-017C executes with explicit candidate/previous package inputs and operator approval.
+MS-017B read-only target preflight is verified for target alias `habersoft-rss-staging-alias`. MS-017C1A-R2 package/image binding is verified. MS-017C1A-3R production IdP readiness-only proof is passed with canonical production JWKS, but full staging deployment, backup/restore, rollback and roll-forward remain unexecuted until the bounded MS-017C drill runs with explicit candidate/previous package inputs and operator approval.
