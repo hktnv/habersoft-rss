@@ -61,6 +61,12 @@ Tenant auth hatalari 401/403/503 olarak rate-limit guard'indan once sonlanir ve 
 
 `/health/ready`, PostgreSQL, Redis ve tenant auth JWKS cache hazir oldugunda `ready` doner. JWKS hic basariyla yuklenmemisse readiness `not_ready` olur.
 
+## Staging JWKS Incident Note
+
+MS-017C1 bu runtime davranisini degistirmedi. Approved staging ilk candidate attempt'inde API live kaldi, fakat configured JWKS endpoint DNS'te cozulmedigi icin ilk JWKS cache yuklenemedi ve `/health/ready` tenantAuth `down` durumuyla 503 dondu.
+
+Root cause `OPERATOR_JWKS_CONFIG_INVALID` olarak siniflandirildi: staging external env icindeki JWKS URL'i HTTPS ve canonical path tasisa da canonical auth hostname sinirinda degildi. Canonical auth JWKS endpoint local, remote host, candidate image default bridge ve temporary target-project network probe'larinda basariyla dogrulandi. Remediation operator-owned external env duzeltmesidir; TLS bypass, HTTP JWKS, local fixture, hard-coded key veya readiness bypass kullanilmaz.
+
 ## Local Fixture
 
 Compose default topolojisinde `tenant-auth-jwks-fixture` servisi kullanilir. Bu servis:

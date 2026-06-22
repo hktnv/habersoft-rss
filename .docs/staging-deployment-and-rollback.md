@@ -8,19 +8,23 @@ Bu belge MS-017 kapsaminda gercek staging deployment, target safety gate, immuta
 
 Remote staging preflight: `Passed`
 
-Staging deployment: `Not executed`
+First candidate staging attempt: `Failed at tenant JWKS readiness`
+
+Staging deployment acceptance: `Not accepted`
 
 Rollback drill: `Not executed`
 
 MS-017B approved staging target read-only remote preflight, target alias `habersoft-rss-staging-alias` icin 2026-06-22 UTC tarihinde iki kez basariyla calistirildi. Strict SSH host identity operator-owned pinned known_hosts ile dogrulandi ve remote environment marker exact `staging` olarak ilk semantic gate'te verified edildi.
 
-Remote host Linux `linux/amd64` olarak siniflandirildi; Docker Engine ve Docker Compose v2 noninteractive olarak available. Target project state `absent`, API port state `available`, base-dir state `existing-empty-approved`, filesystem state `read-write`, edge mode `loopback-only` / edge check `not_exercised`. Iki run icin before/after target-relevant inventory unchanged ve external preflight receipts + comparison verifier passed.
+MS-017C ilk candidate attempt, version `0.1.0-ms-017` icin migrate exit 0, `GET /health/live` 200, `GET /health/ready` 503 sonucuyla kontrollu durdu. Readiness failure secret-free olarak `tenantAuth=down / JWKS unavailable` siniflandirildi; worker health passed. Sentinel yazilmadi, backup alinmadi, rollback/roll-forward denenmedi, `current` symlink candidate'a promote edilmedi, production'a dokunulmadi ve artifact publication yapilmadi.
 
-MS-017 remote staging deployment, package/image transfer, Docker resource mutation, rollback, roll-forward, production deployment, artifact publication, Git tag, GitHub Release, DNS/TLS/CyberPanel live change bu degisiklikte yapilmadi.
+MS-017C1 root cause: `OPERATOR_JWKS_CONFIG_INVALID`. Operator-provided JWKS config HTTPS ve canonical path tasiyordu, fakat hostname class `external-noncanonical` idi. Ayni configured endpoint local makinede, remote host namespace'te, candidate image default bridge aginda ve temporary target-project network probe'unda DNS failure verdi. Canonical auth JWKS endpoint ayni katmanlarin tamaminda HTTPS, TLS/CA, JSON parse ve RS256 signing key shape kontrollerinden gecti.
 
-Application version remains: `0.1.0-ms-016`
+MS-017C1 remote failed-state recheck: marker verified, project containers `0`, running containers `0`, API port `available`, project volumes `2`, release layout present, candidate/previous release dirs identifiable, `current` symlink absent/not promoted ve active healthy version absent. Temporary no-secret target-project network probe'u sonrasinda project network inventory before/after restored.
 
-Application status remains: `MVP Adayi - Deployment Karari Kesin / Release Paketi Dogrulandi`
+Application version remains: `0.1.0-ms-017`
+
+Application status remains: `Staging Adayi`
 
 Master baseline: `rss-habersoft-master-v12` / `df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430` / `29`
 
