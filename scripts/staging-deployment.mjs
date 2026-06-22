@@ -4,6 +4,10 @@ import { loadAndValidateTargetConfig, sanitizeTargetForReceipt } from "./staging
 import { loadReceipt, validateReceipt } from "./staging/receipt.mjs";
 import { runRemoteDrill } from "./staging/remote-drill.mjs";
 import {
+  runProductionIdpReadiness,
+  validateProductionIdpReadinessReceipt
+} from "./staging/production-idp-readiness.mjs";
+import {
   validatePreflightComparison,
   validatePreflightReceipt,
   runRemotePreflight,
@@ -21,6 +25,9 @@ try {
     case "deploy":
       deploy();
       break;
+    case "production-idp-readiness":
+      await productionIdpReadiness();
+      break;
     case "verify":
       guardedVerify();
       break;
@@ -37,7 +44,7 @@ try {
       receiptCompare();
       break;
     default:
-      fail("usage: staging-deployment <preflight|deploy|verify|rollback|roll-forward|receipt:verify|receipt:compare>");
+      fail("usage: staging-deployment <preflight|deploy|production-idp-readiness|verify|rollback|roll-forward|receipt:verify|receipt:compare>");
   }
 } catch (error) {
   fail(error.message);
@@ -108,6 +115,28 @@ function deploy() {
   }, null, 2));
 }
 
+async function productionIdpReadiness() {
+  const result = await runProductionIdpReadiness(args);
+  console.log(JSON.stringify({
+    status: "remote-production-idp-readiness-passed",
+    target_alias: result.receipt.target_alias,
+    idp_decision: result.receipt.idp_decision,
+    jwks_url: result.receipt.idp_jwks_url,
+    candidate_source_commit: result.receipt.candidate_source_commit,
+    candidate_package_sha256: result.receipt.candidate_package_sha256,
+    candidate_image_id: result.receipt.candidate_image_id,
+    local_jwks_probe: result.receipt.local_jwks_probe.status,
+    remote_host_jwks_probe: result.receipt.remote_host_jwks_probe.status,
+    candidate_default_network_jwks_probe: result.receipt.candidate_default_network_jwks_probe.status,
+    candidate_project_network_jwks_probe: result.receipt.candidate_project_network_jwks_probe.status,
+    api_ready_rounds: result.receipt.api_readiness.rounds.length,
+    final_active_staging_service: result.receipt.final_active_staging_service,
+    production_touched: false,
+    artifact_published: false,
+    receipt_file: path.basename(result.receiptFile)
+  }, null, 2));
+}
+
 function receiptVerify() {
   const receipt = loadReceipt(args.receipt);
   if (receipt.receipt_type === "remote-staging-readonly-preflight") {
@@ -118,6 +147,11 @@ function receiptVerify() {
   if (receipt.receipt_type === "remote-staging-readonly-preflight-comparison") {
     validatePreflightComparison(receipt);
     console.log("staging-preflight-comparison-verify: ok");
+    return;
+  }
+  if (receipt.receipt_type === "remote-production-idp-readiness-only") {
+    validateProductionIdpReadinessReceipt(receipt);
+    console.log("production-idp-readiness-receipt-verify: ok");
     return;
   }
   validateReceipt(receipt);
