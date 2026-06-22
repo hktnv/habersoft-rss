@@ -16,6 +16,8 @@ Script backup dump ile birlikte `<temp-backup>.metadata.json` uretir. Metadata c
 
 Backup output production host disina tasinmalidir. Gercek backup path, retention schedule ve off-host transfer operasyonel runbook kapsamindadir; bu repository secret veya production dump saklamaz.
 
+MS-018B operator modelinde backup production sunucusunda operator tarafindan tetiklenir. Source delivery yine Git-only kalir; backup artifact'i, SHA-256 kaydi ve off-host kopya Git disinda tutulur. Codex production SSH veya production backup komutu calistirmaz.
+
 ## Restore Verification
 
 ```powershell

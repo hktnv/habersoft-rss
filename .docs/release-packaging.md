@@ -39,6 +39,8 @@ Manifest application/version/status, master release/hash, production deployment 
 
 `MAIN_SERVICE_IMAGE` shared production/staging env sahibi degildir. Image identity release package tarafindan uretilir: `main-service-image.tar` load/inspect sonucundaki `sha256:<image-id>` degeri `deploy/runtime-image.env` icine yazilir ve manifest/provenance/checksum tarafindan baglanir.
 
+MS-018B production operator modeli, production icin ayni immutable image prensibini Git-only source delivery ile uygular: operator `origin/main` commit'ini sunucuda `git pull --ff-only` ile alir, image'i server-local Docker build ile exact commit label'iyle uretir ve `deploy/runtime-image.env` dosyasini build edilen image ID'den olusturur. Staging package-derived image modeli staging evidence icin devam eder; production kaydi Git commit + server-built immutable image ID uzerinden tutulur.
+
 Production Compose iki env dosyasi ile resolve edilir:
 
 ```powershell

@@ -38,6 +38,7 @@ Ayrinti gerektiginde ana envanterden devam et: [../README.md](../README.md).
 
 En cok bakilan detaylar:
 
+- [../../PRODUCTION.md](../../PRODUCTION.md)
 - [../production-deployment.md](../production-deployment.md)
 - [../release-packaging.md](../release-packaging.md)
 - [../backup-and-restore.md](../backup-and-restore.md)
@@ -48,3 +49,5 @@ En cok bakilan detaylar:
 ## Bu el kitabinin kapsam disi alanlari
 
 Bu el kitabi secret, host/IP, SSH, DNS provider, TLS private key, production receipt, raw backup veya deploy hedefi bilgisi tasimaz. Agent uygulamasinin kendi runtime implementasyonunu veya bagimsiz Tenant uygulamasinin production hazirligini tamamlanmis gibi anlatmaz.
+
+Production operator akisi Git-only'dir: source tree dogrudan sunucuya upload edilmez; operator `PRODUCTION.md` uzerinden Git pull, server-local Docker build ve Compose akisini uygular.

@@ -16,6 +16,8 @@ Bu belge MS-016 ile uygulanmis production deployment package'inin single-host Co
 
 Production package tek Linux host + Docker Engine / Docker Compose v2 modelini uygular. Dedicated `rss.habersoft.com` vhost TLS termination ve reverse proxy rolundedir. Host CyberPanel/OpenLiteSpeed ile yonetiliyorsa CyberPanel yalniz edge DNS/TLS/reverse-proxy siniridir; `main-service` runtime CyberPanel Node/app process modeliyle calismaz.
 
+MS-018B itibariyla production source acquisition Git-only operator akisidir: lokal source tree sunucuya upload edilmez; operator sunucuda `git pull --ff-only origin main` ile exact commit'i alir, Docker image'i sunucuda build eder ve generated `deploy/runtime-image.env` ile Compose'u calistirir. Codex production SSH kullanmaz; server Git/Docker/OpenLiteSpeed/TLS islemleri operator-managed kalir.
+
 Production Compose service inventory:
 
 - `postgres`
@@ -34,6 +36,8 @@ Shared env dosyasi config ve secret inventory'sini tasir; `MAIN_SERVICE_IMAGE` s
 
 API yalniz host loopback uzerinden edge'e acilir: `127.0.0.1:${API_HOST_PORT}:3000`. Worker, PostgreSQL ve Redis host port yayinlamaz. PostgreSQL ve Redis yalniz internal Docker network'te kullanilir.
 
+Same-host default port matrix, mevcut auth binding'leriyle carpismaz: auth API `127.0.0.1:3100`, auth panel `127.0.0.1:8080`, RSS API default `127.0.0.1:3200`, future RSS panel reservation `127.0.0.1:8081`. Operator production oncesi port availability'yi dogrular ve conflict varsa `API_HOST_PORT` ile OpenLiteSpeed upstream'i birlikte degistirir.
+
 Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Request body limit'i `POST /agent/entries` 5 MiB sozlesmesini kesmeyecek sekilde edge tarafinda ayarlanmalidir.
 
 ## Startup ve Readiness
@@ -47,6 +51,8 @@ Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Reque
 ## Durum
 
 Package verified. Approved staging deployment/rollback drill passed. Production rollout yapilmadi. DNS/TLS/CyberPanel live configuration degistirilmedi. Staging evidence MS-017 kapsamindadir.
+
+MS-018B Git-based operator handbook hazirlandi. Bu, backend production'in calistigi anlamina gelmez; current backend production execution operator bekliyor. Frontend implementasyonu yoktur ve `rss-panel.habersoft.com` active degildir.
 
 MS-017C1A-R2 asamasinda package-derived image binding remote config-only proof'tan gecmistir. API/worker/PostgreSQL/Redis baslatilmamis, migration/readiness retry/rollback/roll-forward veya current symlink promotion yapilmamistir. Production runtime ve edge siniri degismemistir.
 

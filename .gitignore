@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+.env.production
 coverage/
 .prisma/
 npm-debug.log*
@@ -22,3 +23,5 @@ staging-deployment-receipt.*.json
 local-staging-rehearsal-receipt.json
 local-staging-rehearsal-receipt.*.json
 local-staging-rehearsal/
+deploy/runtime-image.env
+production-git-handoff-receipt.json
