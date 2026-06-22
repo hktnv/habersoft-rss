@@ -76,6 +76,8 @@ Residual non-blocker is a bounded item outside the current MVP repository accept
 Known residual non-blockers:
 
 - production deployment decision is closed; rollout is not performed,
+- production source delivery operator guide is Git-only; backend production execution is still operator pending,
+- frontend and `rss-panel.habersoft.com` are planned and not implemented,
 - release identity alignment is verified; production rollout is not performed,
 - MS-017 staging target/preflight, production IdP readiness-only proof, full staging deployment, backup/restore, rollback and roll-forward drills passed on approved staging,
 - external registry publication is not performed,

@@ -34,6 +34,8 @@ API container icinde `3000` portunu dinler. PostgreSQL Docker network icinde `54
 
 Gercek production loopback portu bu el kitabinda hardcode edilmez; operator-owned env ve target descriptor tarafindan secilir.
 
+Current operator default'u `rss.habersoft.com` backend API icin `127.0.0.1:3200` upstream'idir. Operator port uygunlugunu production sunucusunda dogrular; conflict varsa env ve edge upstream birlikte degistirilir.
+
 ## Startup order
 
 1. PostgreSQL ve Redis baslar.
@@ -97,6 +99,7 @@ Rollback once immutable image/pointer/edge durumunu geri almayi hedefler. DB res
 ## Ayrintili operasyon belgeleri
 
 - [../production-deployment.md](../production-deployment.md)
+- [../../PRODUCTION.md](../../PRODUCTION.md)
 - [../release-packaging.md](../release-packaging.md)
 - [../backup-and-restore.md](../backup-and-restore.md)
 - [../production-rollout-runbook.md](../production-rollout-runbook.md)

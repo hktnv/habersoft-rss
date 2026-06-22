@@ -4,6 +4,8 @@
 
 Bu runbook, `main-service` icin kontrollu production rollout, dogrulama ve rollback prosedurunu secret veya vendor-private veri yazmadan anlatir. Bu belge bir production success receipt degildir; gercek basari yalniz public acceptance ve external receipt ile kaydedilir.
 
+MS-018B ile active production handoff'un kaynagi root [../PRODUCTION.md](../PRODUCTION.md) dosyasidir. Operator source'u yalniz Git uzerinden alir; lokal source upload, Codex SSH ve Codex tarafindan server Docker/OpenLiteSpeed mutation yoktur. Bu dosya daha cok gate/receipt mantigini aciklar; kopyalanabilir operator komutlari root production guide'dadir.
+
 ## Prerequisites
 
 - Latest `origin/main` uzerinde temiz worktree.
