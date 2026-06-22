@@ -9,6 +9,18 @@ export function buildSshArgs(target, remoteCommand) {
     "-o",
     `UserKnownHostsFile=${target.known_hosts_file}`,
     "-o",
+    "PasswordAuthentication=no",
+    "-o",
+    "KbdInteractiveAuthentication=no",
+    "-o",
+    "PreferredAuthentications=publickey",
+    "-o",
+    "ForwardAgent=no",
+    "-o",
+    "ClearAllForwardings=yes",
+    "-o",
+    "RequestTTY=no",
+    "-o",
     "ConnectTimeout=10",
     "-o",
     "ServerAliveInterval=10",
@@ -30,6 +42,16 @@ export function buildScpArgs(target, source, destination) {
     "-o",
     `UserKnownHostsFile=${target.known_hosts_file}`,
     "-o",
+    "PasswordAuthentication=no",
+    "-o",
+    "KbdInteractiveAuthentication=no",
+    "-o",
+    "PreferredAuthentications=publickey",
+    "-o",
+    "ForwardAgent=no",
+    "-o",
+    "ClearAllForwardings=yes",
+    "-o",
     "ConnectTimeout=10",
     "-P",
     String(target.ssh_port),
@@ -40,10 +62,17 @@ export function buildScpArgs(target, source, destination) {
 
 export function assertNoInsecureSshArgs(args) {
   const joined = args.join(" ");
-  if (/StrictHostKeyChecking=no|sshpass|password=/iu.test(joined)) {
+  if (/StrictHostKeyChecking=no|UserKnownHostsFile=(?:\/dev\/null|NUL)|sshpass|password=/iu.test(joined)) {
     throw new Error("insecure SSH option detected");
   }
-  if (!joined.includes("BatchMode=yes") || !joined.includes("StrictHostKeyChecking=yes")) {
+  if (
+    !joined.includes("BatchMode=yes")
+    || !joined.includes("StrictHostKeyChecking=yes")
+    || !joined.includes("UserKnownHostsFile=")
+    || !joined.includes("PasswordAuthentication=no")
+    || !joined.includes("KbdInteractiveAuthentication=no")
+    || !joined.includes("PreferredAuthentications=publickey")
+  ) {
     throw new Error("strict SSH options are required");
   }
 }
@@ -59,10 +88,14 @@ export function redact(text) {
     .replace(/(PASSWORD|SECRET|TOKEN|AGENT_KEY)=([^\s]+)/giu, "$1=[REDACTED]");
 }
 
-export function runSsh(target, remoteCommand) {
+export function runSsh(target, remoteCommand, options = {}) {
   const args = buildSshArgs(target, remoteCommand);
   assertNoInsecureSshArgs(args);
-  const result = spawnSync("ssh", args, { encoding: "utf8" });
+  const result = spawnSync("ssh", args, {
+    encoding: "utf8",
+    timeout: options.timeoutMs ?? 120_000,
+    maxBuffer: options.maxBuffer ?? 1024 * 1024
+  });
   return {
     status: result.status ?? 1,
     stdout: redact(result.stdout ?? ""),
