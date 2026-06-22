@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "decision": "STAGING_USES_PRODUCTION_IDP",
+  "owner": "Habersoft RSS Operat\u00f6r Ekibi",
+  "environment": "staging",
+  "consumer": "main-service",
+  "status": "ONAYLANDI & AKT\u0130F",
+  "issuer": "https://auth.habersoft.com",
+  "jwks_url": "https://auth.habersoft.com/.well-known/jwks.json",
+  "audience": "rss.habersoft.com",
+  "scope": "services:access",
+  "algorithm": "RS256",
+  "token_acquisition_owner": "Operat\u00f6r Kimlik Bilgileri",
+  "raw_sha256": "ba83f81e86502c93b5f54e5b50bc178df295305ecd840d51d6a1a0f8da7935aa",
+  "lf_normalized_sha256": "e8c3746dd58b1ba511c6a3c09eac574fa0a73017fca7524ae8657ac4b6839a60",
+  "authorization_scope": "staging-readiness-and-validation"
+}

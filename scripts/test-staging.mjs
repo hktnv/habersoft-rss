@@ -16,10 +16,15 @@ import { buildRemoteDrillCommand, buildRemotePrepareCommand } from "./staging/re
 import { assertNoVolumeDeletion, releaseDir, switchCommands } from "./staging/remote-layout.mjs";
 import { validateReceipt } from "./staging/receipt.mjs";
 import { loadEnvFile, stagingEnvFromTemplate, validateStagingEnv } from "./staging/env-inputs.mjs";
+import {
+  CONTRACT_ERROR_CODES,
+  loadVerifiedStagingIdpContract
+} from "./staging/idp-contract-policy.mjs";
 import { inspectKnownHostsForTarget } from "./staging/known-hosts.mjs";
 import { loadReadinessReceipt, validateReadinessReceipt } from "./staging/operator-receipt.mjs";
 import { compareRollbackCompatibility } from "./staging/package-pair.mjs";
 import { EXPECTED_MIGRATIONS, EXPECTED_PUBLIC_ROUTES, EXPECTED_SERVICES, RELEASE_IDENTITY } from "./release-identity.mjs";
+import { formatRuntimeImageEnv } from "./runtime-image-env.mjs";
 
 const temp = mkdtempSync(path.join(os.tmpdir(), "main-service-staging-tests-"));
 const publicKey = "AAAAC3NzaC1lZDI1NTE5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB";
@@ -162,6 +167,57 @@ try {
     rateLimitSecret: "r".repeat(32),
     agentKey: "a".repeat(32)
   });
+  const contractFile = resolveAuthoritativeContractFile();
+  const contractProjection = loadVerifiedStagingIdpContract({ idpContractFile: contractFile });
+  assert.equal(contractProjection.contract_verified, true);
+  assert.equal(contractProjection.raw_sha256, "ba83f81e86502c93b5f54e5b50bc178df295305ecd840d51d6a1a0f8da7935aa");
+  assert.equal(contractProjection.lf_normalized_sha256, "e8c3746dd58b1ba511c6a3c09eac574fa0a73017fca7524ae8657ac4b6839a60");
+  assert.equal(contractProjection.decision, "STAGING_USES_PRODUCTION_IDP");
+  assert.doesNotMatch(JSON.stringify(contractProjection), /07-staging-contract|auth-habersoft-com|[A-Za-z]:\\/u);
+
+  const contractText = readFileSync(contractFile, "utf8");
+  const lfContractFile = path.join(temp, "lf-normalized-staging-contract.md");
+  writeFileSync(lfContractFile, contractText.replace(/\r\n/gu, "\n"));
+  const lfContractProjection = loadVerifiedStagingIdpContract({ idpContractFile: lfContractFile });
+  assert.equal(lfContractProjection.raw_hash_match, false);
+  assert.equal(lfContractProjection.normalized_hash_match, true);
+  const tamperedContractFile = path.join(temp, "tampered-staging-contract.md");
+  writeFileSync(tamperedContractFile, contractText.replace("STAGING_USES_PRODUCTION_IDP", "STAGING_USES_WRONG_IDP"));
+  assert.throws(
+    () => loadVerifiedStagingIdpContract({ idpContractFile: tamperedContractFile }),
+    new RegExp(CONTRACT_ERROR_CODES.hashMismatch, "u")
+  );
+
+  const productionJwksEnv = {
+    ...validEnv,
+    TENANT_AUTH_JWKS_URL: "https://auth.habersoft.com/.well-known/jwks.json"
+  };
+  assert.throws(
+    () => validateStagingEnv(productionJwksEnv, valid, "operator-input", { idpContractFile: "" }),
+    new RegExp(CONTRACT_ERROR_CODES.required, "u")
+  );
+  const contractEnvResult = validateStagingEnv(productionJwksEnv, valid, "operator-input", { idpContractFile: contractFile });
+  assert.equal(contractEnvResult.idpContract.contract_verified, true);
+  assert.equal(contractEnvResult.idpContract.jwks_url, productionJwksEnv.TENANT_AUTH_JWKS_URL);
+  const contractDeploymentResult = validateStagingEnv(productionJwksEnv, valid, "deployment-ready", { idpContractFile: contractFile });
+  assert.equal(contractDeploymentResult.packageImageRequired, true);
+  assert.equal(contractDeploymentResult.idpContract.contract_verified, true);
+  assert.throws(
+    () => validateStagingEnv({ ...validEnv, TENANT_AUTH_JWKS_URL: "https://auth.habersoft.com/.well-known/other.json" }, valid, "operator-input", { idpContractFile: contractFile }),
+    new RegExp(`${CONTRACT_ERROR_CODES.jwksMismatch}|${CONTRACT_ERROR_CODES.productionIdentifierForbidden}`, "u")
+  );
+  assert.throws(
+    () => validateStagingEnv({ ...validEnv, TENANT_AUTH_JWKS_URL: "https://auth.habersoft.com:444/.well-known/jwks.json" }, valid, "operator-input", { idpContractFile: contractFile }),
+    new RegExp(`${CONTRACT_ERROR_CODES.jwksMismatch}|${CONTRACT_ERROR_CODES.productionIdentifierForbidden}`, "u")
+  );
+  assert.throws(
+    () => validateStagingEnv({ ...validEnv, TENANT_AUTH_JWKS_URL: "https://auth-staging.habersoft.com/.well-known/jwks.json" }, valid),
+    new RegExp(CONTRACT_ERROR_CODES.jwksMismatch, "u")
+  );
+  assert.throws(
+    () => validateStagingEnv({ ...productionJwksEnv, BULLMQ_PREFIX: "main-service-production" }, valid, "operator-input", { idpContractFile: contractFile }),
+    /BULLMQ_PREFIX|STAGING_PRODUCTION_IDENTIFIER_FORBIDDEN/u
+  );
   const operatorEnvResult = validateStagingEnv(validEnv, valid, "operator-input");
   assert.equal(operatorEnvResult.imageIdentityReady, false);
   assert.equal(operatorEnvResult.legacyImageFieldPresent, false);
@@ -278,6 +334,7 @@ try {
   })));
   const verifyResult = runNode(["scripts/staging-operator-inputs.mjs", "verify", "--target", verifyTargetFile, "--env-file", verifyEnvFile]);
   assert.equal(verifyResult.status, 0, verifyResult.stderr);
+  assert.equal(parseCommandJson(verifyResult.stdout, "staging-operator-inputs-verified").idp_contract_verified, false);
   const missingRuntimeResult = runNode(["scripts/staging-operator-inputs.mjs", "verify", "--target", verifyTargetFile, "--env-file", verifyEnvFile, "--mode", "deployment-ready"]);
   assert.notEqual(missingRuntimeResult.status, 0);
   assert.match(missingRuntimeResult.stderr, /runtime-image-env/u);
@@ -286,7 +343,60 @@ try {
   assert.equal(readiness.host_key_trust_confirmed_by_tool, false);
   assert.equal(readiness.remote_environment_marker_verified, false);
   assert.equal(readiness.image_identity_ready, false);
+  assert.equal(readiness.idp_contract_verified, false);
   assert.doesNotThrow(() => validateReadinessReceipt(readiness));
+  const verifyProductionEnvFile = path.join(verifyDir, "staging-production-idp.env");
+  writeFileSync(verifyProductionEnvFile, formatTestEnv({
+    ...stagingEnvFromTemplate(verifyTarget, {
+      postgresPassword: "v".repeat(32),
+      rateLimitSecret: "w".repeat(40),
+      agentKey: "x".repeat(40)
+    }),
+    TENANT_AUTH_JWKS_URL: "https://auth.habersoft.com/.well-known/jwks.json"
+  }));
+  const missingContractVerify = runNode([
+    "scripts/staging-operator-inputs.mjs",
+    "verify",
+    "--target", verifyTargetFile,
+    "--env-file", verifyProductionEnvFile,
+    "--idp-contract", ""
+  ]);
+  assert.notEqual(missingContractVerify.status, 0);
+  assert.match(missingContractVerify.stderr, new RegExp(CONTRACT_ERROR_CODES.required, "u"));
+  assert.doesNotMatch(missingContractVerify.stderr, /07-staging-contract|auth-habersoft-com|postgresql:\/\//u);
+
+  const contractVerifyResult = runNode([
+    "scripts/staging-operator-inputs.mjs",
+    "verify",
+    "--target", verifyTargetFile,
+    "--env-file", verifyProductionEnvFile,
+    "--idp-contract", contractFile
+  ]);
+  assert.equal(contractVerifyResult.status, 0, contractVerifyResult.stderr);
+  const contractVerifyJson = parseCommandJson(contractVerifyResult.stdout, "staging-operator-inputs-verified");
+  assert.equal(contractVerifyJson.idp_contract_verified, true);
+  assert.equal(contractVerifyJson.idp_contract_raw_sha256, "ba83f81e86502c93b5f54e5b50bc178df295305ecd840d51d6a1a0f8da7935aa");
+  const contractReadiness = loadReadinessReceipt(path.join(verifyDir, "staging-input-readiness.json"));
+  assert.equal(contractReadiness.idp_contract_verified, true);
+  assert.equal(contractReadiness.idp_contract_jwks, "https://auth.habersoft.com/.well-known/jwks.json");
+  assert.doesNotMatch(JSON.stringify(contractReadiness), /07-staging-contract|auth-habersoft-com|postgresql:\/\//u);
+
+  const runtimeImageEnvFile = path.join(verifyDir, "runtime-image.env");
+  writeFileSync(runtimeImageEnvFile, formatRuntimeImageEnv(`sha256:${"b".repeat(64)}`));
+  const deploymentReadyContractResult = runNode([
+    "scripts/staging-operator-inputs.mjs",
+    "verify",
+    "--target", verifyTargetFile,
+    "--env-file", verifyProductionEnvFile,
+    "--mode", "deployment-ready",
+    "--runtime-image-env", runtimeImageEnvFile,
+    "--idp-contract", contractFile
+  ]);
+  assert.equal(deploymentReadyContractResult.status, 0, deploymentReadyContractResult.stderr);
+  const deploymentReadyJson = parseCommandJson(deploymentReadyContractResult.stdout, "staging-operator-inputs-verified");
+  assert.equal(deploymentReadyJson.image_identity_ready, true);
+  assert.equal(deploymentReadyJson.package_image_required, true);
+  assert.equal(deploymentReadyJson.idp_contract_verified, true);
   const inspectResult = runNode(["scripts/staging-operator-inputs.mjs", "known-hosts:inspect", "--target", verifyTargetFile]);
   assert.equal(inspectResult.status, 0, inspectResult.stderr);
   const inspectJson = JSON.parse(inspectResult.stdout);
@@ -443,4 +553,21 @@ function runNode(commandArgs) {
 
 function formatTestEnv(env) {
   return `${Object.entries(env).map(([key, value]) => `${key}=${value}`).join("\n")}\n`;
+}
+
+function resolveAuthoritativeContractFile() {
+  const candidates = [
+    process.env.STAGING_IDP_CONTRACT_FILE,
+    path.resolve("..", "..", "auth-habersoft-com", ".docs", "07-staging-contract.md")
+  ].filter(Boolean);
+  const contractFile = candidates.find((candidate) => existsSync(candidate));
+  assert(contractFile !== undefined, "authoritative staging IdP contract file must exist for staging tests");
+  return contractFile;
+}
+
+function parseCommandJson(stdout, status) {
+  const marker = `{\n  "status": "${status}"`;
+  const index = stdout.indexOf(marker);
+  assert(index >= 0, `stdout did not include ${status} JSON`);
+  return JSON.parse(stdout.slice(index));
 }
