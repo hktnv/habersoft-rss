@@ -73,7 +73,9 @@ Credential hygiene: staging credential set MS-017C1A-R kapsaminda rotate edilip 
 
 MS-017C1A-R2 sonucunda package-derived image binding de dogrulandi ve shared staging env image secmez hale geldi. Staging HTTPS JWKS edge, issuer/audience/scope/token acquisition ve authoritative IdP ownership contract'i eksik kaldigi icin tenantAuth readiness retry hala bloke durumdadir.
 
-MS-017C1A-3V sonucunda external staging authorization contract accepted ve hash-pinned olarak local validator tarafindan okunabilir hale geldi. Contract decision `STAGING_USES_PRODUCTION_IDP` oldugu icin staging input validator yalniz exact `TENANT_AUTH_JWKS_URL=https://auth.habersoft.com/.well-known/jwks.json` degerini verified contract ile kabul eder. Bu runtime tenant auth allowlist'ini genisletmez, issuer/audience/scope/RS256 kurallarini degistirmez ve tenantAuth readiness passed iddiasi uretmez. Remote readiness-only proof henuz calistirilmamistir.
+MS-017C1A-3V sonucunda external staging authorization contract accepted ve hash-pinned olarak local validator tarafindan okunabilir hale geldi. Contract decision `STAGING_USES_PRODUCTION_IDP` oldugu icin staging input validator yalniz exact `TENANT_AUTH_JWKS_URL=https://auth.habersoft.com/.well-known/jwks.json` degerini verified contract ile kabul eder. Bu runtime tenant auth allowlist'ini genisletmez, issuer/audience/scope/RS256 kurallarini degistirmez.
+
+MS-017C1A-3R readiness-only sonucunda canonical production JWKS endpoint'i local host, remote host, candidate image default bridge ve candidate image target project network katmanlarinda strict HTTPS/JWKS proof'tan gecti. API iki readiness turunda `tenantAuth=up`, `postgres=up`, `redis=up` dondu. Worker process'i TenantAuthModule veya JWKS lifecycle baslatmadi. Bu proof full staging deployment kabulune, backup/restore'a, rollback/roll-forward tatbikatina, current symlink promotion'a veya production deployment'a esdeger degildir.
 
 ## Local Fixture
 
