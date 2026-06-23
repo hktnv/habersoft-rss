@@ -659,7 +659,7 @@ function manifest(version, commit, imageId) {
 function productionIdpManifest() {
   return {
     version: RELEASE_IDENTITY.version,
-    status: "Staging Adayi",
+    status: RELEASE_IDENTITY.status,
     source_commit: "074d868d09c5b3d6079803480760d9e669b51826",
     master_release: RELEASE_IDENTITY.masterRelease,
     master_sha256: RELEASE_IDENTITY.masterSha256,

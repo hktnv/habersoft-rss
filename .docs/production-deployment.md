@@ -2,21 +2,24 @@
 
 ## Sorumluluk
 
-Bu belge MS-016 ile uygulanmis production deployment package'inin single-host Compose topology'sini, edge/vhost sinirini, service/network/port/volume/startup/readiness/config placement'ini ve deploy edilmemislik durumunu aciklar.
+Bu belge `main-service` icin single-host production Compose topology'sini, edge/vhost sinirini, service/network/port/volume/startup/readiness/config placement'ini ve MS-018C sonrasi active production source/build modelini aciklar.
+
+Current production activation evidence'in canonical sahibi [production-acceptance.md](production-acceptance.md) dosyasidir. Bu belge evidence bloklarini tekrar etmez; runtime topology ve operator delivery modelini aciklar.
 
 ## Master ve DEV Referanslari
 
 - Master Deployment View: `../../.md/master/23-uretim-deployment-gorunumu.md`
 - Main-service DEV leaf: `../../.md/sub-docs/main-service/13-uretim-deployment-ve-release-paketleme-tasarimi.md`
 - Application version: `0.1.0-ms-017`
+- Application status: `MVP — Production Aktif`
 - Master baseline: `rss-habersoft-master-v12`
 - Master SHA-256: `df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430`
 
 ## Topology
 
-Production package tek Linux host + Docker Engine / Docker Compose v2 modelini uygular. Dedicated `rss.habersoft.com` vhost TLS termination ve reverse proxy rolundedir. Host CyberPanel/OpenLiteSpeed ile yonetiliyorsa CyberPanel yalniz edge DNS/TLS/reverse-proxy siniridir; `main-service` runtime CyberPanel Node/app process modeliyle calismaz.
+Production model tek Linux host + Docker Engine / Docker Compose v2 modelidir. Dedicated `rss.habersoft.com` vhost TLS termination ve reverse proxy rolundedir. Host CyberPanel/OpenLiteSpeed ile yonetiliyorsa CyberPanel yalniz edge DNS/TLS/reverse-proxy siniridir; `main-service` runtime CyberPanel Node/app process modeliyle calismaz.
 
-MS-018B itibariyla production source acquisition Git-only operator akisidir: lokal source tree sunucuya upload edilmez; operator sunucuda `git pull --ff-only origin main` ile exact commit'i alir, Docker image'i sunucuda build eder ve generated `deploy/runtime-image.env` ile Compose'u calistirir. Codex production SSH kullanmaz; server Git/Docker/OpenLiteSpeed/TLS islemleri operator-managed kalir.
+Production source acquisition Git-only operator akisidir: lokal source tree sunucuya upload edilmez; operator sunucuda `git pull --ff-only origin main` ile exact commit'i alir, Docker image'i sunucuda build eder ve generated `deploy/runtime-image.env` ile Compose'u calistirir. Codex production SSH kullanmaz; server Git/Docker/OpenLiteSpeed/TLS islemleri operator-managed kalir.
 
 Production Compose service inventory:
 
@@ -30,15 +33,24 @@ Production Compose service inventory:
 
 ## Config ve Image Identity
 
-Shared env dosyasi config ve secret inventory'sini tasir; `MAIN_SERVICE_IMAGE` shared env icinde bulunmaz. Release package image artifact'i load/inspect edildikten sonra `runtime-image.env` icine `MAIN_SERVICE_IMAGE=sha256:<loaded-image-id>` olarak yazilir. Compose her zaman shared env ve release-local runtime image env dosyasini birlikte alir.
+Shared env dosyasi config ve secret inventory'sini tasir; `MAIN_SERVICE_IMAGE` shared env icinde bulunmaz.
+
+Production image identity modeli:
+
+1. operator canonical `origin/main` uzerinden source'u server-side Git pull ile alir,
+2. server-local Docker build exact checkout'tan immutable image uretir,
+3. generated `deploy/runtime-image.env` build edilen image ID'sini tasir,
+4. Compose shared env ve runtime image env dosyalarini birlikte kullanir.
+
+Package-derived staging image modeli production identity olarak kullanilmaz. MS-018C operator evidence exact production Git commit, Docker image ID veya image revision label kanitlamaz; bu alanlar [production-acceptance.md](production-acceptance.md) icinde `NOT_RECORDED` olarak ayrilmistir.
 
 ## Network ve Portlar
 
 API yalniz host loopback uzerinden edge'e acilir: `127.0.0.1:${API_HOST_PORT}:3000`. Worker, PostgreSQL ve Redis host port yayinlamaz. PostgreSQL ve Redis yalniz internal Docker network'te kullanilir.
 
-Same-host default port matrix, mevcut auth binding'leriyle carpismaz: auth API `127.0.0.1:3100`, auth panel `127.0.0.1:8080`, RSS API default `127.0.0.1:3200`, future RSS panel reservation `127.0.0.1:8081`. Operator production oncesi port availability'yi dogrular ve conflict varsa `API_HOST_PORT` ile OpenLiteSpeed upstream'i birlikte degistirir.
+Same-host default port matrix, mevcut auth binding'leriyle carpismaz: auth API `127.0.0.1:3100`, auth panel `127.0.0.1:8080`, RSS API default `127.0.0.1:3200`, future RSS panel reservation `127.0.0.1:8081`. MS-018C operator evidence RSS backend API upstream default'unun `127.0.0.1:3200` oldugunu kaydeder.
 
-Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Request body limit'i `POST /agent/entries` 5 MiB sozlesmesini kesmeyecek sekilde edge tarafinda ayarlanmalidir.
+Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Request body limit'i `POST /agent/entries` 5 MiB sozlesmesini kesmeyecek sekilde edge tarafinda ayarlanmalidir. Edge body-limit verification MS-018C inputunda `NOT_RECORDED` kalir.
 
 ## Startup ve Readiness
 
@@ -48,18 +60,18 @@ Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Reque
 4. API `/health/live` ve `/health/ready` ile izlenir.
 5. Worker `npm run worker:health` ile izlenir.
 
+MS-018C evidence API live/ready ve dependency readiness icin yeterlidir. Worker health output, scheduler inventory ve migration status output bu milestone inputunda kaydedilmemistir.
+
 ## Durum
 
-Package verified. Approved staging deployment/rollback drill passed. Production rollout yapilmadi. DNS/TLS/CyberPanel live configuration degistirilmedi. Staging evidence MS-017 kapsamindadir.
+`main-service` backend application status'u `MVP — Production Aktif`tir.
 
-MS-018B Git-based operator handbook hazirlandi. Bu, backend production'in calistigi anlamina gelmez; current backend production execution operator bekliyor. Frontend implementasyonu yoktur ve `rss-panel.habersoft.com` active degildir.
+Operator 2026-06-22 tarihinde internal loopback ve public HTTPS `/health/live` ile `/health/ready` checks icin HTTP `200`, `status=live/ready`, `postgres=up`, `redis=up` ve `tenantAuth=up` evidence sagladi. Basic activation acceptance passed; extended operational acceptance partial/not fully recorded durumdadir.
 
-MS-017C1A-R2 asamasinda package-derived image binding remote config-only proof'tan gecmistir. API/worker/PostgreSQL/Redis baslatilmamis, migration/readiness retry/rollback/roll-forward veya current symlink promotion yapilmamistir. Production runtime ve edge siniri degismemistir.
+Registry publish, Git tag ve GitHub Release yapilmamistir. Frontend implementasyonu yoktur ve `rss-panel.habersoft.com` active degildir. Bagimsiz Agent application ve bagimsiz Tenant applications ayri delivery siniridir.
 
-MS-017C1A-3R asamasinda staging target uzerinde production IdP readiness-only proof gecti. Canonical production JWKS endpoint'i strict HTTPS ile local/remote/candidate network katmanlarinda dogrulandi; preserved staging volumes uzerinde PostgreSQL, Redis, migrate no-op, API ve worker gecici olarak baslatilip iki readiness turu passed sonucuyla safe-stop edildi. Bu production rollout, full staging deployment kabul, backup/restore, rollback/roll-forward, current symlink promotion, artifact publication, Git tag veya GitHub Release anlamina gelmez.
-
-MS-017C asamasinda approved staging target `habersoft-rss-staging-alias` uzerinde full deployment, synthetic sentinel, PostgreSQL backup, off-host restore verification, rollback to `0.1.0-ms-016`, roll-forward to `0.1.0-ms-017`, final current pointer candidate promotion ve final running services acceptance passed. Final staging edge mode `loopback-only` kaldi. Bu production rollout, DNS/TLS/CyberPanel live configuration, artifact publication, Git tag veya GitHub Release anlamina gelmez.
+MS-017C staging drill tarihsel kanit olarak korunur: approved staging target uzerinde full deployment, synthetic sentinel, PostgreSQL backup, off-host restore verification, rollback to `0.1.0-ms-016`, roll-forward to `0.1.0-ms-017`, final current pointer candidate promotion ve final running services acceptance passed. Staging source/package/image kimlikleri production identity degildir.
 
 ## Guvenli Troubleshooting
 
-Generated production env file, backup, SBOM, provenance, image tarball ve registry auth Git'e commit edilmez. Gercek host/IP/cert/secret bu belgeye yazilmaz.
+Generated production env file, backup, SBOM, provenance, image tarball, receipt ve registry auth Git'e commit edilmez. Gercek host/IP/cert/secret bu belgeye yazilmaz.

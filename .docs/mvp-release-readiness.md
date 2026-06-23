@@ -2,9 +2,11 @@
 
 ## Scope
 
-MS-015, `main-service` repository'sinin mevcut MVP davranisini release-blocker kapilarindan gecirir. MS-016 sonrasi deployment karari kapatilmis ve release package dogrulanmistir. `MVP Adayi`, production'a deploy edildi, admin/frontend tamamlandi veya bagimsiz Agent/Tenant uygulamalari release-ready anlamina gelmez.
+MS-015, `main-service` repository'sinin mevcut MVP davranisini release-blocker kapilarindan gecirir. MS-016 sonrasi deployment karari kapatilmis, release package dogrulanmis ve MS-018C ile operator-confirmed production activation repository-local PROD dokumantasyonuna gecmistir. `MVP — Production Aktif`, yalniz main-service backend application icin basic production activation acceptance'in passed oldugu anlamina gelir; admin/frontend veya bagimsiz Agent/Tenant uygulamalari release-ready anlamina gelmez.
 
 Application version: `0.1.0-ms-017`
+
+Application status: `MVP — Production Aktif`
 
 Master baseline:
 
@@ -75,13 +77,14 @@ Residual non-blocker is a bounded item outside the current MVP repository accept
 
 Known residual non-blockers:
 
-- production deployment decision is closed; rollout is not performed,
-- production source delivery operator guide is Git-only; backend production execution is still operator pending,
+- basic production activation acceptance passed with operator-confirmed internal/public live-ready evidence,
+- extended operational evidence is partial/not fully recorded,
+- exact production Git commit, image ID and image revision label are not recorded,
+- worker health, scheduler inventory, production backup/restore, TLS detail, pointers and restart/OOM stability evidence are not recorded,
 - frontend and `rss-panel.habersoft.com` are planned and not implemented,
-- release identity alignment is verified; production rollout is not performed,
+- release identity alignment is verified; package-derived staging image identity is not production identity,
 - MS-017 staging target/preflight, production IdP readiness-only proof, full staging deployment, backup/restore, rollback and roll-forward drills passed on approved staging,
 - external registry publication is not performed,
-- production edge DNS/TLS/CyberPanel live configuration is not changed,
 - admin/frontend is not implemented,
 - current dev-only audit advisories are not in the production/runtime dependency gate,
 - optional observability dashboard/notification backend is not implemented,
@@ -105,12 +108,14 @@ docker compose run --rm main-service-api npm run test:mvp-acceptance
 docker compose exec main-service-worker npm run worker:health
 ```
 
-If any required gate fails after a later change, the `MVP Adayi` claim is invalid until the gate passes again.
+If any required gate fails after a later change, the repository release-readiness claim is invalid until the gate passes again. Fresh contradictory production health evidence blocks expanding the production-active claim.
 
 ## Acceptance Result
 
-Status: `MVP Adayi - Staging Dogrulandi / Rollback Tatbikati Gecti`
+Status: `MVP — Production Aktif`
 
-Decision: `MVP Kabul Kapisi ve MS-017C Staging Drill Gecti`
+Decision: `MVP Kabul Kapisi, MS-017C Staging Drill ve MS-018C Production Basic Activation Acceptance Gecti`
 
 Acceptance date: `2026-06-22`
+
+MS-018C acceptance result is based on operator-confirmed internal/public `/health/live` and `/health/ready` evidence. Exact evidence time beyond the date is not recorded.

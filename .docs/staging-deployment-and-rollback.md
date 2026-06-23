@@ -44,7 +44,9 @@ MS-017C1A-3R production IdP readiness-only sonucu: active staging IdP decision `
 
 Application version remains: `0.1.0-ms-017`
 
-Application status: `MVP Adayi - Staging Dogrulandi / Rollback Tatbikati Gecti`
+Application status: `MVP — Production Aktif`
+
+Current production activation evidence is owned by [production-acceptance.md](production-acceptance.md). This staging document preserves MS-017 historical staging evidence and does not define production identity.
 
 Master baseline: `rss-habersoft-master-v12` / `df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430` / `29`
 

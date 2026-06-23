@@ -305,7 +305,7 @@ npm sbom --sbom-format=cyclonedx
 npm outdated
 ```
 
-`MVP Adayi`, main-service repository kabul sonucudur; production deployment veya diger uygulamalarin readiness iddiasi degildir.
+`MVP — Production Aktif`, main-service backend application icin MS-018C basic production activation acceptance sonucudur. Diger uygulamalarin readiness, frontend/rss-panel activation, release publication veya full operational acceptance complete iddiasi degildir.
 
 ## Smoke Test
 

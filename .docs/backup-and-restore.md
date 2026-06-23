@@ -39,3 +39,12 @@ MS-017 hazirlik tooling'i staging receipt icinde backup checksum ve restore veri
 MS-017C approved staging drill sirasinda target alias `habersoft-rss-staging-alias` icin PostgreSQL custom-format backup alindi ve off-host disposable PostgreSQL restore verification passed oldu. Backup SHA-256 `595ee0617d86f5886aca25ae99486f064ce06e081d16fec19fec74cdd8db9bfc`. Restore verifier six canonical business table'i, two Prisma migration kaydini, sentinel row count minimumlarini, entry/detail invariant'ini, agent event varligini ve runtime status varligini kontrol etti. Backup/metadata Git'e alinmadi; production database overwrite edilmedi.
 
 MS-017B2 local rehearsal tooling'i PostgreSQL backup ve disposable restore verification'i izole local Docker project uzerinde dener. Bu kanit production backup veya remote staging backup yerine gecmez.
+
+## Production Evidence Status
+
+MS-018C operator-confirmed production activation input'u production backup SHA-256 veya production off-host restore verification sonucu tasimaz.
+
+- Production backup SHA-256: `NOT_RECORDED`
+- Production off-host restore result: `NOT_RECORDED`
+
+Bu durum production backup/restore'un failed oldugu anlamina gelmez; yalniz bu milestone'da kanit kaydedilmedigini belirtir. Backup komutu, restore verification veya production SSH bu gorevde calistirilmaz. Eksik production backup/restore evidence'i MS-019 operational evidence gap'i olarak kalir.

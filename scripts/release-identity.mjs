@@ -5,10 +5,11 @@ import path from "node:path";
 export const RELEASE_IDENTITY = Object.freeze({
   application: "main-service",
   version: "0.1.0-ms-017",
-  status: "Staging Adayi",
+  status: "MVP — Production Aktif",
   masterRelease: "rss-habersoft-master-v12",
   masterSha256: "df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430",
   masterActiveMarkdownCount: 29,
+  // Package-level flags remain false; production activation evidence is tracked by production-acceptance receipt.
   productionDeployed: false,
   releasePublished: false
 });

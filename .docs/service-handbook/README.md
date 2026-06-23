@@ -51,3 +51,5 @@ En cok bakilan detaylar:
 Bu el kitabi secret, host/IP, SSH, DNS provider, TLS private key, production receipt, raw backup veya deploy hedefi bilgisi tasimaz. Agent uygulamasinin kendi runtime implementasyonunu veya bagimsiz Tenant uygulamasinin production hazirligini tamamlanmis gibi anlatmaz.
 
 Production operator akisi Git-only'dir: source tree dogrudan sunucuya upload edilmez; operator `PRODUCTION.md` uzerinden Git pull, server-local Docker build ve Compose akisini uygular.
+
+Current production activation status icin canonical ozet [../production-acceptance.md](../production-acceptance.md) dosyasindadir. Bu el kitabi endpoint contract veya evidence detaylarini tekrar etmez.

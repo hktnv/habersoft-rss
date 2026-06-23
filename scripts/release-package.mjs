@@ -140,10 +140,23 @@ function createSbom() {
   }
 
   try {
-    return JSON.parse(result.stdout);
+    const sbom = JSON.parse(result.stdout);
+    normalizeApplicationComponent(sbom);
+    return sbom;
   } catch {
     fail("npm CycloneDX SBOM output was not valid JSON");
   }
+}
+
+function normalizeApplicationComponent(sbom) {
+  if (sbom.metadata?.component === undefined) {
+    return;
+  }
+
+  sbom.metadata.component.name = RELEASE_IDENTITY.application;
+  sbom.metadata.component.version = RELEASE_IDENTITY.version;
+  sbom.metadata.component["bom-ref"] = `${RELEASE_IDENTITY.application}@${RELEASE_IDENTITY.version}`;
+  sbom.metadata.component.purl = `pkg:npm/${RELEASE_IDENTITY.application}@${RELEASE_IDENTITY.version}`;
 }
 
 function createProvenance(manifest) {

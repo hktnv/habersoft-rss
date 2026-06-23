@@ -214,6 +214,8 @@ function assertProductionGuide() {
     "Kaynak kodu sunucuya scp, rsync, SFTP, ZIP, panel upload veya kopyala-yapistir ile tasinmaz.",
     "server-local Docker build",
     "Codex production SSH kullanmaz",
+    "MVP — Production Aktif",
+    ".docs/production-acceptance.md",
     "rss-panel.habersoft.com` planned/inactive",
     "backend-only repository layout",
     "habersoft-rss/backend",
@@ -231,7 +233,7 @@ function assertProductionGuide() {
   const matrixRows = [
     ["auth.habersoft.com", "127.0.0.1:3100", "mevcut"],
     ["auth-panel.habersoft.com", "127.0.0.1:8080", "mevcut"],
-    ["rss.habersoft.com", "127.0.0.1:3200", "backend rollout target"],
+    ["rss.habersoft.com", "127.0.0.1:3200", "backend active"],
     ["rss-panel.habersoft.com", "127.0.0.1:8081", "planned/inactive"]
   ];
   for (const row of matrixRows) {

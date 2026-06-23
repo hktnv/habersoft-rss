@@ -660,7 +660,7 @@ function createArchive(packageDir, archiveFile) {
 
 function validateCandidateManifest(manifest) {
   assert(manifest.version === RELEASE_IDENTITY.version, "candidate version mismatch");
-  assert(manifest.status === "Staging Adayi", "candidate status mismatch");
+  assert(manifest.status === RELEASE_IDENTITY.status, "candidate status mismatch");
   assert(manifest.source_commit === "074d868d09c5b3d6079803480760d9e669b51826", "candidate source commit mismatch");
   assert(manifest.image?.id === "sha256:fdeb82c314b8f5af0f6e0fca572ef986d8b311449503389691950f0a4e940919", "candidate image id mismatch");
   assert(manifest.runtime_image_env?.sha256 === "b0dde9479c9fbe64c00f86cb439716207795f8f793df81c0fcb37f1bb449d873", "runtime-image.env checksum mismatch");

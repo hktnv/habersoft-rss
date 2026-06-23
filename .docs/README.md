@@ -7,7 +7,7 @@
 - Canonical repository remote: `https://github.com/hktnv/habersoft-rss`
 - PROD dokuman seti sorumlulugu: Bu repository'de gercekten uygulanmis main-service surumunun kurulum, calistirma, dogrulama ve operasyon gercegini aciklamak.
 - Belge sahibi: `Main Service Teknik Sahibi`
-- Uygulama surumu/durum: `0.1.0-ms-017` / `MVP Adayi - Staging Dogrulandi / Rollback Tatbikati Gecti`
+- Uygulama surumu/durum: `0.1.0-ms-017` / `MVP — Production Aktif`
 
 Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application repository siniridir. Merkezi master ve DEV alt dokumanlar bu repository'ye kopyalanmaz.
 
@@ -17,6 +17,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 |---|---|
 | [README.md](README.md) | Repository-local PROD dokumantasyon girisi, envanter ve uyum kaydi. |
 | [../PRODUCTION.md](../PRODUCTION.md) | Git-only production source delivery, operator Git pull/build/run, OpenLiteSpeed handoff ve kabul checklist'i. |
+| [production-acceptance.md](production-acceptance.md) | Current production activation status, operator-confirmed evidence, external receipt identity ve claim boundary. |
 | [service-handbook/README.md](service-handbook/README.md) | Sade servis el kitabi girisi, aktorler ve okuma sirasi. |
 | [service-handbook/main-servis-kilavuzu.md](service-handbook/main-servis-kilavuzu.md) | Main-service runtime rolleri, veri iliskileri, port modeli ve operasyon sinirlari. |
 | [service-handbook/agent-servis-kilavuzu.md](service-handbook/agent-servis-kilavuzu.md) | Agent entegrasyon akisi, auth siniri, idempotency ve yapmamasi gerekenler. |
@@ -37,7 +38,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [background-job-runner.md](background-job-runner.md) | MS-014 worker-only BullMQ queue, scheduler reconciliation, retry, readiness ve shutdown gercegi. |
 | [cleanup-retention.md](cleanup-retention.md) | MS-014 cleanup retention orkestrasyonu, canonical step sirasi, bounded SQL davranisi ve telemetry siniri. |
 | [mvp-release-readiness.md](mvp-release-readiness.md) | MS-015 MVP adayinin release-blocker tanimi, kabul komutlari, gate matrisi, clean-room yontemi ve residual risk siniri. |
-| [production-deployment.md](production-deployment.md) | MS-016 single-host production Compose topology, edge/vhost, service/network/port/volume/startup/readiness ve deploy edilmemislik durumu. |
+| [production-deployment.md](production-deployment.md) | Single-host production Compose topology, Git-only source/build modeli, service/network/port/volume/startup/readiness ve active production siniri. |
 | [release-packaging.md](release-packaging.md) | MS-016 release package command, artifact inventory, manifest/checksum/SBOM/provenance, image identity, verifier ve publication/deployment ayrimi. |
 | [backup-and-restore.md](backup-and-restore.md) | MS-016 PostgreSQL backup prerequisite, checksum metadata, disposable restore verification, Redis siniri ve rollback data-protection gate'i. |
 | [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md) | MS-017 staging target preflight, deployment/rollback tatbikati icin target safety, SSH, receipt ve remote staging operasyon gercegi. |
@@ -51,40 +52,42 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 2. [service-handbook/main-servis-kilavuzu.md](service-handbook/main-servis-kilavuzu.md)
 3. [service-handbook/agent-servis-kilavuzu.md](service-handbook/agent-servis-kilavuzu.md)
 4. [service-handbook/tenant-servis-kilavuzu.md](service-handbook/tenant-servis-kilavuzu.md)
-5. [../PRODUCTION.md](../PRODUCTION.md)
-6. [production-deployment.md](production-deployment.md)
-7. [release-packaging.md](release-packaging.md)
-8. [backup-and-restore.md](backup-and-restore.md)
-9. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
+5. [production-acceptance.md](production-acceptance.md)
+6. [../PRODUCTION.md](../PRODUCTION.md)
+7. [production-deployment.md](production-deployment.md)
+8. [release-packaging.md](release-packaging.md)
+9. [backup-and-restore.md](backup-and-restore.md)
+10. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
 
 ## Okuma Sirasi
 
 1. [README.md](README.md)
 2. [../PRODUCTION.md](../PRODUCTION.md)
-3. [local-development.md](local-development.md)
-4. [tenant-authentication.md](tenant-authentication.md)
-5. [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md)
-6. [tenant-rate-limiting.md](tenant-rate-limiting.md)
-7. [tenant-entry-listing.md](tenant-entry-listing.md)
-8. [tenant-entry-detail.md](tenant-entry-detail.md)
-9. [agent-authentication.md](agent-authentication.md)
-10. [agent-heartbeat.md](agent-heartbeat.md)
-11. [agent-due-feeds.md](agent-due-feeds.md)
-12. [agent-new-guid-filtering.md](agent-new-guid-filtering.md)
-13. [agent-entry-ingestion.md](agent-entry-ingestion.md)
-14. [agent-feed-check-results.md](agent-feed-check-results.md)
-15. [background-job-runner.md](background-job-runner.md)
-16. [cleanup-retention.md](cleanup-retention.md)
-17. [mvp-release-readiness.md](mvp-release-readiness.md)
-18. [production-deployment.md](production-deployment.md)
-19. [release-packaging.md](release-packaging.md)
-20. [backup-and-restore.md](backup-and-restore.md)
-21. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
-22. [staging-host-provisioning.md](staging-host-provisioning.md)
-23. [local-staging-rehearsal.md](local-staging-rehearsal.md)
-24. [production-rollout-runbook.md](production-rollout-runbook.md)
-25. [database-schema.md](database-schema.md)
-26. Repository kok [README.md](../README.md)
+3. [production-acceptance.md](production-acceptance.md)
+4. [local-development.md](local-development.md)
+5. [tenant-authentication.md](tenant-authentication.md)
+6. [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md)
+7. [tenant-rate-limiting.md](tenant-rate-limiting.md)
+8. [tenant-entry-listing.md](tenant-entry-listing.md)
+9. [tenant-entry-detail.md](tenant-entry-detail.md)
+10. [agent-authentication.md](agent-authentication.md)
+11. [agent-heartbeat.md](agent-heartbeat.md)
+12. [agent-due-feeds.md](agent-due-feeds.md)
+13. [agent-new-guid-filtering.md](agent-new-guid-filtering.md)
+14. [agent-entry-ingestion.md](agent-entry-ingestion.md)
+15. [agent-feed-check-results.md](agent-feed-check-results.md)
+16. [background-job-runner.md](background-job-runner.md)
+17. [cleanup-retention.md](cleanup-retention.md)
+18. [mvp-release-readiness.md](mvp-release-readiness.md)
+19. [production-deployment.md](production-deployment.md)
+20. [release-packaging.md](release-packaging.md)
+21. [backup-and-restore.md](backup-and-restore.md)
+22. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
+23. [staging-host-provisioning.md](staging-host-provisioning.md)
+24. [local-staging-rehearsal.md](local-staging-rehearsal.md)
+25. [production-rollout-runbook.md](production-rollout-runbook.md)
+26. [database-schema.md](database-schema.md)
+27. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
@@ -97,15 +100,17 @@ Bu `.docs/` kumesi, merkezi [Polyrepo DEV ve PROD Dokumantasyon Sozlesmesi](../.
 - Master baseline: `rss-habersoft-master-v12`
 - Master agac ozeti SHA-256: `df466d84859edcf17d91e797b490c07059f37d5a6ad5ba3c17ddc987a2ac0430`
 - Ilgili DEV alt kumesi: `../../.md/sub-docs/main-service/`
-- Uyum durumu: `MVP Adayi - Staging Dogrulandi / Rollback Tatbikati Gecti`
+- Uyum durumu: `MVP — Production Aktif`
 
-`MVP Adayi - Staging Dogrulandi / Rollback Tatbikati Gecti`, approved staging target uzerinde MS-017C deployment, backup/restore, rollback ve roll-forward drill'inin gectigini belirtir. Production rollout, artifact publication, Git tag, GitHub Release, Agent application readiness veya Tenant application readiness iddiasi degildir.
+`MVP — Production Aktif`, MS-018C operator-confirmed internal/public live-ready evidence ile yalniz `main-service` backend application'in production'da active oldugunu belirtir. Full operational acceptance alanlari kismen kayitlidir; exact production commit/image, worker/scheduler, production backup/restore, TLS detail, pointers ve stability evidence `NOT_RECORDED` kalir. Artifact publication, Git tag, GitHub Release, Agent application readiness veya Tenant application readiness iddiasi degildir.
 
 v11 etki notu: MS-014 uygulamasi v11 master cleanup, retention ve job-runner sozlesmeleriyle uyumludur. `POST /agent/feed-check-results` response'u MS-013'te v11 dort-sayac sozlesmesini `accepted`, `feed_state_updated`, `idempotent_replay_count` ve `out_of_order_result_count` olarak uygulamaya devam eder.
 
-v12 etki notu: MS-016 production deployment karari master `23-uretim-deployment-gorunumu.md` ile kapanmistir. Release package identity canonical master hash ile hizalanmistir; staging-handoff paketi image artifact dahil edildiginde dogrulanir. Production deploy, registry publish, DNS/TLS/CyberPanel live change, Git tag ve GitHub Release yapilmamistir.
+v12 etki notu: MS-016 production deployment karari master `23-uretim-deployment-gorunumu.md` ile kapanmistir. Release package identity canonical master hash ile hizalanmistir; staging-handoff paketi image artifact dahil edildiginde dogrulanir. Registry publish, Git tag ve GitHub Release yapilmamistir.
 
-MS-018B Git production handoff notu: Production source delivery Git-only olarak kanoniklestirildi. Lokal source tree scp/rsync/SFTP/ZIP/panel upload ile sunucuya tasinmaz; operator `origin/main` uzerinden `git pull --ff-only`, server-local Docker build, generated `runtime-image.env`, Compose migrate/up ve OpenLiteSpeed reverse proxy akisini [../PRODUCTION.md](../PRODUCTION.md) ile uygular. Codex production SSH kullanmaz ve server Git/Docker/OpenLiteSpeed/TLS islemleri operator-managed kalir. Backend production execution pending; frontend ve `rss-panel.habersoft.com` planned/inactive durumdadir.
+MS-018B Git production handoff notu: Production source delivery Git-only olarak kanoniklestirildi. Lokal source tree scp/rsync/SFTP/ZIP/panel upload ile sunucuya tasinmaz; operator `origin/main` uzerinden `git pull --ff-only`, server-local Docker build, generated `runtime-image.env`, Compose migrate/up ve OpenLiteSpeed reverse proxy akisini [../PRODUCTION.md](../PRODUCTION.md) ile uygular. Codex production SSH kullanmaz ve server Git/Docker/OpenLiteSpeed/TLS islemleri operator-managed kalir. Frontend ve `rss-panel.habersoft.com` planned/inactive durumdadir.
+
+MS-018C production activation notu: Operator 2026-06-22 tarihinde internal loopback ve public HTTPS `/health/live` ile `/health/ready` checks icin HTTP `200`, `status=live/ready`, `postgres=up`, `redis=up` ve `tenantAuth=up` kanitini verdi. Current production status ve external receipt kimligi [production-acceptance.md](production-acceptance.md) dosyasinda kanoniktir. Production exact commit/image, worker/scheduler, backup/restore, TLS detail, pointers ve stability evidence `NOT_RECORDED` kalir; bu eksikler basic active status'u geriye donuk olarak pending yapmaz.
 
 MS-017C candidate notu: Approved staging target preflight kaniti uzerinden `0.1.0-ms-017` candidate package'i tam staging drill icin kullanilir. Staging deployment, rollback ve roll-forward evidence commit'i remote drill full success sonrasi yazilir.
 

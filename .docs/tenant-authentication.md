@@ -61,6 +61,8 @@ Tenant auth hatalari 401/403/503 olarak rate-limit guard'indan once sonlanir ve 
 
 `/health/ready`, PostgreSQL, Redis ve tenant auth JWKS cache hazir oldugunda `ready` doner. JWKS hic basariyla yuklenmemisse readiness `not_ready` olur.
 
+MS-018C production readiness notu: operator-confirmed `/health/ready` evidence icinde `tenantAuth=up`, `postgres=up` ve `redis=up` kaydedildi. Bu kanit tenant auth readiness icin yeterlidir; exact token minting, live authenticated Tenant request veya auth-service token acquisition testi bu milestone inputunda kanitlanmamistir. Tenant auth contract'i degismemistir.
+
 ## Staging JWKS Incident Note
 
 MS-017C1 bu runtime davranisini degistirmedi. Approved staging ilk candidate attempt'inde API live kaldi, fakat configured JWKS endpoint DNS'te cozulmedigi icin ilk JWKS cache yuklenemedi ve `/health/ready` tenantAuth `down` durumuyla 503 dondu.

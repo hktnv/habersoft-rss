@@ -29,6 +29,7 @@ const failures = [];
 
 assert(manifest.application === RELEASE_IDENTITY.application, "manifest application mismatch");
 assert(manifest.version === RELEASE_IDENTITY.version, "manifest version mismatch");
+assert(manifest.status === RELEASE_IDENTITY.status, "manifest status mismatch");
 assert(manifest.master_release === RELEASE_IDENTITY.masterRelease, "manifest master release mismatch");
 assert(manifest.master_sha256 === RELEASE_IDENTITY.masterSha256, "manifest master hash mismatch");
 assert(manifest.master_active_markdown_count === RELEASE_IDENTITY.masterActiveMarkdownCount, "manifest master active count mismatch");

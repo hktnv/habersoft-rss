@@ -36,6 +36,8 @@ Gercek production loopback portu bu el kitabinda hardcode edilmez; operator-owne
 
 Current operator default'u `rss.habersoft.com` backend API icin `127.0.0.1:3200` upstream'idir. Operator port uygunlugunu production sunucusunda dogrular; conflict varsa env ve edge upstream birlikte degistirilir.
 
+Current production activation status `MVP — Production Aktif` olarak [../production-acceptance.md](../production-acceptance.md) dosyasinda tutulur. Bu kilavuz evidence receipt detaylarini tekrar etmez.
+
 ## Startup order
 
 1. PostgreSQL ve Redis baslar.

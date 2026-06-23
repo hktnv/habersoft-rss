@@ -6,6 +6,10 @@ Bu belge, `habersoft-rss` repository'sinin production sunucusunda Git tabanli ol
 
 Bu belge insan operator icindir. Codex production sunucusuna SSH baglanmaz, source upload etmez, Docker/OpenLiteSpeed/DNS/TLS komutu calistirmaz ve production deployment yaptigini iddia etmez.
 
+Current main-service production activation status ve operator-confirmed evidence'in canonical repository-local sahibi [.docs/production-acceptance.md](.docs/production-acceptance.md) dosyasidir. Bu guide yeniden kullanilabilir operator prosedurudur; kendi basina success receipt degildir.
+
+Current application status: `MVP — Production Aktif`.
+
 Production source delivery icin tek gecerli akış:
 
 ```text
@@ -59,10 +63,10 @@ OpenLiteSpeed edge katmanidir. Uygulamalar Docker container'larindan servis edil
 |---|---|---:|---|
 | Auth API | `auth.habersoft.com` | `127.0.0.1:3100` | mevcut |
 | Auth panel | `auth-panel.habersoft.com` | `127.0.0.1:8080` | mevcut |
-| RSS backend API | `rss.habersoft.com` | `127.0.0.1:3200` | backend rollout target |
+| RSS backend API | `rss.habersoft.com` | `127.0.0.1:3200` | backend active |
 | RSS panel | `rss-panel.habersoft.com` | `127.0.0.1:8081` | planned/inactive |
 
-`3200` ve `8081`, mevcut auth portlariyla carpismaz diye secilen RSS varsayilanlaridir. Ilk production kullanimindan once operator port durumunu kontrol eder:
+`3200` ve `8081`, mevcut auth portlariyla carpismaz diye secilen RSS varsayilanlaridir. Operator port durumunu kontrol eder:
 
 ```bash
 ss -ltnp | grep -E ':(3100|3200|8080|8081)\b' || true
@@ -422,7 +426,7 @@ docker compose \
 |---|---|---:|---|
 | `auth.habersoft.com` | existing auth empty docRoot | `127.0.0.1:3100` | existing |
 | `auth-panel.habersoft.com` | existing auth-panel empty docRoot | `127.0.0.1:8080` | existing |
-| `rss.habersoft.com` | `/home/habersoft.com/rss` | `127.0.0.1:3200` | backend rollout target |
+| `rss.habersoft.com` | `/home/habersoft.com/rss` | `127.0.0.1:3200` | backend active |
 | `rss-panel.habersoft.com` | `/home/habersoft.com/rss-panel` | `127.0.0.1:8081` | planned/inactive |
 
 Kurallar:
@@ -460,6 +464,8 @@ redis = up
 tenantAuth = up
 ```
 
+MS-018C current known activation evidence, operator tarafindan 2026-06-22 tarihinde internal loopback ve public HTTPS live/ready checks icin bu beklenen durumun passed oldugunu kaydeder. Bu evidence [.docs/production-acceptance.md](.docs/production-acceptance.md) dosyasinda kanoniktir.
+
 Worker health:
 
 ```bash
@@ -479,6 +485,8 @@ curl -i https://rss.habersoft.com/agent/feeds/due
 ```
 
 Beklenen: unknown route `404`, unauthenticated Tenant route `401`, unauthenticated Agent route `401`. Gercek Agent key veya JWT bu belgeye yazilmaz.
+
+MS-018C inputunda worker health, auth boundary smoke, TLS fingerprint/expiry, redirect ve edge body-limit evidence kaydedilmedi. Bu alanlar failed degil, `NOT_RECORDED` durumundadir.
 
 ## 14. Log ve servis yonetimi
 
@@ -746,7 +754,7 @@ Codex production SSH kullanmaz. Server Git, Docker, `.env.production`, OpenLiteS
 
 ## 19. Operator production kabul kontrol listesi
 
-Bu liste insan kaydidir; otomatik deployment claim'i degildir.
+Bu liste insan kaydidir; otomatik deployment claim'i degildir. Durum dili `PASSED`, `NOT_RECORDED` veya `NOT_APPLICABLE` gibi explicit degerler kullanir; bos alan success anlamina gelmez.
 
 ```text
 deployment UTC date:
@@ -763,6 +771,34 @@ backup SHA-256:
 rollback image ID:
 operator name/role:
 notes:
+```
+
+MS-018C current known activation snapshot:
+
+```text
+deployment UTC date: 2026-06-22
+Git commit: NOT_RECORDED
+image ID: NOT_RECORDED
+image revision label: NOT_RECORDED
+migration status: NOT_RECORDED
+API live status: PASSED
+API ready status: PASSED
+internal dependencies: postgres=up, redis=up, tenantAuth=up
+worker health status: NOT_RECORDED
+scheduler inventory: NOT_RECORDED
+OpenLiteSpeed vhost status: NOT_RECORDED
+TLS status: NOT_RECORDED
+public HTTPS status: PASSED
+backup SHA-256: NOT_RECORDED
+restore verification: NOT_RECORDED
+current/previous pointers: NOT_RECORDED
+restart/OOM/stability: NOT_RECORDED
+artifact publication: NOT_PERFORMED
+Git tag: NOT_CREATED
+GitHub Release: NOT_CREATED
+rss-panel.habersoft.com: NOT_IMPLEMENTED_INACTIVE
+operator name/role: operator-confirmed transcript
+notes: basic production activation acceptance passed; extended operational acceptance partial/not fully recorded
 ```
 
 Secret deger yazilmaz.
@@ -822,6 +858,7 @@ Bu kosullar tamamlanmadan `rss-panel.habersoft.com` production-ready sayilmaz.
 
 - [README.md](README.md)
 - [.docs/README.md](.docs/README.md)
+- [.docs/production-acceptance.md](.docs/production-acceptance.md)
 - [.docs/production-deployment.md](.docs/production-deployment.md)
 - [.docs/production-rollout-runbook.md](.docs/production-rollout-runbook.md)
 - [.docs/release-packaging.md](.docs/release-packaging.md)

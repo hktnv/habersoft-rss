@@ -71,4 +71,6 @@ MS-017B3 operator handoff bundle package uretmez veya image tasimaz; yalniz stag
 
 ## Publication Ayrimi
 
-MS-017 package uretir, dogrular ve approved staging drill icinde kullanabilir. External registry publish, Docker Hub/GHCR push, Git tag, GitHub Release ve production deployment yapmaz.
+MS-017 package uretir, dogrular ve approved staging drill icinde kullanabilir. External registry publish, Docker Hub/GHCR push, Git tag ve GitHub Release yapmaz.
+
+MS-018C production activation Git-only operator pull/build/run evidence ile kaydedilmistir. Release package manifest/provenance icindeki package-level `production_deployed=false` flag'i korunur; bu flag package artifact'inin kendi basina production deployment receipt'i olmadigini belirtir. Package-derived staging image kimligi production identity olarak kullanilmaz.
