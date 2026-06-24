@@ -23,7 +23,9 @@ const CHECKSUMS_FILENAME = "checksums.sha256";
 const TOOL_NAME = "production-restore-verify";
 const DOCKER_BIN = process.env.MS019C_DOCKER_BIN ?? "docker";
 const DOCKER_FAKE_SCRIPT = process.env.MS019C_DOCKER_FAKE_SCRIPT;
-const KNOWN_FLAGS = new Set(["input-dir", "backup", "receipt"]);
+const KNOWN_FLAGS = new Set(["input-dir", "backup", "receipt", "authority"]);
+const CAPTURE_BUNDLE_FILES = Object.freeze([DUMP_FILENAME, METADATA_FILENAME, CAPTURE_RECEIPT_FILENAME, CHECKSUMS_FILENAME]);
+const CAPTURE_CHECKSUM_FILES = Object.freeze([DUMP_FILENAME, METADATA_FILENAME, CAPTURE_RECEIPT_FILENAME]);
 const CANONICAL_TABLES = Object.freeze([
   "feeds",
   "entries",
@@ -59,7 +61,7 @@ function describeContract() {
     accepted_input_mode: "capture-bundle-and-legacy-backup-file",
     capture_bundle_mode: {
       required_flags: ["--input-dir"],
-      optional_flags: ["--receipt"],
+      optional_flags: ["--receipt", "--authority"],
       input_files: [DUMP_FILENAME, METADATA_FILENAME, CAPTURE_RECEIPT_FILENAME, CHECKSUMS_FILENAME],
       output_mode: "external-restore-receipt-json"
     },
@@ -82,13 +84,14 @@ function printUsage() {
   console.log([
     "usage:",
     "  production-restore-verify contract:describe",
-    "  production-restore-verify --input-dir <flat-capture-bundle-dir> [--receipt <external-receipt.json>]",
+    "  production-restore-verify --input-dir <flat-capture-bundle-dir> [--authority <returned-authority.json>] [--receipt <external-receipt.json>]",
     "  production-restore-verify --backup <backup.dump> [--receipt <external-receipt.json>]"
   ].join("\n"));
 }
 
 function verifyRestore(options) {
   const input = loadInput(options);
+  const authority = loadAuthority(options.authority, input);
   const context = inspectDockerContext();
   const postgresImageId = inspectPostgresImage();
   const nonce = randomBytes(6).toString("hex");
@@ -172,9 +175,13 @@ function verifyRestore(options) {
     restore_environment: "off-host-disposable",
     restored_at_utc: new Date().toISOString(),
     parent_ms019b_operational_receipt_sha256: PARENT_OPERATIONAL_RECEIPT_SHA256,
+    returned_backup_authority_sha256: authority?.sha256,
+    returned_backup_tree_digest_sha256: authority?.treeDigestSha256,
     backup_sha256: input.backupSha256,
     backup_bytes: input.backupBytes,
     capture_receipt_sha256: input.captureReceiptSha256,
+    capture_metadata_sha256: input.metadataSha256,
+    captured_at_utc: input.capturedAtUtc,
     docker_context: {
       class: context.class,
       local_engine: true
@@ -184,6 +191,7 @@ function verifyRestore(options) {
       image_id: postgresImageId
     },
     restore_command_result: restorePassed ? "PASSED" : "FAILED",
+    table_verification: tablesPassed ? "PASSED" : "FAILED",
     canonical_tables: Object.fromEntries(CANONICAL_TABLES.map((table) => [table, tablesPassed ? "PASSED" : "FAILED"])),
     expected_migrations: [...EXPECTED_MIGRATIONS],
     migration_verification: migrationsPassed ? "PASSED" : "FAILED",
@@ -219,6 +227,7 @@ function loadInput(options) {
   if (options["input-dir"] !== undefined) {
     return loadCaptureBundle(path.resolve(options["input-dir"]));
   }
+  assert(options.authority === undefined, "authority requires input-dir mode");
   const backupPath = path.resolve(requiredValue(options.backup, "backup"));
   assert(existsSync(backupPath), "backup does not exist");
   assertCustomDump(backupPath);
@@ -234,14 +243,17 @@ function loadInput(options) {
     dumpPath: backupPath,
     backupSha256: sha256(backupBytes),
     backupBytes: backupBytes.length,
-    captureReceiptSha256: "NOT_RECORDED"
+    captureReceiptSha256: "NOT_RECORDED",
+    metadataSha256: "NOT_RECORDED",
+    treeDigestSha256: "NOT_RECORDED",
+    capturedAtUtc: "NOT_RECORDED"
   };
 }
 
 function loadCaptureBundle(directory) {
   assert(existsSync(directory) && statSync(directory).isDirectory(), "input-dir must exist");
-  assertExactFiles(directory, [DUMP_FILENAME, METADATA_FILENAME, CAPTURE_RECEIPT_FILENAME, CHECKSUMS_FILENAME]);
-  verifyChecksums(directory, [DUMP_FILENAME, METADATA_FILENAME, CAPTURE_RECEIPT_FILENAME]);
+  assertExactFiles(directory, CAPTURE_BUNDLE_FILES);
+  verifyChecksums(directory, CAPTURE_CHECKSUM_FILES);
   const dumpPath = path.join(directory, DUMP_FILENAME);
   assertCustomDump(dumpPath);
   const dumpBytes = readFileSync(dumpPath);
@@ -259,11 +271,47 @@ function loadCaptureBundle(directory) {
   assert(captureReceipt.restore_performed === false, "capture receipt restore flag must be false");
   scanValueForSecrets(metadata, "metadata");
   scanValueForSecrets(captureReceipt, "capture receipt");
+  const fileInventory = CAPTURE_BUNDLE_FILES.map((file) => fileMetadata(directory, file));
   return {
     dumpPath,
     backupSha256: sha256(dumpBytes),
     backupBytes: dumpBytes.length,
-    captureReceiptSha256: sha256(readFileSync(path.join(directory, CAPTURE_RECEIPT_FILENAME)))
+    captureReceiptSha256: sha256(readFileSync(path.join(directory, CAPTURE_RECEIPT_FILENAME))),
+    metadataSha256: sha256(readFileSync(path.join(directory, METADATA_FILENAME))),
+    treeDigestSha256: treeDigest(fileInventory),
+    capturedAtUtc: captureReceipt.captured_at_utc,
+    fileInventory
+  };
+}
+
+function loadAuthority(authorityPath, input) {
+  if (authorityPath === undefined) {
+    return undefined;
+  }
+  assert(input.treeDigestSha256 !== "NOT_RECORDED", "authority requires input-dir mode");
+  const resolved = path.resolve(authorityPath);
+  const authorityBytes = readFileSync(resolved);
+  const authority = JSON.parse(authorityBytes.toString("utf8"));
+  scanValueForSecrets(authority, "authority");
+  assertNoPrivateLocatorText(JSON.stringify(authority), "authority");
+  assert(authority.schema_version === 1, "authority schema mismatch");
+  assert(authority.authority_type === "production-backup-returned-v2-authority", "authority type mismatch");
+  assert(authority.contract_version === CONTRACT_VERSION, "authority contract mismatch");
+  assert(authority.parent_ms019b_operational_receipt_sha256 === PARENT_OPERATIONAL_RECEIPT_SHA256, "authority parent receipt mismatch");
+  assert(authority.returned_backup_tree_digest_sha256 === input.treeDigestSha256, "authority tree digest mismatch");
+  assert(authority.backup_sha256 === input.backupSha256, "authority backup SHA mismatch");
+  assert(authority.backup_bytes === input.backupBytes, "authority backup size mismatch");
+  assert(authority.capture_metadata_sha256 === input.metadataSha256, "authority metadata SHA mismatch");
+  assert(authority.capture_receipt_sha256 === input.captureReceiptSha256, "authority capture receipt SHA mismatch");
+  assert(authority.production_mutation_performed === false, "authority mutation flag must be false");
+  assert(authority.production_restore_performed === false, "authority restore flag must be false");
+  assert(authority.raw_dump_content_included === false, "authority raw dump flag must be false");
+  assert(authority.row_data_included === false, "authority row data flag must be false");
+  assert(authority.raw_sql_included === false, "authority raw SQL flag must be false");
+  assert(authority.secrets_included === false, "authority secrets flag must be false");
+  return {
+    sha256: sha256(authorityBytes),
+    treeDigestSha256: authority.returned_backup_tree_digest_sha256
   };
 }
 
@@ -387,6 +435,22 @@ function verifyChecksums(directory, files) {
   assert(map.size === files.length, "checksum file must cover exact payload files");
 }
 
+function fileMetadata(directory, file) {
+  const fullPath = path.join(directory, file);
+  return {
+    path: file,
+    bytes: statSync(fullPath).size,
+    sha256: sha256(readFileSync(fullPath))
+  };
+}
+
+function treeDigest(fileInventory) {
+  const lines = fileInventory
+    .map((file) => `${file.path}\0${file.bytes}\0${file.sha256}`)
+    .join("\n");
+  return sha256(Buffer.from(`${lines}\n`, "utf8"));
+}
+
 function assertCustomDump(file) {
   const bytes = readFileSync(file);
   assert(bytes.length >= 5, "backup dump is too small");
@@ -410,10 +474,23 @@ function scanValueForSecrets(value, label) {
     /[A-Za-z]:\\/u,
     /\/home\//u,
     /\/Users\//u,
-    /feed_url|title|content|tenant_id|raw_sql|dump_bytes/iu
+    /"(?:feed_url|feed_title|entry_title|entry_content|tenant_id|raw_sql|dump_bytes)"\s*:/iu
   ];
   for (const pattern of forbidden) {
     assert(!pattern.test(text), `${label} contains forbidden sensitive content`);
+  }
+}
+
+function assertNoPrivateLocatorText(text, label) {
+  const forbidden = [
+    /[A-Za-z]:\\/u,
+    /\/home\//u,
+    /\/Users\//u,
+    /\b(?:ssh|tcp|npipe|unix):\/\//iu,
+    /\b\d{1,3}(?:\.\d{1,3}){3}\b/u
+  ];
+  for (const pattern of forbidden) {
+    assert(!pattern.test(text), `${label} contains forbidden private locator`);
   }
 }
 
@@ -433,7 +510,10 @@ function spawnDocker(commandArgs, options) {
       shell: false
     });
   }
-  return spawnSync(DOCKER_BIN, commandArgs, options);
+  return spawnSync(DOCKER_BIN, commandArgs, {
+    ...options,
+    shell: false
+  });
 }
 
 function readJson(file) {

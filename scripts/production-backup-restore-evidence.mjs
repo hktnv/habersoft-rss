@@ -20,11 +20,17 @@ const PARENT_OPERATIONAL_RECEIPT_SHA256 = "3a5624a5cab3044a1797d9c8ee78e92828a28
 const STAGING_BACKUP_SHA256 = "595ee0617d86f5886aca25ae99486f064ce06e081d16fec19fec74cdd8db9bfc";
 const POSTGRES_IMAGE = "postgres:17.9-bookworm";
 const DEPENDENCY_MODE = "LANDED_MAIN_PINNED_TOOLING";
+const DUMP_FILENAME = "main-service-production.dump";
+const METADATA_FILENAME = "backup-capture-metadata.json";
+const CAPTURE_RECEIPT_FILENAME = "backup-capture-receipt.json";
+const CHECKSUMS_FILENAME = "checksums.sha256";
 const CAPTURE_SOURCE = "scripts/production-backup-restore-capture.sh";
 const RESTORE_SOURCE = "scripts/production-backup-restore-off-host-verify.sh";
 const CAPTURE_BUNDLE = "capture-production-postgres-backup.sh";
 const RESTORE_BUNDLE = "verify-off-host-postgres-restore.sh";
 const TOOLING_LOCK = "repository-tooling-lock.json";
+const CAPTURE_BUNDLE_FILES = Object.freeze([DUMP_FILENAME, METADATA_FILENAME, CAPTURE_RECEIPT_FILENAME, CHECKSUMS_FILENAME]);
+const CAPTURE_CHECKSUM_FILES = Object.freeze([DUMP_FILENAME, METADATA_FILENAME, CAPTURE_RECEIPT_FILENAME]);
 const REQUIRED_TOOL_FILES = Object.freeze([
   "package.json",
   "scripts/release-identity.mjs",
@@ -68,6 +74,12 @@ try {
     case "handoff:freeze":
       freezeHandoffCommand(args);
       break;
+    case "authority:create":
+      createReturnedBackupAuthorityCommand(args);
+      break;
+    case "authority:verify":
+      verifyReturnedBackupAuthorityCommand(args);
+      break;
     case "receipt:create":
       createCombinedReceiptCommand(args);
       break;
@@ -75,7 +87,7 @@ try {
       verifyCombinedReceiptCommand(args);
       break;
     default:
-      fail("usage: production-backup-restore-evidence <handoff|handoff:verify|handoff:freeze|receipt:create|receipt:verify>");
+      fail("usage: production-backup-restore-evidence <handoff|handoff:verify|handoff:freeze|authority:create|authority:verify|receipt:create|receipt:verify>");
   }
 } catch (error) {
   fail(error.message);
@@ -169,14 +181,29 @@ function freezeHandoffCommand(options) {
 function createCombinedReceiptCommand(options) {
   const captureDir = externalPath(options["capture-dir"], "capture-dir");
   const restoreReceiptFile = externalPath(options["restore-receipt"], "restore-receipt");
+  const authorityFile = externalPath(options.authority, "authority");
+  const handoffDir = externalPath(options.handoff, "handoff");
   const output = externalPath(options.output, "output");
   assert(!existsSync(output), "combined receipt output must not already exist");
   const captureReceiptFile = path.join(captureDir, "backup-capture-receipt.json");
   const captureReceipt = readJson(captureReceiptFile);
   const restoreReceipt = readJson(restoreReceiptFile);
+  const captureEvidence = readCaptureBundleEvidence(captureDir);
+  const authority = readJson(authorityFile);
+  validateReturnedBackupAuthority(authority, { captureEvidence });
+  const handoff = verifyHandoff(handoffDir);
   const receipt = createCombinedReceipt(captureReceipt, restoreReceipt, {
     captureReceiptSha256: sha256(readFileSync(captureReceiptFile)),
-    restoreReceiptSha256: sha256(readFileSync(restoreReceiptFile))
+    captureMetadataSha256: captureEvidence.metadataSha256,
+    restoreReceiptSha256: sha256(readFileSync(restoreReceiptFile)),
+    authorityRecordSha256: sha256(readFileSync(authorityFile)),
+    returnedBackupTreeDigestSha256: captureEvidence.treeDigestSha256,
+    handoffManifestSha256: sha256(readFileSync(path.join(handoffDir, "manifest.json"))),
+    toolingLockSha256: sha256(readFileSync(path.join(handoffDir, TOOLING_LOCK))),
+    handoffGenerationSourceCommit: handoff.manifest.generation_source_commit,
+    handoffCaptureScriptSha256: handoff.manifest.capture_script.sha256,
+    handoffRestoreWrapperSha256: handoff.manifest.restore_wrapper.sha256,
+    localVerifierSourceCommit: gitOutput(["rev-parse", "HEAD"])
   });
   validateCombinedReceipt(receipt, { requireBaseline: false });
   writeJson(output, receipt, 0o600);
@@ -185,6 +212,52 @@ function createCombinedReceiptCommand(options) {
     receipt: output,
     sha256: sha256(readFileSync(output)),
     backup_restore_baseline: receipt.backup_restore_baseline
+  }, null, 2));
+}
+
+function createReturnedBackupAuthorityCommand(options) {
+  const captureDir = externalPath(options["capture-dir"] ?? options["input-dir"], "capture-dir");
+  const output = externalPath(options.output, "output");
+  const captureEvidence = readCaptureBundleEvidence(captureDir);
+  if (existsSync(output)) {
+    const existing = readJson(output);
+    validateReturnedBackupAuthority(existing, { captureEvidence });
+    console.log(JSON.stringify({
+      status: "production-backup-returned-authority-verified",
+      authority: output,
+      sha256: sha256(readFileSync(output)),
+      returned_backup_tree_digest_sha256: existing.returned_backup_tree_digest_sha256,
+      backup_sha256: existing.backup_sha256
+    }, null, 2));
+    return;
+  }
+  const authority = createReturnedBackupAuthority(captureEvidence);
+  validateReturnedBackupAuthority(authority, { captureEvidence });
+  mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
+  writeJsonNew(output, authority, 0o600);
+  console.log(JSON.stringify({
+    status: "production-backup-returned-authority-created",
+    authority: output,
+    sha256: sha256(readFileSync(output)),
+    returned_backup_tree_digest_sha256: authority.returned_backup_tree_digest_sha256,
+    backup_sha256: authority.backup_sha256
+  }, null, 2));
+}
+
+function verifyReturnedBackupAuthorityCommand(options) {
+  const authorityFile = externalPath(options.authority ?? options.input, "authority");
+  const captureEvidence = options["capture-dir"] === undefined
+    ? undefined
+    : readCaptureBundleEvidence(externalPath(options["capture-dir"], "capture-dir"));
+  const authority = readJson(authorityFile);
+  validateReturnedBackupAuthority(authority, { captureEvidence });
+  console.log(JSON.stringify({
+    status: "production-backup-returned-authority-verified",
+    authority: authorityFile,
+    sha256: sha256(readFileSync(authorityFile)),
+    returned_backup_tree_digest_sha256: authority.returned_backup_tree_digest_sha256,
+    backup_sha256: authority.backup_sha256,
+    secrets_included: false
   }, null, 2));
 }
 
@@ -231,9 +304,15 @@ function createCombinedReceipt(captureReceipt, restoreReceipt, hashes) {
   const baseline =
     captureReceipt.receipt_type === "production-backup-capture" &&
     restoreReceipt.receipt_type === "off-host-disposable-restore" &&
+    restoreReceipt.returned_backup_authority_sha256 === hashes.authorityRecordSha256 &&
+    restoreReceipt.backup_sha256 === captureReceipt.backup?.sha256 &&
+    restoreReceipt.backup_bytes === captureReceipt.backup?.bytes &&
+    restoreReceipt.capture_receipt_sha256 === hashes.captureReceiptSha256 &&
     restoreReceipt.restore_command_result === "PASSED" &&
+    restoreReceipt.table_verification === "PASSED" &&
     restoreReceipt.migration_verification === "PASSED" &&
     restoreReceipt.teardown?.result === "PASSED" &&
+    restoreReceipt.docker_context?.local_engine === true &&
     restoreReceipt.production_mutation_performed === false &&
     restoreReceipt.production_restore_performed === false
       ? "PASSED"
@@ -246,13 +325,29 @@ function createCombinedReceipt(captureReceipt, restoreReceipt, hashes) {
     service: RELEASE_IDENTITY.application,
     environment: "production",
     parent_ms019b_operational_receipt_sha256: PARENT_OPERATIONAL_RECEIPT_SHA256,
+    handoff_manifest_sha256: hashes.handoffManifestSha256,
+    handoff_generation_source_commit: hashes.handoffGenerationSourceCommit,
+    handoff_capture_script_sha256: hashes.handoffCaptureScriptSha256,
+    handoff_restore_wrapper_sha256: hashes.handoffRestoreWrapperSha256,
+    repository_tooling_lock_sha256: hashes.toolingLockSha256,
+    local_verifier_source_commit: hashes.localVerifierSourceCommit,
+    returned_backup_authority_sha256: hashes.authorityRecordSha256,
+    returned_backup_tree_digest_sha256: hashes.returnedBackupTreeDigestSha256,
     backup_capture_receipt_sha256: hashes.captureReceiptSha256,
+    backup_capture_metadata_sha256: hashes.captureMetadataSha256,
     backup_sha256: captureReceipt.backup?.sha256,
     backup_bytes: captureReceipt.backup?.bytes,
     captured_at_utc: captureReceipt.captured_at_utc,
     off_host_restore_receipt_sha256: hashes.restoreReceiptSha256,
     restored_at_utc: restoreReceipt.restored_at_utc,
+    docker_context_class: restoreReceipt.docker_context?.class,
+    postgres_image: restoreReceipt.postgres?.image,
+    postgres_image_id: restoreReceipt.postgres?.image_id,
+    restore_command_result: restoreReceipt.restore_command_result,
     structural_verification: "PASSED",
+    table_verification: restoreReceipt.table_verification,
+    canonical_tables: restoreReceipt.canonical_tables,
+    expected_migrations: restoreReceipt.expected_migrations,
     migration_verification: restoreReceipt.migration_verification,
     teardown_result: restoreReceipt.teardown?.result,
     canonical_repository: CANONICAL_REMOTE,
@@ -271,18 +366,34 @@ function validateCombinedReceipt(receipt, options) {
   assert(receipt.contract_version === CONTRACT_VERSION, "receipt contract mismatch");
   assert(receipt.receipt_type === "production-backup-restore-acceptance", "receipt type mismatch");
   assert(receipt.parent_ms019b_operational_receipt_sha256 === PARENT_OPERATIONAL_RECEIPT_SHA256, "parent MS-019B receipt mismatch");
+  assertOptionalSha(receipt.handoff_manifest_sha256, "handoff manifest SHA malformed");
+  assertOptionalGitSha(receipt.handoff_generation_source_commit, "handoff source commit malformed");
+  assertOptionalSha(receipt.handoff_capture_script_sha256, "handoff capture SHA malformed");
+  assertOptionalSha(receipt.handoff_restore_wrapper_sha256, "handoff restore SHA malformed");
+  assertOptionalSha(receipt.repository_tooling_lock_sha256, "tooling lock SHA malformed");
+  assertOptionalGitSha(receipt.local_verifier_source_commit, "local verifier commit malformed");
+  assertOptionalSha(receipt.returned_backup_authority_sha256, "authority record SHA malformed");
+  assertOptionalSha(receipt.returned_backup_tree_digest_sha256, "authority tree digest malformed");
   assert(isSha256(receipt.backup_capture_receipt_sha256), "capture receipt SHA malformed");
+  assertOptionalSha(receipt.backup_capture_metadata_sha256, "capture metadata SHA malformed");
   assert(isSha256(receipt.backup_sha256), "backup SHA malformed");
   assert(receipt.backup_sha256 !== STAGING_BACKUP_SHA256, "staging backup SHA cannot substitute production backup SHA");
   assert(Number.isInteger(receipt.backup_bytes) && receipt.backup_bytes > 0, "backup size invalid");
   assert(isSha256(receipt.off_host_restore_receipt_sha256), "restore receipt SHA malformed");
+  assert(receipt.docker_context_class === undefined || ["LOCAL_UNIX_SOCKET", "LOCAL_WINDOWS_NPIPE"].includes(receipt.docker_context_class), "Docker context class invalid");
+  assert(receipt.postgres_image === undefined || receipt.postgres_image === POSTGRES_IMAGE, "PostgreSQL image mismatch");
+  assert(receipt.postgres_image_id === undefined || /^sha256:[a-f0-9]{64}$/u.test(receipt.postgres_image_id), "PostgreSQL image id malformed");
+  assert(receipt.restore_command_result === undefined || ["PASSED", "FAILED"].includes(receipt.restore_command_result), "restore command status invalid");
   assert(receipt.structural_verification === "PASSED", "structural verification must pass");
+  assert(receipt.table_verification === undefined || ["PASSED", "FAILED"].includes(receipt.table_verification), "table verification status invalid");
   assert(["PASSED", "FAILED"].includes(receipt.migration_verification), "migration verification status invalid");
   assert(["PASSED", "FAILED"].includes(receipt.teardown_result), "teardown status invalid");
   assert(receipt.production_mutation_performed === false, "production mutation flag must be false");
   assert(receipt.production_restore_performed === false, "production restore flag must be false");
   assert(receipt.secrets_included === false, "secrets flag must be false");
   const expectedBaseline =
+    (receipt.restore_command_result === undefined || receipt.restore_command_result === "PASSED") &&
+    (receipt.table_verification === undefined || receipt.table_verification === "PASSED") &&
     receipt.migration_verification === "PASSED" &&
     receipt.teardown_result === "PASSED"
       ? "PASSED"
@@ -290,6 +401,98 @@ function validateCombinedReceipt(receipt, options) {
   assert(receipt.backup_restore_baseline === expectedBaseline, `backup_restore_baseline must be ${expectedBaseline}`);
   if (options.requireBaseline === true) {
     assert(receipt.backup_restore_baseline === "PASSED", "backup restore baseline is not passed");
+    assert(isSha256(receipt.handoff_manifest_sha256), "handoff manifest SHA required for strict baseline");
+    assert(isGitSha(receipt.handoff_generation_source_commit), "handoff source commit required for strict baseline");
+    assert(isSha256(receipt.repository_tooling_lock_sha256), "tooling lock SHA required for strict baseline");
+    assert(isSha256(receipt.returned_backup_authority_sha256), "authority record SHA required for strict baseline");
+    assert(isSha256(receipt.returned_backup_tree_digest_sha256), "authority tree digest required for strict baseline");
+    assert(isSha256(receipt.backup_capture_metadata_sha256), "capture metadata SHA required for strict baseline");
+    assert(isGitSha(receipt.local_verifier_source_commit), "local verifier commit required for strict baseline");
+    assert(receipt.docker_context_class === "LOCAL_UNIX_SOCKET" || receipt.docker_context_class === "LOCAL_WINDOWS_NPIPE", "local Docker context required for strict baseline");
+    assert(receipt.postgres_image === POSTGRES_IMAGE, "PostgreSQL image required for strict baseline");
+    assert(/^sha256:[a-f0-9]{64}$/u.test(receipt.postgres_image_id), "PostgreSQL image id required for strict baseline");
+    assert(receipt.restore_command_result === "PASSED", "restore command must pass for strict baseline");
+    assert(receipt.table_verification === "PASSED", "table verification must pass for strict baseline");
+  }
+}
+
+function createReturnedBackupAuthority(captureEvidence) {
+  return {
+    schema_version: 1,
+    authority_type: "production-backup-returned-v2-authority",
+    contract_version: CONTRACT_VERSION,
+    milestone: MILESTONE,
+    service: RELEASE_IDENTITY.application,
+    environment: "production",
+    created_at_utc: new Date().toISOString(),
+    parent_ms019b_operational_receipt_sha256: PARENT_OPERATIONAL_RECEIPT_SHA256,
+    expected_inventory: [...CAPTURE_BUNDLE_FILES],
+    actual_inventory: captureEvidence.fileInventory,
+    checksums_sha256: captureEvidence.checksumsSha256,
+    returned_backup_tree_digest_sha256: captureEvidence.treeDigestSha256,
+    backup_sha256: captureEvidence.backupSha256,
+    backup_bytes: captureEvidence.backupBytes,
+    backup_format: "POSTGRESQL_CUSTOM",
+    capture_metadata_sha256: captureEvidence.metadataSha256,
+    capture_receipt_sha256: captureEvidence.captureReceiptSha256,
+    captured_at_utc: captureEvidence.captureReceipt.captured_at_utc,
+    capture_receipt_type: captureEvidence.captureReceipt.receipt_type,
+    production_contact_performed_by_codex: false,
+    production_mutation_performed: false,
+    production_restore_performed: false,
+    raw_dump_content_included: false,
+    row_data_included: false,
+    raw_sql_included: false,
+    secrets_included: false
+  };
+}
+
+function validateReturnedBackupAuthority(authority, { captureEvidence } = {}) {
+  scanTextForSecrets(JSON.stringify(authority), "returned backup authority");
+  assertNoPrivateLocatorText(JSON.stringify(authority), "returned backup authority");
+  assert(authority.schema_version === 1, "authority schema mismatch");
+  assert(authority.authority_type === "production-backup-returned-v2-authority", "authority type mismatch");
+  assert(authority.contract_version === CONTRACT_VERSION, "authority contract mismatch");
+  assert(authority.milestone === MILESTONE, "authority milestone mismatch");
+  assert(authority.service === RELEASE_IDENTITY.application, "authority service mismatch");
+  assert(authority.parent_ms019b_operational_receipt_sha256 === PARENT_OPERATIONAL_RECEIPT_SHA256, "authority parent receipt mismatch");
+  assertSameArray(authority.expected_inventory, [...CAPTURE_BUNDLE_FILES], "authority expected inventory mismatch");
+  assert(Array.isArray(authority.actual_inventory), "authority actual inventory invalid");
+  assertSameArray(authority.actual_inventory.map((file) => file.path), [...CAPTURE_BUNDLE_FILES], "authority actual inventory mismatch");
+  for (const file of authority.actual_inventory) {
+    assert(CAPTURE_BUNDLE_FILES.includes(file.path), "authority unexpected file");
+    assert(Number.isInteger(file.bytes) && file.bytes > 0, `authority file size invalid for ${file.path}`);
+    assert(isSha256(file.sha256), `authority file SHA malformed for ${file.path}`);
+  }
+  assert(isSha256(authority.checksums_sha256), "authority checksums SHA malformed");
+  assert(isSha256(authority.returned_backup_tree_digest_sha256), "authority tree digest malformed");
+  assert(isSha256(authority.backup_sha256), "authority backup SHA malformed");
+  assert(authority.backup_sha256 !== STAGING_BACKUP_SHA256, "staging backup SHA cannot substitute production backup SHA");
+  assert(Number.isInteger(authority.backup_bytes) && authority.backup_bytes > 0, "authority backup size invalid");
+  assert(authority.backup_format === "POSTGRESQL_CUSTOM", "authority backup format mismatch");
+  assert(isSha256(authority.capture_metadata_sha256), "authority metadata SHA malformed");
+  assert(isSha256(authority.capture_receipt_sha256), "authority capture receipt SHA malformed");
+  assert(authority.capture_receipt_type === "production-backup-capture", "authority capture receipt type mismatch");
+  for (const key of [
+    "production_contact_performed_by_codex",
+    "production_mutation_performed",
+    "production_restore_performed",
+    "raw_dump_content_included",
+    "row_data_included",
+    "raw_sql_included",
+    "secrets_included"
+  ]) {
+    assert(authority[key] === false, `authority ${key} must be false`);
+  }
+  if (captureEvidence !== undefined) {
+    assert(authority.checksums_sha256 === captureEvidence.checksumsSha256, "authority checksums SHA mismatch");
+    assert(authority.returned_backup_tree_digest_sha256 === captureEvidence.treeDigestSha256, "authority tree digest mismatch");
+    assert(authority.backup_sha256 === captureEvidence.backupSha256, "authority backup SHA mismatch");
+    assert(authority.backup_bytes === captureEvidence.backupBytes, "authority backup size mismatch");
+    assert(authority.capture_metadata_sha256 === captureEvidence.metadataSha256, "authority metadata SHA mismatch");
+    assert(authority.capture_receipt_sha256 === captureEvidence.captureReceiptSha256, "authority capture receipt SHA mismatch");
+    assert(authority.captured_at_utc === captureEvidence.captureReceipt.captured_at_utc, "authority captured timestamp mismatch");
+    assert(JSON.stringify(authority.actual_inventory) === JSON.stringify(captureEvidence.fileInventory), "authority file inventory mismatch");
   }
 }
 
@@ -614,16 +817,51 @@ function validateToolingLock(lock) {
 function assertExactFiles(directory, expected) {
   const entries = readdirSync(directory, { withFileTypes: true });
   const names = entries.map((entry) => entry.name).sort();
-  assertSameArray(names, [...expected].sort(), `unexpected handoff inventory: ${names.join(",")}`);
+  assertSameArray(names, [...expected].sort(), `unexpected inventory: ${names.join(",")}`);
   for (const entry of entries) {
     const stat = lstatSync(path.join(directory, entry.name));
-    assert(stat.isFile(), `handoff entry must be a file: ${entry.name}`);
-    assert(!entry.name.endsWith(".zip") && !entry.name.endsWith(".tar"), "handoff must not include archive");
+    assert(stat.isFile(), `entry must be a file: ${entry.name}`);
+    assert(!entry.name.endsWith(".zip") && !entry.name.endsWith(".tar"), "inventory must not include archive");
   }
 }
 
+function readCaptureBundleEvidence(directory) {
+  assert(existsSync(directory) && statSync(directory).isDirectory(), "capture-dir must be an existing directory");
+  assertExactFiles(directory, CAPTURE_BUNDLE_FILES);
+  verifyChecksums(directory, CAPTURE_CHECKSUM_FILES);
+  const dumpPath = path.join(directory, DUMP_FILENAME);
+  assertCustomDump(dumpPath);
+  const dumpBytes = readFileSync(dumpPath);
+  const metadata = readJson(path.join(directory, METADATA_FILENAME));
+  const captureReceipt = readJson(path.join(directory, CAPTURE_RECEIPT_FILENAME));
+  assert(metadata.contract_version === CONTRACT_VERSION, "metadata contract mismatch");
+  assert(captureReceipt.contract_version === CONTRACT_VERSION, "capture receipt contract mismatch");
+  assert(captureReceipt.receipt_type === "production-backup-capture", "capture receipt type mismatch");
+  assert(metadata.backup_sha256 === sha256(dumpBytes), "metadata backup SHA mismatch");
+  assert(captureReceipt.backup?.sha256 === sha256(dumpBytes), "capture receipt backup SHA mismatch");
+  assert(metadata.backup_bytes === dumpBytes.length, "metadata backup size mismatch");
+  assert(captureReceipt.backup?.bytes === dumpBytes.length, "capture receipt backup size mismatch");
+  assert(captureReceipt.parent_ms019b_operational_receipt_sha256 === PARENT_OPERATIONAL_RECEIPT_SHA256, "parent MS-019B receipt mismatch");
+  assert(captureReceipt.production_mutation_performed === false, "capture receipt mutation flag must be false");
+  assert(captureReceipt.restore_performed === false, "capture receipt restore flag must be false");
+  scanTextForSecrets(JSON.stringify(metadata), "metadata");
+  scanTextForSecrets(JSON.stringify(captureReceipt), "capture receipt");
+  const fileInventory = CAPTURE_BUNDLE_FILES.map((file) => fileMetadata(directory, file));
+  return {
+    fileInventory,
+    treeDigestSha256: treeDigest(fileInventory),
+    checksumsSha256: sha256(readFileSync(path.join(directory, CHECKSUMS_FILENAME))),
+    metadataSha256: sha256(readFileSync(path.join(directory, METADATA_FILENAME))),
+    captureReceiptSha256: sha256(readFileSync(path.join(directory, CAPTURE_RECEIPT_FILENAME))),
+    backupSha256: sha256(dumpBytes),
+    backupBytes: dumpBytes.length,
+    metadata,
+    captureReceipt
+  };
+}
+
 function verifyChecksums(directory, files) {
-  const lines = readText(path.join(directory, "checksums.sha256"))
+  const lines = readText(path.join(directory, CHECKSUMS_FILENAME))
     .trim()
     .split(/\r?\n/u)
     .filter((line) => line !== "");
@@ -637,6 +875,19 @@ function verifyChecksums(directory, files) {
   }
   assert(map.size === files.length, "checksum file must cover exact payload files");
   return map;
+}
+
+function assertCustomDump(file) {
+  const bytes = readFileSync(file);
+  assert(bytes.length >= 5, "backup dump is too small");
+  assert(bytes.subarray(0, 5).toString("ascii") === "PGDMP", "backup is not a PostgreSQL custom-format dump");
+}
+
+function treeDigest(fileInventory) {
+  const lines = fileInventory
+    .map((file) => `${file.path}\0${file.bytes}\0${file.sha256}`)
+    .join("\n");
+  return sha256(Buffer.from(`${lines}\n`, "utf8"));
 }
 
 function scanShellForForbiddenCommands(text, label) {
@@ -662,10 +913,23 @@ function scanTextForSecrets(text, label) {
     /AGENT_KEY\s*=/iu,
     /-----BEGIN [A-Z ]*PRIVATE KEY-----/u,
     /Bearer\s+[A-Za-z0-9._-]+/u,
-    /feed_url|tenant_id|raw_sql|dump_bytes/iu
+    /"(?:feed_url|feed_title|entry_title|entry_content|tenant_id|raw_sql|dump_bytes)"\s*:/iu
   ];
   for (const pattern of forbidden) {
     assert(!pattern.test(text), `${label} contains forbidden sensitive content`);
+  }
+}
+
+function assertNoPrivateLocatorText(text, label) {
+  const forbidden = [
+    /[A-Za-z]:\\/u,
+    /\/home\//u,
+    /\/Users\//u,
+    /\b(?:ssh|tcp|npipe|unix):\/\//iu,
+    /\b\d{1,3}(?:\.\d{1,3}){3}\b/u
+  ];
+  for (const pattern of forbidden) {
+    assert(!pattern.test(text), `${label} contains forbidden private locator`);
   }
 }
 
@@ -718,6 +982,10 @@ function writeJson(file, value, mode) {
   writeText(file, `${JSON.stringify(value, null, 2)}\n`, mode);
 }
 
+function writeJsonNew(file, value, mode) {
+  writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, { mode, flag: "wx" });
+}
+
 function externalPath(value, label) {
   assert(value !== undefined && value !== "", `${label} is required`);
   return path.resolve(value);
@@ -752,6 +1020,14 @@ function isSha256(value) {
 
 function isGitSha(value) {
   return /^[a-f0-9]{40}$/u.test(String(value ?? ""));
+}
+
+function assertOptionalSha(value, message) {
+  assert(value === undefined || isSha256(value), message);
+}
+
+function assertOptionalGitSha(value, message) {
+  assert(value === undefined || isGitSha(value), message);
 }
 
 function assertSameArray(actual, expected, message) {

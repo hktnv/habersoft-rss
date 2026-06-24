@@ -18,6 +18,7 @@ import path from "node:path";
 const temp = mkdtempSync(path.join(os.tmpdir(), "main-service-ms019c-tests-"));
 const fakeBin = path.join(temp, "fake-bin");
 const captureDir = path.join(temp, "capture-output");
+const authorityFile = path.join(temp, "production-backup-returned-v2-authority.json");
 const restoreReceipt = path.join(temp, "off-host-restore-receipt.json");
 const combinedReceipt = path.join(temp, "production-backup-restore-receipt.json");
 const handoffDir = path.join(temp, "handoff");
@@ -38,6 +39,7 @@ try {
   assertCoreContractsPass();
   assertHandoffPasses();
   assertCapturePasses(env);
+  assertAuthorityPasses();
   assertRestorePasses();
   assertCombinedReceiptPasses();
   assertGeneratedHandoffWrappersPass();
@@ -54,6 +56,7 @@ try {
   assertRestoreRejectsSecretMetadata();
   assertRestoreRejectsRemoteDockerContext();
   assertRestoreRejectsTeardownLeak();
+  assertAuthorityRejectsBundleMismatch();
   assertCombinedReceiptRejectsStagingBackupSha();
   assertCombinedReceiptStrictRejectsFailedBaseline();
   assertHandoffRejectsChecksumMismatch();
@@ -141,11 +144,54 @@ function assertCapturePasses(env) {
   assertNoSensitiveText(JSON.stringify(receipt));
 }
 
+function assertAuthorityPasses() {
+  const create = runNode([
+    "scripts/production-backup-restore-evidence.mjs",
+    "authority:create",
+    "--capture-dir",
+    captureDir,
+    "--output",
+    authorityFile
+  ]);
+  assert.equal(create.status, 0, create.stderr);
+  const authority = readJson(authorityFile);
+  assert.equal(authority.authority_type, "production-backup-returned-v2-authority");
+  assert.equal(authority.raw_dump_content_included, false);
+  assert.equal(authority.row_data_included, false);
+  assert.equal(authority.raw_sql_included, false);
+  assert.equal(authority.secrets_included, false);
+  assert.equal(authority.backup_sha256, readJson(path.join(captureDir, "backup-capture-receipt.json")).backup.sha256);
+  assertNoSensitiveText(JSON.stringify(authority));
+
+  const verify = runNode([
+    "scripts/production-backup-restore-evidence.mjs",
+    "authority:verify",
+    "--authority",
+    authorityFile,
+    "--capture-dir",
+    captureDir
+  ]);
+  assert.equal(verify.status, 0, verify.stderr);
+
+  const idempotent = runNode([
+    "scripts/production-backup-restore-evidence.mjs",
+    "authority:create",
+    "--capture-dir",
+    captureDir,
+    "--output",
+    authorityFile
+  ]);
+  assert.equal(idempotent.status, 0, idempotent.stderr);
+  assert.match(idempotent.stdout, /authority-verified/u);
+}
+
 function assertRestorePasses() {
   const result = runNode([
     "scripts/production-restore-verify.mjs",
     "--input-dir",
     captureDir,
+    "--authority",
+    authorityFile,
     "--receipt",
     restoreReceipt
   ], { fakeDocker: true });
@@ -154,6 +200,8 @@ function assertRestorePasses() {
   assert.equal(receipt.restore_command_result, "PASSED");
   assert.equal(receipt.migration_verification, "PASSED");
   assert.equal(receipt.teardown.result, "PASSED");
+  assert.equal(receipt.returned_backup_authority_sha256, sha256(readFileSync(authorityFile)));
+  assert.equal(receipt.table_verification, "PASSED");
   assert.equal(receipt.production_restore_performed, false);
   assertNoSensitiveText(JSON.stringify(receipt));
 }
@@ -166,10 +214,18 @@ function assertCombinedReceiptPasses() {
     captureDir,
     "--restore-receipt",
     restoreReceipt,
+    "--authority",
+    authorityFile,
+    "--handoff",
+    handoffDir,
     "--output",
     combinedReceipt
   ]);
   assert.equal(create.status, 0, create.stderr);
+  const receipt = readJson(combinedReceipt);
+  assert.equal(receipt.returned_backup_authority_sha256, sha256(readFileSync(authorityFile)));
+  assert.equal(receipt.handoff_manifest_sha256, sha256(readFileSync(path.join(handoffDir, "manifest.json"))));
+  assert.equal(receipt.table_verification, "PASSED");
   const verify = runNode([
     "scripts/production-backup-restore-evidence.mjs",
     "receipt:verify",
@@ -414,6 +470,22 @@ function assertRestoreRejectsTeardownLeak() {
   const result = restoreFixture(captureDir, { FAKE_TEARDOWN_LEFT: "1" });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /teardown|failed/u);
+}
+
+function assertAuthorityRejectsBundleMismatch() {
+  const dir = cloneCapture("authority-mismatch");
+  writeFileSync(path.join(dir, "main-service-production.dump"), "PGDMPauthority-changed\n");
+  rewriteCaptureIdentity(dir);
+  const result = runNode([
+    "scripts/production-backup-restore-evidence.mjs",
+    "authority:verify",
+    "--authority",
+    authorityFile,
+    "--capture-dir",
+    dir
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /authority .*mismatch/u);
 }
 
 function assertCombinedReceiptRejectsStagingBackupSha() {
@@ -663,6 +735,22 @@ function rewriteCaptureChecksums(dir) {
   writeFileSync(path.join(dir, "checksums.sha256"), `${files.map((file) => `${sha256(readFileSync(path.join(dir, file)))}  ${file}`).join("\n")}\n`);
 }
 
+function rewriteCaptureIdentity(dir) {
+  const dump = readFileSync(path.join(dir, "main-service-production.dump"));
+  const digest = sha256(dump);
+  const metadataFile = path.join(dir, "backup-capture-metadata.json");
+  const metadata = readJson(metadataFile);
+  metadata.backup_sha256 = digest;
+  metadata.backup_bytes = dump.length;
+  writeJson(metadataFile, metadata);
+  const receiptFile = path.join(dir, "backup-capture-receipt.json");
+  const receipt = readJson(receiptFile);
+  receipt.backup.sha256 = digest;
+  receipt.backup.bytes = dump.length;
+  writeJson(receiptFile, receipt);
+  rewriteCaptureChecksums(dir);
+}
+
 function rewriteHandoffChecksums(dir) {
   const manifestFile = path.join(dir, "manifest.json");
   const manifest = readJson(manifestFile);
@@ -692,7 +780,10 @@ function runNode(args, options = {}) {
     shell: false,
     env: {
       ...process.env,
-      ...(options.fakeDocker ? { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` } : {}),
+      ...(options.fakeDocker ? {
+        PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+        MS019C_DOCKER_FAKE_SCRIPT: path.join(fakeBin, "docker-fake.cjs")
+      } : {}),
       ...(options.env ?? {})
     }
   });
