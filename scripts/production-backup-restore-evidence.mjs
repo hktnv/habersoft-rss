@@ -19,15 +19,27 @@ const CANONICAL_REMOTE = "https://github.com/hktnv/habersoft-rss";
 const PARENT_OPERATIONAL_RECEIPT_SHA256 = "3a5624a5cab3044a1797d9c8ee78e92828a28233a67f759b8bf6845a7ecc4620";
 const STAGING_BACKUP_SHA256 = "595ee0617d86f5886aca25ae99486f064ce06e081d16fec19fec74cdd8db9bfc";
 const POSTGRES_IMAGE = "postgres:17.9-bookworm";
+const DEPENDENCY_MODE = "LANDED_MAIN_PINNED_TOOLING";
 const CAPTURE_SOURCE = "scripts/production-backup-restore-capture.sh";
 const RESTORE_SOURCE = "scripts/production-backup-restore-off-host-verify.sh";
 const CAPTURE_BUNDLE = "capture-production-postgres-backup.sh";
 const RESTORE_BUNDLE = "verify-off-host-postgres-restore.sh";
+const TOOLING_LOCK = "repository-tooling-lock.json";
+const REQUIRED_TOOL_FILES = Object.freeze([
+  "package.json",
+  "scripts/release-identity.mjs",
+  "scripts/production-backup.mjs",
+  "scripts/production-restore-verify.mjs",
+  "scripts/production-backup-restore-evidence.mjs",
+  CAPTURE_SOURCE,
+  RESTORE_SOURCE
+]);
 const HANDOFF_FILES = Object.freeze([
   "README.md",
   CAPTURE_BUNDLE,
   RESTORE_BUNDLE,
   "backup-restore-contract.json",
+  TOOLING_LOCK,
   "manifest.json",
   "checksums.sha256"
 ]);
@@ -74,13 +86,15 @@ function generateHandoff(options) {
   prepareEmptyOutputDir(outputDir);
   const generatedAt = new Date().toISOString();
   const sourceCommit = gitOutput(["rev-parse", "HEAD"]);
-  const captureText = readText(CAPTURE_SOURCE).replaceAll("__MS019C_SOURCE_COMMIT__", sourceCommit);
-  const restoreText = readText(RESTORE_SOURCE);
+  const toolingLock = createToolingLock(sourceCommit);
+  const captureText = renderWrapper(readText(CAPTURE_SOURCE), toolingLock);
+  const restoreText = renderWrapper(readText(RESTORE_SOURCE), toolingLock);
   writeText(path.join(outputDir, CAPTURE_BUNDLE), captureText, 0o755);
   writeText(path.join(outputDir, RESTORE_BUNDLE), restoreText, 0o755);
   writeText(path.join(outputDir, "README.md"), renderReadme(generatedAt), 0o644);
   writeJson(path.join(outputDir, "backup-restore-contract.json"), createContract(), 0o644);
-  const manifest = createManifest(outputDir, generatedAt, sourceCommit);
+  writeJson(path.join(outputDir, TOOLING_LOCK), toolingLock, 0o644);
+  const manifest = createManifest(outputDir, generatedAt, sourceCommit, toolingLock);
   writeJson(path.join(outputDir, "manifest.json"), manifest, 0o644);
   writeChecksums(outputDir, CHECKSUM_FILES);
   const verified = verifyHandoff(outputDir);
@@ -107,6 +121,7 @@ function verifyHandoffCommand(options) {
     manifest_sha256: sha256(readFileSync(path.join(bundle, "manifest.json"))),
     capture_script_sha256: result.manifest.capture_script.sha256,
     restore_wrapper_sha256: result.manifest.restore_wrapper.sha256,
+    tooling_lock_sha256: result.manifest.repository_tooling_lock.sha256,
     production_contact_performed: false,
     backup_performed: false,
     restore_performed: false
@@ -128,6 +143,11 @@ function freezeHandoffCommand(options) {
     manifest_sha256: sha256(readFileSync(path.join(bundle, "manifest.json"))),
     capture_script_sha256: result.manifest.capture_script.sha256,
     restore_wrapper_sha256: result.manifest.restore_wrapper.sha256,
+    tooling_lock_sha256: result.manifest.repository_tooling_lock.sha256,
+    dependency_mode: result.manifest.dependency_mode,
+    core_cli_contract_version: result.manifest.core_cli_contract_version,
+    lf_bash_syntax_result: "PASSED",
+    end_to_end_synthetic_smoke_result: options["synthetic-smoke-result"] ?? "NOT_RUN",
     generated_at_utc: new Date().toISOString(),
     production_contact_performed: false,
     production_mutation_performed: false,
@@ -141,7 +161,8 @@ function freezeHandoffCommand(options) {
     freeze_sha256: sha256(readFileSync(output)),
     manifest_sha256: freeze.manifest_sha256,
     capture_script_sha256: freeze.capture_script_sha256,
-    restore_wrapper_sha256: freeze.restore_wrapper_sha256
+    restore_wrapper_sha256: freeze.restore_wrapper_sha256,
+    tooling_lock_sha256: freeze.tooling_lock_sha256
   }, null, 2));
 }
 
@@ -186,11 +207,15 @@ function verifyHandoff(bundle) {
   const checksumMap = verifyChecksums(bundle, CHECKSUM_FILES);
   const manifest = readJson(path.join(bundle, "manifest.json"));
   const contract = readJson(path.join(bundle, "backup-restore-contract.json"));
+  const toolingLock = readJson(path.join(bundle, TOOLING_LOCK));
   const capture = readText(path.join(bundle, CAPTURE_BUNDLE));
   const restore = readText(path.join(bundle, RESTORE_BUNDLE));
   validateManifest(manifest, checksumMap);
   validateContract(contract);
-  for (const file of ["README.md", "backup-restore-contract.json", "manifest.json", CAPTURE_BUNDLE, RESTORE_BUNDLE]) {
+  validateToolingLock(toolingLock);
+  assert(manifest.repository_tooling_lock?.sha256 === checksumMap.get(TOOLING_LOCK), "manifest tooling lock checksum mismatch");
+  assert(toolingLock.required_landed_commit === manifest.generation_source_commit, "tooling lock commit mismatch");
+  for (const file of ["README.md", "backup-restore-contract.json", TOOLING_LOCK, "manifest.json", CAPTURE_BUNDLE, RESTORE_BUNDLE]) {
     scanTextForSecrets(readText(path.join(bundle, file)), file);
   }
   assert(!capture.includes("\r"), "capture shell must use LF");
@@ -268,7 +293,7 @@ function validateCombinedReceipt(receipt, options) {
   }
 }
 
-function createManifest(outputDir, generatedAt, sourceCommit) {
+function createManifest(outputDir, generatedAt, sourceCommit, toolingLock) {
   return {
     schema_version: 1,
     bundle_type: "production-backup-restore-handoff",
@@ -280,6 +305,9 @@ function createManifest(outputDir, generatedAt, sourceCommit) {
     application_version: RELEASE_IDENTITY.version,
     application_status: RELEASE_IDENTITY.status,
     canonical_remote: CANONICAL_REMOTE,
+    dependency_mode: DEPENDENCY_MODE,
+    required_landed_commit: sourceCommit,
+    core_cli_contract_version: CONTRACT_VERSION,
     parent_ms019b_operational_receipt_sha256: PARENT_OPERATIONAL_RECEIPT_SHA256,
     backup_format: "POSTGRESQL_CUSTOM",
     production_compose_context_mode: "EXPLICIT_PRODUCTION_COMPOSE_TWO_ENV_FILES",
@@ -292,14 +320,23 @@ function createManifest(outputDir, generatedAt, sourceCommit) {
     capture_script: {
       filename: CAPTURE_BUNDLE,
       sha256: sha256(readFileSync(path.join(outputDir, CAPTURE_BUNDLE))),
-      executable_intended: true
+      executable_intended: true,
+      preflight_only_supported: true
     },
     restore_wrapper: {
       filename: RESTORE_BUNDLE,
       sha256: sha256(readFileSync(path.join(outputDir, RESTORE_BUNDLE))),
-      executable_intended: true
+      executable_intended: true,
+      preflight_only_supported: true
     },
-    payload_files: ["README.md", CAPTURE_BUNDLE, RESTORE_BUNDLE, "backup-restore-contract.json"].map((file) => fileMetadata(outputDir, file)),
+    repository_tooling_lock: {
+      filename: TOOLING_LOCK,
+      sha256: sha256(readFileSync(path.join(outputDir, TOOLING_LOCK))),
+      required_file_count: toolingLock.required_files.length
+    },
+    core_backup_script: toolingLock.required_files.find((file) => file.path === "scripts/production-backup.mjs"),
+    restore_verifier_script: toolingLock.required_files.find((file) => file.path === "scripts/production-restore-verify.mjs"),
+    payload_files: ["README.md", CAPTURE_BUNDLE, RESTORE_BUNDLE, "backup-restore-contract.json", TOOLING_LOCK].map((file) => fileMetadata(outputDir, file)),
     production_contact_performed: false,
     production_mutation_performed: false,
     deployment_performed: false,
@@ -319,7 +356,27 @@ function createContract() {
     contract_version: CONTRACT_VERSION,
     milestone: MILESTONE,
     service: RELEASE_IDENTITY.application,
+    dependency_mode: DEPENDENCY_MODE,
+    core_cli_contract_version: CONTRACT_VERSION,
     parent_ms019b_operational_receipt_sha256: PARENT_OPERATIONAL_RECEIPT_SHA256,
+    repository_tooling: {
+      required_commit_source: "manifest.generation_source_commit",
+      required_files_source: TOOLING_LOCK,
+      global_worktree_clean_required: false,
+      required_tool_files_must_match_sha256: true,
+      required_tool_files_must_be_unmodified: true
+    },
+    wrapper_interfaces: {
+      capture: {
+        flags: ["--repository-dir", "--compose-file", "--shared-env", "--runtime-image-env", "--output-dir", "--preflight-only"],
+        output_dir_maps_to_core_bundle_mode: true,
+        unsupported_output_flag: "--output"
+      },
+      restore: {
+        flags: ["--repository-dir", "--input-dir", "--receipt", "--preflight-only"],
+        docker_resources_created_by_preflight: false
+      }
+    },
     backup_capture: {
       format: "POSTGRESQL_CUSTOM",
       output_files: [
@@ -330,6 +387,7 @@ function createContract() {
       ],
       compose_context_mode: "EXPLICIT_PRODUCTION_COMPOSE_TWO_ENV_FILES",
       production_read_only: true,
+      preflight_only_supported: true,
       no_secret_output: true,
       no_overwrite: true
     },
@@ -363,6 +421,45 @@ function createContract() {
   };
 }
 
+function createToolingLock(sourceCommit) {
+  return {
+    schema_version: 1,
+    lock_type: "production-backup-restore-repository-tooling-lock",
+    milestone: MILESTONE,
+    dependency_mode: DEPENDENCY_MODE,
+    canonical_remote: CANONICAL_REMOTE,
+    required_landed_commit: sourceCommit,
+    core_cli_contract_version: CONTRACT_VERSION,
+    package_script_identities: {
+      backup: "production:backup",
+      restore_verify: "production:restore:verify",
+      handoff: "production:backup-restore:handoff"
+    },
+    required_files: REQUIRED_TOOL_FILES.map((relativePath) => {
+      assert(existsSync(relativePath), `required tool file missing: ${relativePath}`);
+      return {
+        path: relativePath,
+        sha256: sha256(readFileSync(relativePath))
+      };
+    }),
+    global_worktree_clean_required: false,
+    required_tool_files_must_be_unmodified: true,
+    production_contact_performed: false,
+    production_mutation_performed: false,
+    secrets_included: false
+  };
+}
+
+function renderWrapper(source, toolingLock) {
+  const requiredToolLines = toolingLock.required_files.map((file) => `${file.path} ${file.sha256}`).join("\n");
+  return source
+    .replaceAll("__MS019C_SOURCE_COMMIT__", toolingLock.required_landed_commit)
+    .replaceAll("__MS019C_REQUIRED_TOOLING_COMMIT__", toolingLock.required_landed_commit)
+    .replaceAll("__MS019C_CANONICAL_REMOTE__", CANONICAL_REMOTE)
+    .replaceAll("__MS019C_CONTRACT_VERSION__", CONTRACT_VERSION)
+    .replaceAll("__MS019C_REQUIRED_TOOL_LINES__", requiredToolLines);
+}
+
 function renderReadme(generatedAt) {
   return `# MS-019C Production Backup Restore Handoff
 
@@ -370,21 +467,55 @@ This bundle prepares a production PostgreSQL custom-format backup capture and la
 
 Generating or verifying this bundle does not contact production, take a backup, restore a database, mutate services, deploy, publish an artifact, create a Git tag or create a GitHub Release.
 
-Production capture command shape:
+Handoff-v1 is historical and superseded. This handoff uses ${DEPENDENCY_MODE}: the production checkout must be on canonical main at the landed source commit or a descendant, and the wrapper verifies the required tool file hashes before any backup starts.
+
+First pull landed tooling:
 
 \`\`\`bash
 cd /opt/habersoft-rss
-<approved-ms-019c-handoff-dir>/capture-production-postgres-backup.sh \\
+git fetch origin
+git switch main
+git pull --ff-only origin main
+git rev-parse HEAD
+\`\`\`
+
+Then verify this handoff bundle:
+
+\`\`\`bash
+cd <approved-ms-019c-handoff-v2-dir>
+sha256sum -c checksums.sha256
+bash -n capture-production-postgres-backup.sh
+bash -n verify-off-host-postgres-restore.sh
+\`\`\`
+
+Safe preflight-only command shape:
+
+\`\`\`bash
+cd /opt/habersoft-rss
+<approved-ms-019c-handoff-v2-dir>/capture-production-postgres-backup.sh \\
   --repository-dir /opt/habersoft-rss \\
   --compose-file deploy/production/compose.yaml \\
   --shared-env .env.production \\
   --runtime-image-env deploy/runtime-image.env \\
-  --output-dir <new-empty-production-backup-output-dir>
+  --output-dir <absolute-new-empty-production-backup-output-dir> \\
+  --preflight-only
 \`\`\`
 
-The output directory must stay outside the repository checkout and must be transferred through an operator-approved secure channel. Extract the exact returned files flat into the local external intake directory for the next Codex resume. Do not put a ZIP/archive in the canonical intake directory.
+Production capture command shape:
 
-Do not paste or upload backup bytes, DB URLs, passwords, raw metadata, raw PostgreSQL output, row data or secrets.
+\`\`\`bash
+cd /opt/habersoft-rss
+<approved-ms-019c-handoff-v2-dir>/capture-production-postgres-backup.sh \\
+  --repository-dir /opt/habersoft-rss \\
+  --compose-file deploy/production/compose.yaml \\
+  --shared-env .env.production \\
+  --runtime-image-env deploy/runtime-image.env \\
+  --output-dir <absolute-new-empty-production-backup-output-dir>
+\`\`\`
+
+The output directory must be absolute, new or empty, outside the repository checkout, and must not reuse any failed prior output directory. It must be transferred through an operator-approved secure channel. Extract the exact returned files flat into the local external intake directory for the next Codex resume. Do not put a ZIP/archive in the canonical intake directory.
+
+Do not use bash -x or set -x. If preflight fails, report only the safe MS019C_PREFLIGHT_FAILED class. Do not paste or upload backup bytes, DB URLs, passwords, raw metadata, raw stderr, raw PostgreSQL output, row data or secrets.
 
 Generated at UTC: ${generatedAt}
 `;
@@ -397,6 +528,9 @@ function validateManifest(manifest, checksumMap) {
   assert(manifest.milestone === MILESTONE, "manifest milestone mismatch");
   assert(manifest.service === RELEASE_IDENTITY.application, "manifest service mismatch");
   assert(manifest.canonical_remote === CANONICAL_REMOTE, "manifest canonical remote mismatch");
+  assert(manifest.dependency_mode === DEPENDENCY_MODE, "manifest dependency mode mismatch");
+  assert(manifest.required_landed_commit === manifest.generation_source_commit, "manifest required commit mismatch");
+  assert(manifest.core_cli_contract_version === CONTRACT_VERSION, "manifest core CLI contract mismatch");
   assert(manifest.parent_ms019b_operational_receipt_sha256 === PARENT_OPERATIONAL_RECEIPT_SHA256, "manifest parent receipt mismatch");
   assert(manifest.backup_format === "POSTGRESQL_CUSTOM", "manifest backup format mismatch");
   assert(manifest.postgres_image === POSTGRES_IMAGE, "manifest PostgreSQL image mismatch");
@@ -405,8 +539,17 @@ function validateManifest(manifest, checksumMap) {
   assert(isGitSha(manifest.generation_source_commit), "manifest source commit malformed");
   assert(manifest.capture_script?.filename === CAPTURE_BUNDLE, "manifest capture script mismatch");
   assert(manifest.capture_script.sha256 === checksumMap.get(CAPTURE_BUNDLE), "manifest capture script checksum mismatch");
+  assert(manifest.capture_script.preflight_only_supported === true, "manifest capture preflight mismatch");
   assert(manifest.restore_wrapper?.filename === RESTORE_BUNDLE, "manifest restore wrapper mismatch");
   assert(manifest.restore_wrapper.sha256 === checksumMap.get(RESTORE_BUNDLE), "manifest restore wrapper checksum mismatch");
+  assert(manifest.restore_wrapper.preflight_only_supported === true, "manifest restore preflight mismatch");
+  assert(manifest.repository_tooling_lock?.filename === TOOLING_LOCK, "manifest tooling lock mismatch");
+  assert(manifest.repository_tooling_lock.sha256 === checksumMap.get(TOOLING_LOCK), "manifest tooling lock checksum mismatch");
+  assert(manifest.repository_tooling_lock.required_file_count === REQUIRED_TOOL_FILES.length, "manifest tooling lock file count mismatch");
+  assert(manifest.core_backup_script?.path === "scripts/production-backup.mjs", "manifest core backup path mismatch");
+  assert(isSha256(manifest.core_backup_script?.sha256), "manifest core backup SHA malformed");
+  assert(manifest.restore_verifier_script?.path === "scripts/production-restore-verify.mjs", "manifest restore verifier path mismatch");
+  assert(isSha256(manifest.restore_verifier_script?.sha256), "manifest restore verifier SHA malformed");
   for (const key of [
     "production_contact_performed",
     "production_mutation_performed",
@@ -426,12 +569,46 @@ function validateManifest(manifest, checksumMap) {
 function validateContract(contract) {
   assert(contract.schema_version === 1, "contract schema mismatch");
   assert(contract.contract_version === CONTRACT_VERSION, "contract version mismatch");
+  assert(contract.dependency_mode === DEPENDENCY_MODE, "contract dependency mode mismatch");
+  assert(contract.core_cli_contract_version === CONTRACT_VERSION, "contract core CLI contract mismatch");
   assert(contract.parent_ms019b_operational_receipt_sha256 === PARENT_OPERATIONAL_RECEIPT_SHA256, "contract parent receipt mismatch");
+  assert(contract.repository_tooling?.global_worktree_clean_required === false, "contract worktree cleanliness mismatch");
+  assert(contract.repository_tooling?.required_tool_files_must_match_sha256 === true, "contract tool hash guard mismatch");
+  assert(contract.repository_tooling?.required_tool_files_must_be_unmodified === true, "contract dirty tool guard mismatch");
+  assert(contract.wrapper_interfaces?.capture?.output_dir_maps_to_core_bundle_mode === true, "contract capture mapping mismatch");
+  assert(contract.wrapper_interfaces?.capture?.unsupported_output_flag === "--output", "contract capture unsupported output flag mismatch");
   assert(contract.backup_capture?.format === "POSTGRESQL_CUSTOM", "contract backup format mismatch");
   assert(contract.backup_capture?.compose_context_mode === "EXPLICIT_PRODUCTION_COMPOSE_TWO_ENV_FILES", "contract compose mode mismatch");
+  assert(contract.backup_capture?.preflight_only_supported === true, "contract capture preflight mismatch");
   assert(contract.off_host_restore?.postgres_image === POSTGRES_IMAGE, "contract PostgreSQL image mismatch");
   assertSameArray(contract.off_host_restore?.expected_tables, [...CANONICAL_TABLES], "contract tables mismatch");
   assertSameArray(contract.off_host_restore?.expected_migrations, [...EXPECTED_MIGRATIONS], "contract migrations mismatch");
+}
+
+function validateToolingLock(lock) {
+  assert(lock.schema_version === 1, "tooling lock schema mismatch");
+  assert(lock.lock_type === "production-backup-restore-repository-tooling-lock", "tooling lock type mismatch");
+  assert(lock.milestone === MILESTONE, "tooling lock milestone mismatch");
+  assert(lock.dependency_mode === DEPENDENCY_MODE, "tooling lock dependency mode mismatch");
+  assert(lock.canonical_remote === CANONICAL_REMOTE, "tooling lock canonical remote mismatch");
+  assert(isGitSha(lock.required_landed_commit), "tooling lock required commit malformed");
+  assert(lock.core_cli_contract_version === CONTRACT_VERSION, "tooling lock contract mismatch");
+  assert(lock.package_script_identities?.backup === "production:backup", "tooling lock backup script identity mismatch");
+  assert(lock.package_script_identities?.restore_verify === "production:restore:verify", "tooling lock restore script identity mismatch");
+  assert(lock.global_worktree_clean_required === false, "tooling lock worktree cleanliness mismatch");
+  assert(lock.required_tool_files_must_be_unmodified === true, "tooling lock dirty tool guard mismatch");
+  assertSameArray((lock.required_files ?? []).map((file) => file.path), REQUIRED_TOOL_FILES, "tooling lock file inventory mismatch");
+  for (const file of lock.required_files ?? []) {
+    assert(REQUIRED_TOOL_FILES.includes(file.path), "tooling lock unexpected file");
+    assert(isSha256(file.sha256), `tooling lock SHA malformed for ${file.path}`);
+  }
+  for (const key of [
+    "production_contact_performed",
+    "production_mutation_performed",
+    "secrets_included"
+  ]) {
+    assert(lock[key] === false, `tooling lock ${key} must be false`);
+  }
 }
 
 function assertExactFiles(directory, expected) {
@@ -464,6 +641,7 @@ function verifyChecksums(directory, files) {
 
 function scanShellForForbiddenCommands(text, label) {
   const forbidden = [
+    /\b(?:bash\s+-x|set\s+-x)\b/iu,
     /\bdocker\s+compose\b[\s\S]*(?:\bup\b|\bdown\b|\brestart\b|\brun\b|\brm\b|\bstop\b|\bkill\b)/iu,
     /\bdocker\s+(?:system|volume)\s+prune\b/iu,
     /\bprisma\s+db\s+push\b/iu,

@@ -23,17 +23,80 @@ const METADATA_FILENAME = "backup-capture-metadata.json";
 const RECEIPT_FILENAME = "backup-capture-receipt.json";
 const CHECKSUMS_FILENAME = "checksums.sha256";
 const COMPOSE_CONTEXT_MODE = "EXPLICIT_PRODUCTION_COMPOSE_TWO_ENV_FILES";
-
-const args = parseArgs(process.argv.slice(2));
+const TOOL_NAME = "production-backup";
+const DOCKER_BIN = process.env.MS019C_DOCKER_BIN ?? "docker";
+const DOCKER_FAKE_SCRIPT = process.env.MS019C_DOCKER_FAKE_SCRIPT;
+const KNOWN_FLAGS = new Set([
+  "compose-file",
+  "shared-env",
+  "env-file",
+  "runtime-image-env",
+  "output-dir",
+  "output",
+  "handoff-source-commit",
+  "handoff-capture-script-sha256",
+  "project"
+]);
 
 try {
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs[0] === "contract:describe") {
+    describeContract();
+    process.exit(0);
+  }
+  if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
+    printUsage();
+    process.exit(0);
+  }
+  const args = parseArgs(rawArgs);
+  assertKnownFlags(args);
   if (args["output-dir"] !== undefined) {
+    assert(args.output === undefined, "output and output-dir modes cannot be combined");
+    assert(args["shared-env"] !== undefined, "output-dir mode requires --shared-env");
+    assert(args["env-file"] === undefined, "output-dir mode uses --shared-env; use --env-file only with --output");
     captureBundle(args);
   } else {
+    assert(args["shared-env"] === undefined, "legacy output mode uses --env-file; use --shared-env only with --output-dir");
     captureLegacyDump(args);
   }
 } catch (error) {
   fail(error.message);
+}
+
+function describeContract() {
+  console.log(JSON.stringify({
+    schema_version: 1,
+    tool_name: TOOL_NAME,
+    contract_version: CONTRACT_VERSION,
+    accepted_input_mode: "bundle-directory-and-legacy-file",
+    bundle_mode: {
+      required_flags: ["--compose-file", "--shared-env", "--runtime-image-env", "--output-dir"],
+      optional_flags: ["--project", "--handoff-source-commit", "--handoff-capture-script-sha256"],
+      output_mode: "directory",
+      output_files: [DUMP_FILENAME, METADATA_FILENAME, RECEIPT_FILENAME, CHECKSUMS_FILENAME]
+    },
+    legacy_file_mode: {
+      required_flags: ["--compose-file", "--env-file", "--output"],
+      optional_flags: ["--runtime-image-env", "--project"],
+      output_mode: "single-dump-file-plus-metadata"
+    },
+    backup_format: "POSTGRESQL_CUSTOM",
+    compose_context_mode: COMPOSE_CONTEXT_MODE,
+    production_contact_performed_by_contract_probe: false,
+    production_mutation_performed: false,
+    deployment_performed: false,
+    migration_performed: false,
+    secrets_included: false
+  }, null, 2));
+}
+
+function printUsage() {
+  console.log([
+    "usage:",
+    "  production-backup contract:describe",
+    "  production-backup --compose-file <path> --shared-env <path> --runtime-image-env <path> --output-dir <new-empty-dir>",
+    "  production-backup --compose-file <path> --env-file <path> [--runtime-image-env <path>] --output <backup.dump>"
+  ].join("\n"));
 }
 
 function captureBundle(options) {
@@ -142,7 +205,7 @@ function captureBundle(options) {
 
 function captureLegacyDump(options) {
   const composeFile = requiredPath(options["compose-file"], "compose-file");
-  const sharedEnv = requiredPath(options["shared-env"] ?? options["env-file"], "env-file");
+  const sharedEnv = requiredPath(options["env-file"], "env-file");
   const runtimeImageEnv = options["runtime-image-env"];
   const output = requiredValue(options.output, "output");
   const outputPath = path.resolve(output);
@@ -184,7 +247,7 @@ function runPgDump({ composeFile, sharedEnv, runtimeImageEnv, project, env, outp
   let fd;
   try {
     fd = openSync(outputPath, "wx", 0o600);
-    const result = spawnSync("docker", composeArgs, {
+    const result = spawnDocker(composeArgs, {
       stdio: ["ignore", fd, "pipe"],
       shell: process.platform === "win32"
     });
@@ -206,6 +269,16 @@ function prepareEmptyOutputDirectory(outputDir) {
     return;
   }
   mkdirSync(outputDir, { recursive: true, mode: 0o700 });
+}
+
+function spawnDocker(commandArgs, options) {
+  if (DOCKER_FAKE_SCRIPT !== undefined && DOCKER_FAKE_SCRIPT !== "") {
+    return spawnSync(process.execPath, [DOCKER_FAKE_SCRIPT, ...commandArgs], {
+      ...options,
+      shell: false
+    });
+  }
+  return spawnSync(DOCKER_BIN, commandArgs, options);
 }
 
 function assertCustomDump(file) {
@@ -272,9 +345,12 @@ function parseArgs(rawArgs) {
   for (let index = 0; index < rawArgs.length; index += 1) {
     const arg = rawArgs[index];
     if (!arg.startsWith("--")) {
-      continue;
+      throw new Error(`unknown positional argument: ${arg}`);
     }
     const key = arg.slice(2);
+    if (key === "") {
+      throw new Error("empty flag is not supported");
+    }
     const next = rawArgs[index + 1];
     result[key] = next === undefined || next.startsWith("--") ? "true" : next;
     if (result[key] !== "true") {
@@ -282,6 +358,12 @@ function parseArgs(rawArgs) {
     }
   }
   return result;
+}
+
+function assertKnownFlags(options) {
+  for (const key of Object.keys(options)) {
+    assert(KNOWN_FLAGS.has(key), `unsupported flag: --${key}`);
+  }
 }
 
 function gitOutput(args) {

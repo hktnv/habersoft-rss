@@ -6,10 +6,24 @@ Bu belge production PostgreSQL backup prerequisite'ini, backup artifact/metadata
 
 ## Backup
 
-Backup custom-format `pg_dump -Fc` artifact'idir. MS-019C hazirlik akisi bu komutu versioned operator handoff icinden calistirir ve output'u yeni/bos external directory olarak ister. Canonical capture inventory:
+Backup custom-format `pg_dump -Fc` artifact'idir. MS-019C handoff-v1 historical/superseded durumdadir; production rerun icin handoff-v2 kullanilir. Handoff-v2 `LANDED_MAIN_PINNED_TOOLING` modelindedir: operator once canonical `main` checkout'u `git pull --ff-only origin main` ile landed tooling commit'ine getirir, handoff checksum ve `bash -n` kontrolunu yapar, sonra wrapper `--preflight-only` ile repository identity, required commit ancestry, required tool SHA-256, dirty required-tool guard ve CLI contract version'i dogrular.
+
+Wrapper-level capture interface:
+
+```bash
+<approved-ms-019c-handoff-v2-dir>/capture-production-postgres-backup.sh \
+  --repository-dir /opt/habersoft-rss \
+  --compose-file deploy/production/compose.yaml \
+  --shared-env .env.production \
+  --runtime-image-env deploy/runtime-image.env \
+  --output-dir <absolute-new-empty-output-dir> \
+  --preflight-only
+```
+
+Capture ayni komutun `--preflight-only` olmadan calistirilmasidir. Core contract version `production-backup-restore-evidence-v1` ve capability komutu:
 
 ```powershell
-npm run production:backup -- --compose-file <compose-file> --shared-env <shared-env> --runtime-image-env <runtime-image-env> --output-dir <new-empty-output-dir>
+npm run production:backup -- contract:describe
 ```
 
 Output directory su dosyalari tasir:
@@ -19,11 +33,11 @@ Output directory su dosyalari tasir:
 - `backup-capture-receipt.json`
 - `checksums.sha256`
 
-Script explicit production Compose context kullanir: production compose file, external shared env ve `deploy/runtime-image.env`. Bare `docker compose` production backup evidence komutu degildir. Metadata/receipt backup SHA-256, byte size, custom-format contract, parent MS-019B receipt SHA ve no-mutation flags tasir; DB URL, password, raw row data, private path veya dump content yazmaz.
+Script explicit production Compose context kullanir: production compose file, external shared env ve `deploy/runtime-image.env`. Wrapper `--shared-env` degerini bundle-mode core CLI'ye ayni semantikle iletir; legacy file-mode core CLI backward-compatible olarak `--env-file` + `--output <backup.dump>` seklini korur. Bare `docker compose` production backup evidence komutu degildir. Metadata/receipt backup SHA-256, byte size, custom-format contract, parent MS-019B receipt SHA ve no-mutation flags tasir; DB URL, password, raw row data, private path veya dump content yazmaz.
 
 Backup output production host disina tasinmalidir. Gercek backup path, retention schedule ve off-host transfer operasyonel runbook kapsamindadir; bu repository secret veya production dump saklamaz.
 
-MS-018B operator modelinde backup production sunucusunda operator tarafindan tetiklenir. Source delivery yine Git-only kalir; backup artifact'i, SHA-256 kaydi ve off-host kopya Git disinda tutulur. Codex production SSH veya production backup komutu calistirmaz. MS-019C handoff bundle'i external ve secret-free'dir; generation veya verification production evidence degildir.
+MS-018B operator modelinde backup production sunucusunda operator tarafindan tetiklenir. Source delivery yine Git-only kalir; backup artifact'i, SHA-256 kaydi ve off-host kopya Git disinda tutulur. Codex production SSH veya production backup komutu calistirmaz. MS-019C handoff bundle'i external ve secret-free'dir; generation, verification veya preflight production backup evidence degildir. Production capture sirasinda `bash -x`, `set -x`, raw stderr/env paste, feature-branch checkout ve direct core CLI flag guessing kullanilmaz.
 
 ## Restore Verification
 
@@ -31,7 +45,7 @@ MS-018B operator modelinde backup production sunucusunda operator tarafindan tet
 npm run production:restore:verify -- --input-dir <flat-returned-backup-dir> --receipt <external-off-host-restore-receipt>
 ```
 
-Verifier yalniz local Docker engine endpoint sinifini kabul eder, SSH/remote TCP/production alias context'lerini reddeder. Unique disposable network, volume ve PostgreSQL container kullanir; host port yayinlamaz. Dump'i restore eder, beklenen alti canonical business table'i ve iki Prisma migration kaydini kontrol eder, sonra container/network/volume absence proof yapar. Production database overwrite etmez ve staging'e restore yapmaz.
+Restore wrapper da landed-main-pinned repository tooling closure'i dogrular ve `--preflight-only` destekler. Core capability komutu `npm run production:restore:verify -- contract:describe` seklindedir. Verifier yalniz local Docker engine endpoint sinifini kabul eder, SSH/remote TCP/production alias context'lerini reddeder. Unique disposable network, volume ve PostgreSQL container kullanir; host port yayinlamaz. Dump'i restore eder, beklenen alti canonical business table'i ve iki Prisma migration kaydini kontrol eder, sonra container/network/volume absence proof yapar. Production database overwrite etmez ve staging'e restore yapmaz.
 
 Future combined receipt:
 

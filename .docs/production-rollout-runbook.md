@@ -80,7 +80,7 @@ Preflight evidence current MS-019B receipt icinde identity, migration, worker/sc
 
 For existing production, take a PostgreSQL custom-format backup before mutation and verify disposable off-host restore. For first deployment, take the baseline backup after migrations and before public cutover.
 
-MS-018C/MS-019B accepted evidence icinde production backup SHA-256 veya off-host restore result kaydedilmedi. Bu alanlar failed degil, `NOT_RECORDED` durumundadir. Canonical procedure and evidence boundary [backup-and-restore.md](backup-and-restore.md) dosyasindadir; MS-019C handoff hazirligi gate'i passed yapmaz.
+MS-018C/MS-019B accepted evidence icinde production backup SHA-256 veya off-host restore result kaydedilmedi. Bu alanlar failed degil, `NOT_RECORDED` durumundadir. Canonical procedure and evidence boundary [backup-and-restore.md](backup-and-restore.md) dosyasindadir; MS-019C handoff-v2 tooling'in main'e landed olmasi veya preflight'in passed olmasi backup/restore gate'ini passed yapmaz.
 
 ## Deployment sequence
 

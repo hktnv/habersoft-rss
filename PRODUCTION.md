@@ -572,17 +572,54 @@ docker compose \
 
 Migration veya riskli rollout oncesi PostgreSQL backup alinir. Backup Git disinda tutulur, SHA-256 kaydedilir ve off-host kopyasi operator tarafindan yonetilir.
 
-Repository tooling server'da kullanilabiliyorsa:
+MS-019C handoff-v2, landed-main-pinned repository tooling kullanir. Feature branch checkout kullanilmaz; production host canonical `main` checkout'u uzerinden calisir. Handoff-v1 superseded/historical durumdadir ve yeni backup denemesinde kullanilmaz.
+
+Once landed tooling cekilir:
+
+```bash
+cd "${BACKEND_DIR}"
+git fetch origin
+git switch main
+git pull --ff-only origin main
+git rev-parse HEAD
+```
+
+Sonra handoff-v2 checksum ve shell syntax dogrulanir:
+
+```bash
+cd "<operator-approved-ms-019c-handoff-v2-dir>"
+sha256sum -c checksums.sha256
+bash -n capture-production-postgres-backup.sh
+bash -n verify-off-host-postgres-restore.sh
+```
+
+Safe preflight-only:
 
 ```bash
 cd "${BACKEND_DIR}"
 
-<operator-approved-ms-019c-handoff-dir>/capture-production-postgres-backup.sh \
+<operator-approved-ms-019c-handoff-v2-dir>/capture-production-postgres-backup.sh \
   --repository-dir "${BACKEND_DIR}" \
   --compose-file "${COMPOSE_FILE}" \
   --shared-env "${SHARED_ENV}" \
   --runtime-image-env "${IMAGE_ENV}" \
-  --output-dir "<new-empty-production-backup-output-dir>"
+  --output-dir "<absolute-new-empty-production-backup-output-dir>" \
+  --preflight-only
+```
+
+Preflight repository identity, required landed commit ancestry, required tool file SHA-256, required tool dirty-state, core CLI contract, Compose/shared-env/runtime-image-env file presence ve output collision guard'larini kontrol eder. Full production worktree clean olmak zorunda degildir; yalniz required tooling closure temiz ve hash-matched olmalidir.
+
+Capture ayni komutun `--preflight-only` olmadan calistirilmasidir:
+
+```bash
+cd "${BACKEND_DIR}"
+
+<operator-approved-ms-019c-handoff-v2-dir>/capture-production-postgres-backup.sh \
+  --repository-dir "${BACKEND_DIR}" \
+  --compose-file "${COMPOSE_FILE}" \
+  --shared-env "${SHARED_ENV}" \
+  --runtime-image-env "${IMAGE_ENV}" \
+  --output-dir "<absolute-new-empty-production-backup-output-dir>"
 ```
 
 Capture output su flat dosyalardan olusur ve Git disinda tutulur:
@@ -596,12 +633,15 @@ checksums.sha256
 
 Bu set operator-approved secure channel ile off-host/local verification ortamina tasinir. ZIP sadece transfer container'i olabilir; canonical intake dizinine ZIP konmaz.
 
+Failed onceki output directory tekrar kullanilmaz. Production capture icin `bash -x`, `set -x`, raw stderr/env paste, feature branch checkout ve direct core CLI flag guessing kullanilmaz. Preflight fail olursa yalniz `MS019C_PREFLIGHT_FAILED:<CLASS>` raporlanir.
+
 Restore verification off-host disposable Docker ortaminda calisir:
 
 ```bash
 cd "${BACKEND_DIR}"
 
-npm run production:restore:verify -- \
+<operator-approved-ms-019c-handoff-v2-dir>/verify-off-host-postgres-restore.sh \
+  --repository-dir "${BACKEND_DIR}" \
   --input-dir "<flat-returned-production-backup-dir>" \
   --receipt "<external-off-host-restore-receipt>"
 ```

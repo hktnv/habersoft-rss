@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   cpSync,
   mkdirSync,
   mkdtempSync,
@@ -21,18 +22,32 @@ const restoreReceipt = path.join(temp, "off-host-restore-receipt.json");
 const combinedReceipt = path.join(temp, "production-backup-restore-receipt.json");
 const handoffDir = path.join(temp, "handoff");
 const freezeFile = path.join(temp, "handoff-freeze.json");
+const generatedHandoffDir = path.join(temp, "generated-handoff");
+const generatedCaptureDir = path.join(temp, "generated-capture-output");
+const generatedRestoreReceipt = path.join(temp, "generated-off-host-restore-receipt.json");
 const stagingBackupSha = "595ee0617d86f5886aca25ae99486f064ce06e081d16fec19fec74cdd8db9bfc";
+const bashExecutable = resolveBashExecutable();
 
 try {
   mkdirSync(fakeBin, { recursive: true });
   writeFakeDocker(fakeBin);
+  writeFakeNode(fakeBin);
+  assertBashNodeShimPasses();
   const env = writeCaptureFixture();
 
+  assertCoreContractsPass();
   assertHandoffPasses();
   assertCapturePasses(env);
   assertRestorePasses();
   assertCombinedReceiptPasses();
+  assertGeneratedHandoffWrappersPass();
 
+  assertOldMainNewWrapperFailsPreflight();
+  assertGeneratedWrapperRejectsHashMismatch();
+  assertGeneratedWrapperRejectsDirtyTool();
+  assertGeneratedWrapperRejectsUnsupportedFlag();
+  assertGeneratedWrapperRejectsOutputModeMismatch();
+  assertGeneratedRestoreWrapperRejectsHashMismatch();
   assertCaptureRejectsNonEmptyOutput(env);
   assertRestoreRejectsPlainSql();
   assertRestoreRejectsChecksumMismatch();
@@ -59,15 +74,40 @@ function assertHandoffPasses() {
     "capture-production-postgres-backup.sh",
     "checksums.sha256",
     "manifest.json",
+    "repository-tooling-lock.json",
     "verify-off-host-postgres-restore.sh"
   ].sort());
   assert.equal(readFileSync(path.join(handoffDir, "capture-production-postgres-backup.sh")).includes(13), false);
+  assert.equal(/set\s+-x|bash\s+-x/iu.test(readFileSync(path.join(handoffDir, "capture-production-postgres-backup.sh"), "utf8")), false);
   assert.equal(spawnSync("bash", ["-n", toBashPath(path.join(handoffDir, "capture-production-postgres-backup.sh"))], { shell: false }).status, 0);
   const verify = runNode(["scripts/production-backup-restore-evidence.mjs", "handoff:verify", "--bundle", handoffDir]);
   assert.equal(verify.status, 0, verify.stderr);
-  const freeze = runNode(["scripts/production-backup-restore-evidence.mjs", "handoff:freeze", "--bundle", handoffDir, "--output", freezeFile]);
+  const freeze = runNode(["scripts/production-backup-restore-evidence.mjs", "handoff:freeze", "--bundle", handoffDir, "--output", freezeFile, "--synthetic-smoke-result", "PASSED"]);
   assert.equal(freeze.status, 0, freeze.stderr);
-  assert.equal(JSON.parse(readFileSync(freezeFile, "utf8")).backup_performed, false);
+  const freezeReceipt = JSON.parse(readFileSync(freezeFile, "utf8"));
+  assert.equal(freezeReceipt.backup_performed, false);
+  assert.equal(freezeReceipt.end_to_end_synthetic_smoke_result, "PASSED");
+  assert.match(JSON.stringify(readJson(path.join(handoffDir, "repository-tooling-lock.json"))), /LANDED_MAIN_PINNED_TOOLING/u);
+}
+
+function assertCoreContractsPass() {
+  const backup = runNode(["scripts/production-backup.mjs", "contract:describe"]);
+  assert.equal(backup.status, 0, backup.stderr);
+  const backupContract = JSON.parse(backup.stdout);
+  assert.equal(backupContract.tool_name, "production-backup");
+  assert.equal(backupContract.bundle_mode.output_mode, "directory");
+
+  const restore = runNode(["scripts/production-restore-verify.mjs", "contract:describe"]);
+  assert.equal(restore.status, 0, restore.stderr);
+  const restoreContract = JSON.parse(restore.stdout);
+  assert.equal(restoreContract.tool_name, "production-restore-verify");
+  assert.equal(restoreContract.capture_bundle_mode.output_mode, "external-restore-receipt-json");
+}
+
+function assertBashNodeShimPasses() {
+  const result = runBash(["-lc", "which node && node --version"]);
+  assert.equal(result.status, 0, `stdout=${result.stdout}\nstderr=${result.stderr}`);
+  assert.match(result.stdout, /v\d+\./u);
 }
 
 function assertCapturePasses(env) {
@@ -138,6 +178,182 @@ function assertCombinedReceiptPasses() {
     "--require-backup-restore-baseline"
   ]);
   assert.equal(verify.status, 0, verify.stderr);
+}
+
+function assertGeneratedHandoffWrappersPass() {
+  const fixture = createRepositoryFixture("landed-main-fixture");
+  const fixtureEnv = writeRepositoryCaptureFixture(fixture.dir);
+  const generate = runNode([
+    "scripts/production-backup-restore-evidence.mjs",
+    "handoff",
+    "--output",
+    generatedHandoffDir
+  ], { cwd: fixture.dir });
+  assert.equal(generate.status, 0, generate.stderr);
+
+  const captureWrapper = path.join(generatedHandoffDir, "capture-production-postgres-backup.sh");
+  const capturePreflight = runBash([
+    toBashPath(captureWrapper),
+    "--repository-dir",
+    toBashPath(fixture.dir),
+    "--compose-file",
+    fixtureEnv.composeFile,
+    "--shared-env",
+    fixtureEnv.sharedEnv,
+    "--runtime-image-env",
+    fixtureEnv.runtimeImageEnv,
+    "--output-dir",
+    toBashPath(generatedCaptureDir),
+    "--preflight-only"
+  ]);
+  assert.equal(capturePreflight.status, 0, capturePreflight.stderr);
+  assert.match(capturePreflight.stdout, /backup handoff preflight passed/u);
+
+  const capture = runBash([
+    toBashPath(captureWrapper),
+    "--repository-dir",
+    toBashPath(fixture.dir),
+    "--compose-file",
+    fixtureEnv.composeFile,
+    "--shared-env",
+    fixtureEnv.sharedEnv,
+    "--runtime-image-env",
+    fixtureEnv.runtimeImageEnv,
+    "--output-dir",
+    toBashPath(generatedCaptureDir)
+  ]);
+  assert.equal(capture.status, 0, capture.stderr);
+  assert.deepEqual(readdirSync(generatedCaptureDir).sort(), [
+    "backup-capture-metadata.json",
+    "backup-capture-receipt.json",
+    "checksums.sha256",
+    "main-service-production.dump"
+  ].sort());
+
+  const restoreWrapper = path.join(generatedHandoffDir, "verify-off-host-postgres-restore.sh");
+  const restorePreflight = runBash([
+    toBashPath(restoreWrapper),
+    "--repository-dir",
+    toBashPath(fixture.dir),
+    "--input-dir",
+    toBashPath(generatedCaptureDir),
+    "--receipt",
+    toBashPath(generatedRestoreReceipt),
+    "--preflight-only"
+  ]);
+  assert.equal(restorePreflight.status, 0, restorePreflight.stderr);
+  assert.match(restorePreflight.stdout, /restore handoff preflight passed/u);
+
+  const restore = runBash([
+    toBashPath(restoreWrapper),
+    "--repository-dir",
+    toBashPath(fixture.dir),
+    "--input-dir",
+    toBashPath(generatedCaptureDir),
+    "--receipt",
+    toBashPath(generatedRestoreReceipt)
+  ]);
+  assert.equal(restore.status, 0, restore.stderr);
+  assert.equal(readJson(generatedRestoreReceipt).restore_command_result, "PASSED");
+}
+
+function assertOldMainNewWrapperFailsPreflight() {
+  const { handoff, env } = createFixtureAndHandoff("old-main-regression-source");
+  const oldMain = createMinimalOldMainFixture("old-main-regression-target");
+  const result = runBash([
+    toBashPath(path.join(handoff, "capture-production-postgres-backup.sh")),
+    "--repository-dir",
+    toBashPath(oldMain.dir),
+    "--compose-file",
+    env.composeFile,
+    "--shared-env",
+    env.sharedEnv,
+    "--runtime-image-env",
+    env.runtimeImageEnv,
+    "--output-dir",
+    toBashPath(path.join(temp, "old-main-output")),
+    "--preflight-only"
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /REPOSITORY_TOOLING_COMMIT_MISSING/u);
+}
+
+function assertGeneratedWrapperRejectsHashMismatch() {
+  const { fixture, handoff, env } = createFixtureAndHandoff("hash-mismatch");
+  writeFileSync(path.join(fixture.dir, "scripts", "production-backup.mjs"), `${readFileSync(path.join(fixture.dir, "scripts", "production-backup.mjs"), "utf8")}\n// tamper\n`);
+  const result = runCapturePreflight(handoff, fixture, env, path.join(temp, "hash-mismatch-output"));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /REPOSITORY_TOOL_HASH_MISMATCH/u);
+}
+
+function assertGeneratedWrapperRejectsDirtyTool() {
+  const { fixture, handoff, env } = createFixtureAndHandoff("dirty-tool");
+  const tool = path.join(fixture.dir, "scripts", "production-backup.mjs");
+  const original = readFileSync(tool, "utf8");
+  writeFileSync(tool, `${original}\n// staged dirty tool\n`);
+  runGit(["add", "scripts/production-backup.mjs"], { cwd: fixture.dir });
+  writeFileSync(tool, original);
+  const result = runCapturePreflight(handoff, fixture, env, path.join(temp, "dirty-tool-output"));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /REPOSITORY_TOOL_LOCALLY_MODIFIED/u);
+}
+
+function assertGeneratedWrapperRejectsUnsupportedFlag() {
+  const { fixture, handoff, env } = createFixtureAndHandoff("unsupported-flag");
+  const result = runBash([
+    toBashPath(path.join(handoff, "capture-production-postgres-backup.sh")),
+    "--repository-dir",
+    toBashPath(fixture.dir),
+    "--compose-file",
+    env.composeFile,
+    "--shared-env",
+    env.sharedEnv,
+    "--runtime-image-env",
+    env.runtimeImageEnv,
+    "--output-dir",
+    toBashPath(path.join(temp, "unsupported-output")),
+    "--unknown-flag",
+    "--preflight-only"
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /UNSUPPORTED_FLAG/u);
+}
+
+function assertGeneratedWrapperRejectsOutputModeMismatch() {
+  const { fixture, handoff, env } = createFixtureAndHandoff("output-mode-mismatch");
+  const result = runBash([
+    toBashPath(path.join(handoff, "capture-production-postgres-backup.sh")),
+    "--repository-dir",
+    toBashPath(fixture.dir),
+    "--compose-file",
+    env.composeFile,
+    "--shared-env",
+    env.sharedEnv,
+    "--runtime-image-env",
+    env.runtimeImageEnv,
+    "--output",
+    toBashPath(path.join(temp, "guessed.dump")),
+    "--preflight-only"
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /UNSUPPORTED_FLAG/u);
+}
+
+function assertGeneratedRestoreWrapperRejectsHashMismatch() {
+  const { fixture, handoff } = createFixtureAndHandoff("restore-hash-mismatch");
+  writeFileSync(path.join(fixture.dir, "scripts", "production-restore-verify.mjs"), `${readFileSync(path.join(fixture.dir, "scripts", "production-restore-verify.mjs"), "utf8")}\n// tamper\n`);
+  const result = runBash([
+    toBashPath(path.join(handoff, "verify-off-host-postgres-restore.sh")),
+    "--repository-dir",
+    toBashPath(fixture.dir),
+    "--input-dir",
+    toBashPath(captureDir),
+    "--receipt",
+    toBashPath(path.join(temp, "restore-hash-mismatch-receipt.json")),
+    "--preflight-only"
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /REPOSITORY_TOOL_HASH_MISMATCH/u);
 }
 
 function assertCaptureRejectsNonEmptyOutput(env) {
@@ -274,6 +490,95 @@ function writeCaptureFixture() {
   return { composeFile, sharedEnv, runtimeImageEnv };
 }
 
+function createFixtureAndHandoff(name) {
+  const fixture = createRepositoryFixture(name);
+  const env = writeRepositoryCaptureFixture(fixture.dir);
+  const handoff = path.join(temp, `${name}-handoff`);
+  const generate = runNode(["scripts/production-backup-restore-evidence.mjs", "handoff", "--output", handoff], { cwd: fixture.dir });
+  assert.equal(generate.status, 0, generate.stderr);
+  return { fixture, env, handoff };
+}
+
+function createRepositoryFixture(name) {
+  const directory = path.join(temp, name);
+  mkdirSync(directory, { recursive: true });
+  for (const relative of requiredRepositoryFiles()) {
+    const source = path.join(process.cwd(), relative);
+    const destination = path.join(directory, relative);
+    mkdirSync(path.dirname(destination), { recursive: true });
+    cpSync(source, destination);
+  }
+  runGit(["init"], { cwd: directory });
+  runGit(["checkout", "-b", "main"], { cwd: directory });
+  runGit(["config", "user.email", "ms019c@example.invalid"], { cwd: directory });
+  runGit(["config", "user.name", "MS019C Test"], { cwd: directory });
+  runGit(["config", "core.filemode", "false"], { cwd: directory });
+  runGit(["config", "core.autocrlf", "false"], { cwd: directory });
+  runGit(["remote", "add", "origin", "https://github.com/hktnv/habersoft-rss"], { cwd: directory });
+  runGit(["add", "."], { cwd: directory });
+  runGit(["commit", "-m", "fixture landed main"], { cwd: directory });
+  const commit = runGit(["rev-parse", "HEAD"], { cwd: directory }).stdout.trim();
+  return { dir: directory, commit };
+}
+
+function createMinimalOldMainFixture(name) {
+  const directory = path.join(temp, name);
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(path.join(directory, "README.md"), "old main fixture\n");
+  runGit(["init"], { cwd: directory });
+  runGit(["checkout", "-b", "main"], { cwd: directory });
+  runGit(["config", "user.email", "ms019c@example.invalid"], { cwd: directory });
+  runGit(["config", "user.name", "MS019C Test"], { cwd: directory });
+  runGit(["config", "core.filemode", "false"], { cwd: directory });
+  runGit(["config", "core.autocrlf", "false"], { cwd: directory });
+  runGit(["remote", "add", "origin", "https://github.com/hktnv/habersoft-rss"], { cwd: directory });
+  runGit(["add", "."], { cwd: directory });
+  runGit(["commit", "-m", "old main fixture"], { cwd: directory });
+  return { dir: directory };
+}
+
+function requiredRepositoryFiles() {
+  return [
+    "package.json",
+    "scripts/release-identity.mjs",
+    "scripts/production-backup.mjs",
+    "scripts/production-restore-verify.mjs",
+    "scripts/production-backup-restore-evidence.mjs",
+    "scripts/production-backup-restore-capture.sh",
+    "scripts/production-backup-restore-off-host-verify.sh"
+  ];
+}
+
+function writeRepositoryCaptureFixture(repositoryDir) {
+  const fixtureRoot = path.join(repositoryDir, "fixture-inputs");
+  mkdirSync(fixtureRoot);
+  writeFileSync(path.join(fixtureRoot, "compose.yaml"), "services:\n  postgres: {}\n");
+  writeFileSync(path.join(fixtureRoot, ".env.production"), "POSTGRES_USER=main_service\nPOSTGRES_DB=main_service\nPOSTGRES_PASSWORD=not_printed_value\n");
+  writeFileSync(path.join(fixtureRoot, "runtime-image.env"), `MAIN_SERVICE_IMAGE=sha256:${"a".repeat(64)}\n`);
+  return {
+    composeFile: "fixture-inputs/compose.yaml",
+    sharedEnv: "fixture-inputs/.env.production",
+    runtimeImageEnv: "fixture-inputs/runtime-image.env"
+  };
+}
+
+function runCapturePreflight(handoff, fixture, env, outputDir) {
+  return runBash([
+    toBashPath(path.join(handoff, "capture-production-postgres-backup.sh")),
+    "--repository-dir",
+    toBashPath(fixture.dir),
+    "--compose-file",
+    env.composeFile,
+    "--shared-env",
+    env.sharedEnv,
+    "--runtime-image-env",
+    env.runtimeImageEnv,
+    "--output-dir",
+    toBashPath(outputDir),
+    "--preflight-only"
+  ]);
+}
+
 function writeFakeDocker(directory) {
   const nodeFile = path.join(directory, "docker-fake.cjs");
   writeFileSync(nodeFile, `
@@ -308,9 +613,39 @@ if (joined.includes("container inspect") || joined.includes("volume inspect") ||
 }
 fail("unsupported fake docker command: " + joined);
 `);
-  writeFileSync(path.join(directory, "docker.cmd"), `@echo off\r\nnode "%~dp0docker-fake.cjs" %*\r\n`);
+  writeFileSync(path.join(directory, "docker.cmd"), `@echo off\r\n"${process.execPath}" "%~dp0docker-fake.cjs" %*\r\n`);
   writeFileSync(path.join(directory, "docker"), `#!/usr/bin/env bash\nexec node "${toBashPath(nodeFile)}" "$@"\n`);
   spawnSync("chmod", ["755", path.join(directory, "docker")], { shell: false });
+}
+
+function writeFakeNode(directory) {
+  const nodeExe = toBashPath(process.execPath);
+  const script = path.join(directory, "node");
+  writeFileSync(script, `#!/usr/bin/env bash
+set -euo pipefail
+node_exe=${JSON.stringify(nodeExe)}
+fake_bin="$(cd "$(dirname "$0")" && pwd -P)"
+if command -v wslpath >/dev/null 2>&1; then
+  win_fake_bin="$(wslpath -m "$fake_bin")"
+  win_node_dir="$(wslpath -m "$(dirname "$node_exe")")"
+  export MS019C_DOCKER_BIN="$win_fake_bin/docker.cmd"
+  export MS019C_DOCKER_FAKE_SCRIPT="$win_fake_bin/docker-fake.cjs"
+  export WSLENV="MS019C_DOCKER_BIN:MS019C_DOCKER_FAKE_SCRIPT\${WSLENV:+:$WSLENV}"
+  export PATH="$win_fake_bin;$win_node_dir;$PATH"
+  export Path="$win_fake_bin;$win_node_dir;$PATH"
+fi
+converted=()
+for arg in "$@"; do
+  if [[ "$arg" =~ ^/mnt/[A-Za-z]/ ]] && command -v wslpath >/dev/null 2>&1; then
+    converted+=("$(wslpath -w "$arg")")
+  else
+    converted+=("$arg")
+  fi
+done
+exec "$node_exe" "\${converted[@]}"
+`);
+  chmodIfPossible(script);
+  spawnSync(bashExecutable, ["-c", `chmod 755 '${toBashPath(script).replaceAll("'", "'\\''")}'`], { shell: false });
 }
 
 function cloneCapture(name) {
@@ -344,6 +679,7 @@ function rewriteHandoffChecksums(dir) {
     "backup-restore-contract.json",
     "capture-production-postgres-backup.sh",
     "manifest.json",
+    "repository-tooling-lock.json",
     "verify-off-host-postgres-restore.sh"
   ];
   writeFileSync(path.join(dir, "checksums.sha256"), `${files.map((file) => `${sha256(readFileSync(path.join(dir, file)))}  ${file}`).join("\n")}\n`);
@@ -351,7 +687,7 @@ function rewriteHandoffChecksums(dir) {
 
 function runNode(args, options = {}) {
   return spawnSync(process.execPath, args, {
-    cwd: process.cwd(),
+    cwd: options.cwd ?? process.cwd(),
     encoding: "utf8",
     shell: false,
     env: {
@@ -360,6 +696,42 @@ function runNode(args, options = {}) {
       ...(options.env ?? {})
     }
   });
+}
+
+function runBash(args, options = {}) {
+  const pathPrefix = `export PATH='${toBashPath(fakeBin).replaceAll("'", "'\\''")}':/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin;`;
+  const bashArgs = args[0] === "-lc"
+    ? ["-c", `${pathPrefix} ${args[1]}`]
+    : ["-c", `${pathPrefix} exec /bin/bash ${args.map(shellQuote).join(" ")}`];
+  return spawnSync(bashExecutable, bashArgs, {
+    cwd: options.cwd,
+    encoding: "utf8",
+    shell: false,
+    env: {
+      ...process.env,
+      ...(options.env ?? {})
+    }
+  });
+}
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", "'\\''")}'`;
+}
+
+function resolveBashExecutable() {
+  const where = spawnSync("where", ["bash"], { encoding: "utf8", shell: false });
+  const candidate = where.stdout?.split(/\r?\n/u).find((line) => line.trim() !== "");
+  return candidate?.trim() ?? "bash";
+}
+
+function runGit(args, options = {}) {
+  const result = spawnSync("git", args, {
+    cwd: options.cwd,
+    encoding: "utf8",
+    shell: false
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return result;
 }
 
 function assertNoSensitiveText(text) {
@@ -385,4 +757,12 @@ function toBashPath(file) {
     return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2].replaceAll("\\", "/")}`;
   }
   return resolved.replaceAll(path.sep, "/");
+}
+
+function chmodIfPossible(file) {
+  try {
+    chmodSync(file, 0o755);
+  } catch {
+    // Windows may ignore POSIX execute bits; Git Bash/WSL still reads the script through bash.
+  }
 }

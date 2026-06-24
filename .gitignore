@@ -35,3 +35,5 @@ off-host-restore-receipt.json
 production-backup-restore-receipt.json
 production-backup-returned-v1/
 production-backup-restore-handoff-v1/
+production-backup-returned-v2/
+production-backup-restore-handoff-v2/

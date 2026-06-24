@@ -20,6 +20,10 @@ const DUMP_FILENAME = "main-service-production.dump";
 const METADATA_FILENAME = "backup-capture-metadata.json";
 const CAPTURE_RECEIPT_FILENAME = "backup-capture-receipt.json";
 const CHECKSUMS_FILENAME = "checksums.sha256";
+const TOOL_NAME = "production-restore-verify";
+const DOCKER_BIN = process.env.MS019C_DOCKER_BIN ?? "docker";
+const DOCKER_FAKE_SCRIPT = process.env.MS019C_DOCKER_FAKE_SCRIPT;
+const KNOWN_FLAGS = new Set(["input-dir", "backup", "receipt"]);
 const CANONICAL_TABLES = Object.freeze([
   "feeds",
   "entries",
@@ -29,12 +33,58 @@ const CANONICAL_TABLES = Object.freeze([
   "agent_runtime_status"
 ]);
 
-const args = parseArgs(process.argv.slice(2));
-
 try {
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs[0] === "contract:describe") {
+    describeContract();
+    process.exit(0);
+  }
+  if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
+    printUsage();
+    process.exit(0);
+  }
+  const args = parseArgs(rawArgs);
+  assertKnownFlags(args);
+  assert(!(args["input-dir"] !== undefined && args.backup !== undefined), "input-dir and backup modes cannot be combined");
   verifyRestore(args);
 } catch (error) {
   fail(error.message);
+}
+
+function describeContract() {
+  console.log(JSON.stringify({
+    schema_version: 1,
+    tool_name: TOOL_NAME,
+    contract_version: CONTRACT_VERSION,
+    accepted_input_mode: "capture-bundle-and-legacy-backup-file",
+    capture_bundle_mode: {
+      required_flags: ["--input-dir"],
+      optional_flags: ["--receipt"],
+      input_files: [DUMP_FILENAME, METADATA_FILENAME, CAPTURE_RECEIPT_FILENAME, CHECKSUMS_FILENAME],
+      output_mode: "external-restore-receipt-json"
+    },
+    legacy_file_mode: {
+      required_flags: ["--backup"],
+      optional_flags: ["--receipt"],
+      output_mode: "console-status-or-external-restore-receipt-json"
+    },
+    backup_format: "POSTGRESQL_CUSTOM",
+    docker_context_allowed_classes: ["LOCAL_UNIX_SOCKET", "LOCAL_WINDOWS_NPIPE"],
+    postgres_image: POSTGRES_IMAGE,
+    production_contact_performed_by_contract_probe: false,
+    production_mutation_performed: false,
+    production_restore_performed: false,
+    secrets_included: false
+  }, null, 2));
+}
+
+function printUsage() {
+  console.log([
+    "usage:",
+    "  production-restore-verify contract:describe",
+    "  production-restore-verify --input-dir <flat-capture-bundle-dir> [--receipt <external-receipt.json>]",
+    "  production-restore-verify --backup <backup.dump> [--receipt <external-receipt.json>]"
+  ].join("\n"));
 }
 
 function verifyRestore(options) {
@@ -55,9 +105,9 @@ function verifyRestore(options) {
   let teardownVerified = false;
 
   try {
-    run("docker", ["network", "create", resources.network]);
-    run("docker", ["volume", "create", resources.volume]);
-    run("docker", [
+    run(DOCKER_BIN, ["network", "create", resources.network]);
+    run(DOCKER_BIN, ["volume", "create", resources.volume]);
+    run(DOCKER_BIN, [
       "run",
       "-d",
       "--name",
@@ -75,8 +125,8 @@ function verifyRestore(options) {
       POSTGRES_IMAGE
     ]);
     waitForPostgres(resources.container, password);
-    run("docker", ["cp", input.dumpPath, `${resources.container}:/tmp/backup.dump`]);
-    run("docker", [
+    run(DOCKER_BIN, ["cp", input.dumpPath, `${resources.container}:/tmp/backup.dump`]);
+    run(DOCKER_BIN, [
       "exec",
       "-e",
       `PGPASSWORD=${password}`,
@@ -218,7 +268,7 @@ function loadCaptureBundle(directory) {
 }
 
 function inspectDockerContext() {
-  const result = spawnSync("docker", ["context", "inspect"], { encoding: "utf8", shell: process.platform === "win32" });
+  const result = spawnDocker(["context", "inspect"], { encoding: "utf8", shell: process.platform === "win32" });
   if (result.status !== 0) {
     throw new Error("docker context inspect failed");
   }
@@ -240,7 +290,7 @@ function inspectDockerContext() {
 }
 
 function inspectPostgresImage() {
-  const result = spawnSync("docker", ["image", "inspect", POSTGRES_IMAGE, "--format", "{{.Id}}"], { encoding: "utf8", shell: process.platform === "win32" });
+  const result = spawnDocker(["image", "inspect", POSTGRES_IMAGE, "--format", "{{.Id}}"], { encoding: "utf8", shell: process.platform === "win32" });
   if (result.status !== 0) {
     throw new Error("OPERATOR_ACTION_REQUIRED_IMAGE_UNAVAILABLE");
   }
@@ -251,7 +301,7 @@ function inspectPostgresImage() {
 
 function waitForPostgres(containerName, password) {
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    const result = spawnSync("docker", [
+    const result = spawnDocker([
       "exec",
       "-e",
       `PGPASSWORD=${password}`,
@@ -275,7 +325,7 @@ function waitForPostgres(containerName, password) {
 }
 
 function psql(containerName, password, sql) {
-  const result = spawnSync("docker", [
+  const result = spawnDocker([
     "exec",
     "-e",
     `PGPASSWORD=${password}`,
@@ -299,14 +349,14 @@ function psql(containerName, password, sql) {
 }
 
 function teardown(resources) {
-  spawnSync("docker", ["rm", "-f", resources.container], { stdio: "ignore", shell: process.platform === "win32" });
-  spawnSync("docker", ["volume", "rm", "-f", resources.volume], { stdio: "ignore", shell: process.platform === "win32" });
-  spawnSync("docker", ["network", "rm", resources.network], { stdio: "ignore", shell: process.platform === "win32" });
+  spawnDocker(["rm", "-f", resources.container], { stdio: "ignore", shell: process.platform === "win32" });
+  spawnDocker(["volume", "rm", "-f", resources.volume], { stdio: "ignore", shell: process.platform === "win32" });
+  spawnDocker(["network", "rm", resources.network], { stdio: "ignore", shell: process.platform === "win32" });
   return [
     ["container", "inspect", resources.container],
     ["volume", "inspect", resources.volume],
     ["network", "inspect", resources.network]
-  ].every((dockerArgs) => spawnSync("docker", dockerArgs, { stdio: "ignore", shell: process.platform === "win32" }).status !== 0);
+  ].every((dockerArgs) => spawnDocker(dockerArgs, { stdio: "ignore", shell: process.platform === "win32" }).status !== 0);
 }
 
 function assertExactFiles(directory, expected) {
@@ -368,10 +418,22 @@ function scanValueForSecrets(value, label) {
 }
 
 function run(command, commandArgs) {
-  const result = spawnSync(command, commandArgs, { stdio: "ignore", shell: process.platform === "win32" });
+  const result = command === DOCKER_BIN
+    ? spawnDocker(commandArgs, { stdio: "ignore", shell: process.platform === "win32" })
+    : spawnSync(command, commandArgs, { stdio: "ignore", shell: process.platform === "win32" });
   if (result.status !== 0) {
     throw new Error(`${command} ${commandArgs[0] ?? ""} failed`);
   }
+}
+
+function spawnDocker(commandArgs, options) {
+  if (DOCKER_FAKE_SCRIPT !== undefined && DOCKER_FAKE_SCRIPT !== "") {
+    return spawnSync(process.execPath, [DOCKER_FAKE_SCRIPT, ...commandArgs], {
+      ...options,
+      shell: false
+    });
+  }
+  return spawnSync(DOCKER_BIN, commandArgs, options);
 }
 
 function readJson(file) {
@@ -392,9 +454,12 @@ function parseArgs(rawArgs) {
   for (let index = 0; index < rawArgs.length; index += 1) {
     const arg = rawArgs[index];
     if (!arg.startsWith("--")) {
-      continue;
+      throw new Error(`unknown positional argument: ${arg}`);
     }
     const key = arg.slice(2);
+    if (key === "") {
+      throw new Error("empty flag is not supported");
+    }
     const next = rawArgs[index + 1];
     result[key] = next === undefined || next.startsWith("--") ? "true" : next;
     if (result[key] !== "true") {
@@ -402,6 +467,12 @@ function parseArgs(rawArgs) {
     }
   }
   return result;
+}
+
+function assertKnownFlags(options) {
+  for (const key of Object.keys(options)) {
+    assert(KNOWN_FLAGS.has(key), `unsupported flag: --${key}`);
+  }
 }
 
 function sha256(buffer) {
