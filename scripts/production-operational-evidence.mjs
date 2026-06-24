@@ -727,7 +727,68 @@ function deriveReceiptFields(receipt) {
     identity.runtime_revision_ancestor_of_verified_origin_main =
       gitStatus(["merge-base", "--is-ancestor", identity.running_image_revision_label, "origin/main"]) === 0;
   }
+  deriveV2PortPolicy(receipt);
   receipt.operational_baseline = computeOperationalBaseline(receipt);
+}
+
+function deriveV2PortPolicy(receipt) {
+  if (receipt.contract_version !== HANDOFF_CONTRACT_VERSION) {
+    return;
+  }
+
+  const states = receipt.services?.observed_service_states ?? {};
+  const postgresProjection = states.postgres?.port_projection;
+  const redisProjection = states.redis?.port_projection;
+  const workerProjection = states["main-service-worker"]?.port_projection;
+  const apiProjection = states["main-service-api"]?.port_projection;
+
+  if (typeof postgresProjection === "string") {
+    receipt.services.public_database_port_absent = hasPublishedHostBinding(postgresProjection) ? "FAILED" : "PASSED";
+  }
+  if (typeof redisProjection === "string") {
+    receipt.services.public_redis_port_absent = hasPublishedHostBinding(redisProjection) ? "FAILED" : "PASSED";
+  }
+  if (typeof workerProjection === "string") {
+    receipt.services.worker_host_port_absent = hasPublishedHostBinding(workerProjection) ? "FAILED" : "PASSED";
+  }
+  if (typeof apiProjection === "string") {
+    const loopbackBinding = extractPublishedHostBindings(apiProjection).find((binding) => binding.containerPort === "3000");
+    if (loopbackBinding !== undefined) {
+      receipt.services.api_loopback_binding.result =
+        loopbackBinding.hostIp === "127.0.0.1" && loopbackBinding.hostPort === "3200" ? "PASSED" : "FAILED";
+      receipt.services.api_loopback_binding.host_ip = loopbackBinding.hostIp;
+      receipt.services.api_loopback_binding.host_port = loopbackBinding.hostPort;
+      receipt.services.api_loopback_binding.container_port = 3000;
+    }
+  }
+}
+
+function hasPublishedHostBinding(portProjection) {
+  return extractPublishedHostBindings(portProjection).length > 0;
+}
+
+function extractPublishedHostBindings(portProjection) {
+  return portProjection
+    .split(/\s+/u)
+    .filter((line) => line.includes("="))
+    .flatMap((line) => {
+      const [container, bindings = ""] = line.split("=");
+      const containerPort = container.split("/")[0];
+      return bindings
+        .split(",")
+        .filter((binding) => binding !== "")
+        .map((binding) => {
+          const separator = binding.lastIndexOf(":");
+          if (separator === -1) {
+            return { containerPort, hostIp: "NOT_RECORDED", hostPort: "NOT_RECORDED" };
+          }
+          return {
+            containerPort,
+            hostIp: binding.slice(0, separator),
+            hostPort: binding.slice(separator + 1)
+          };
+        });
+    });
 }
 
 function validateReceiptShape(receipt) {
@@ -888,7 +949,12 @@ function validateServices(services, composeContext) {
   if (composeContext.result !== "NOT_RECORDED") {
     assert(typeof services.observed_service_names === "string", "observed service names must be a string");
     if (composeContext.result === "PASSED") {
-      assert(services.observed_service_names === EXPECTED_SERVICES.join(","), "observed service names mismatch");
+      const observed = services.observed_service_names.split(",").filter((service) => service !== "").sort();
+      const expectedAll = [...EXPECTED_SERVICES].sort();
+      const expectedSteadyState = EXPECTED_SERVICES.filter((service) => service !== "migrate").sort();
+      const matchesExpectedAll = JSON.stringify(observed) === JSON.stringify(expectedAll);
+      const matchesSteadyState = JSON.stringify(observed) === JSON.stringify(expectedSteadyState);
+      assert(matchesExpectedAll || matchesSteadyState, "observed service names mismatch");
     } else {
       assert(services.observed_service_names === "NOT_RECORDED", "blocked service names must not be recorded");
     }

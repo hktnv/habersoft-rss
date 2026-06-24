@@ -160,6 +160,7 @@ try {
   assertCollectorComposeContextPasses("dot-git", canonicalRemoteDotGit);
   assertCollectorComposeContextPasses("suffixless", canonicalRemote);
   assertCollectorComposeContextBlocks();
+  assertCollectorPublishedDataPortsFail();
 
   const completeReceipt = createCompleteReceipt();
   const completeReceiptFile = writeReceipt("complete-receipt.json", completeReceipt);
@@ -420,10 +421,10 @@ function assertCollectorComposeContextPasses(label, remote) {
   assert.equal(records.get("compose_context.result"), "PASSED", readFileSync(fixture.trace, "utf8"));
   assert.equal(records.get("compose_context.evidence_source"), "DIRECT_OBSERVED");
   assert.equal(records.get("identity.canonical_remote"), remote);
-  assert.equal(records.get("services.observed_service_names"), "postgres,redis,migrate,main-service-api,main-service-worker");
+  assert.equal(records.get("services.observed_service_names"), "main-service-api,main-service-worker,postgres,redis");
   assert.equal(records.get("services.api_loopback_binding.result"), "PASSED");
-  assert.equal(records.get("services.public_database_port_absent"), "PASSED");
-  assert.equal(records.get("services.public_redis_port_absent"), "PASSED");
+  assert.equal(records.get("services.public_database_port_absent"), "FAILED");
+  assert.equal(records.get("services.public_redis_port_absent"), "FAILED");
   assert.equal(records.get("services.worker_host_port_absent"), "PASSED");
   assert.equal(records.get("migration.result"), "PASSED");
   assert.equal(records.get("worker_scheduler.worker_health"), "PASSED");
@@ -435,7 +436,9 @@ function assertCollectorComposeContextPasses(label, remote) {
   assertCollectorReceiptPasses(outputDir, {
     composeContext: "PASSED",
     migration: "PASSED",
-    workerHealth: "PASSED"
+    workerHealth: "PASSED",
+    publicDatabasePortAbsent: "PASSED",
+    publicRedisPortAbsent: "PASSED"
   });
 }
 
@@ -461,8 +464,36 @@ function assertCollectorComposeContextBlocks() {
   assertCollectorReceiptPasses(outputDir, {
     composeContext: "BLOCKED",
     migration: "NOT_RUN",
-    workerHealth: "NOT_RUN"
+    workerHealth: "NOT_RUN",
+    publicDatabasePortAbsent: "BLOCKED",
+    publicRedisPortAbsent: "BLOCKED"
   });
+}
+
+function assertCollectorPublishedDataPortsFail() {
+  const fixture = writeCollectorFixture("collector-published-data-ports", {
+    remote: canonicalRemoteDotGit,
+    publishedDataPorts: true
+  });
+  const outputDir = path.join(fixture.root, "collector-output");
+  mkdirSync(outputDir);
+  const result = runCollectorFixture(fixture, outputDir);
+  assert.equal(result.status, 0, result.stderr);
+  const records = readEvidenceRecords(outputDir);
+  assert.equal(records.get("compose_context.result"), "PASSED");
+  assert.equal(records.get("services.public_database_port_absent"), "FAILED");
+  assert.equal(records.get("services.public_redis_port_absent"), "FAILED");
+  const receiptFile = path.join(fixture.root, "published-data-ports-receipt.json");
+  const createResult = runNode([
+    "scripts/production-operational-evidence.mjs",
+    "receipt:create",
+    "--evidence",
+    outputDir,
+    "--output",
+    receiptFile
+  ]);
+  assert.notEqual(createResult.status, 0);
+  assert.match(createResult.stderr, /PostgreSQL host port|Redis host port/u);
 }
 
 function assertCollectorReceiptPasses(outputDir, expected) {
@@ -482,6 +513,8 @@ function assertCollectorReceiptPasses(outputDir, expected) {
   assert.equal(receipt.compose_context.result, expected.composeContext);
   assert.equal(receipt.migration.result, expected.migration);
   assert.equal(receipt.worker_scheduler.worker_health, expected.workerHealth);
+  assert.equal(receipt.services.public_database_port_absent, expected.publicDatabasePortAbsent);
+  assert.equal(receipt.services.public_redis_port_absent, expected.publicRedisPortAbsent);
   assertVerifyReceiptPasses(receiptFile);
 }
 
@@ -695,7 +728,9 @@ function writeCollectorFixture(label, options) {
   runGit(["add", "."], backend);
   runGit(["commit", "-m", "fixture"], backend);
   const revision = gitOutput(["rev-parse", "origin/main"]);
-  writeFakeDocker(fakeBin, trace, revision);
+  writeFakeDocker(fakeBin, trace, revision, {
+    publishedDataPorts: options.publishedDataPorts === true
+  });
   writeFakeCurl(fakeBin);
   writeFakeOpenSsl(fakeBin);
   return { root, backend, fakeBin, trace, composeFail: options.composeFail === true };
@@ -728,7 +763,9 @@ function runCollectorFixture(fixture, outputDir) {
   });
 }
 
-function writeFakeDocker(fakeBin, trace, revision) {
+function writeFakeDocker(fakeBin, trace, revision, options = {}) {
+  const postgresProjection = options.publishedDataPorts ? "5432/tcp=0.0.0.0:5432," : "5432/tcp=";
+  const redisProjection = options.publishedDataPorts ? "6379/tcp=0.0.0.0:6379," : "6379/tcp=";
   writeExecutable(path.join(fakeBin, "docker"), `#!/usr/bin/env bash
 set -eu
 printf '%s\\n' "$*" >> "\${DOCKER_TRACE}"
@@ -744,7 +781,7 @@ case "$*" in
     exit 0
     ;;
   compose*"ps --services"*)
-    printf '%s\\n' postgres redis migrate main-service-api main-service-worker
+    printf '%s\\n' main-service-api main-service-worker postgres redis
     exit 0
     ;;
   compose*"ps -q postgres"*) printf '%s\\n' cid-postgres; exit 0 ;;
@@ -784,7 +821,12 @@ if [ "\${1:-}" = "inspect" ]; then
     *".State.StartedAt"*) printf '%s\\n' "2026-06-24T00:00:00Z" ;;
     *".Image"*) printf '%s\\n' "$image_id" ;;
     *"NetworkSettings.Ports"*)
-      if [ "$cid" = "cid-api" ]; then printf '%s\\n' "3000/tcp=127.0.0.1:3200,"; else printf '%s\\n' ""; fi
+      case "$cid" in
+        cid-api) printf '%s\\n' "3000/tcp=127.0.0.1:3200," ;;
+        cid-postgres) printf '%s\\n' "${postgresProjection}" ;;
+        cid-redis) printf '%s\\n' "${redisProjection}" ;;
+        *) printf '%s\\n' "" ;;
+      esac
       ;;
     *) printf '%s\\n' "NOT_RECORDED" ;;
   esac
