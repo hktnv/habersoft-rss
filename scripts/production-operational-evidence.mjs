@@ -11,7 +11,7 @@ import {
   writeFileSync
 } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { URL, fileURLToPath } from "node:url";
 import {
   EXPECTED_MIGRATIONS,
   EXPECTED_PUBLIC_ROUTES,
@@ -20,6 +20,7 @@ import {
 } from "./release-identity.mjs";
 
 const CANONICAL_REMOTE = "https://github.com/hktnv/habersoft-rss";
+const CANONICAL_REMOTE_DOT_GIT = `${CANONICAL_REMOTE}.git`;
 const EXPECTED_PUBLIC_BASE_URL = "https://rss.habersoft.com";
 const EXPECTED_LOOPBACK_BASE_URL = "http://127.0.0.1:3200";
 const CONTRACT_VERSION = "production-operational-evidence-v1";
@@ -588,8 +589,59 @@ function containerSnapshotSkeleton() {
   };
 }
 
+function normalizeCanonicalGitHubHttpsRepositoryRemote(rawValue, label) {
+  assert(typeof rawValue === "string", `${label} must be a string`);
+  assert(rawValue !== "", `${label} must not be empty`);
+  assert(rawValue !== "NOT_RECORDED", `${label} not recorded`);
+  assert(rawValue === rawValue.trim(), `${label} has surrounding whitespace`);
+  assert(!/[\u0000-\u001f\u007f]/u.test(rawValue), `${label} contains a control character`);
+
+  let parsed;
+  try {
+    parsed = new URL(rawValue);
+  } catch {
+    assert(false, `${label} must be a valid HTTPS URL`);
+  }
+
+  assert(parsed.protocol === "https:", `${label} must use https`);
+  assert(parsed.username === "" && parsed.password === "", `${label} must not contain credentials`);
+  assert(parsed.hostname === "github.com", `${label} host mismatch`);
+  assert(parsed.port === "", `${label} must not contain an explicit port`);
+  assert(parsed.search === "", `${label} must not contain a query`);
+  assert(parsed.hash === "", `${label} must not contain a fragment`);
+
+  if (rawValue === CANONICAL_REMOTE) {
+    return {
+      observed: rawValue,
+      normalized: CANONICAL_REMOTE,
+      variant: "GITHUB_HTTPS_SUFFIXLESS",
+      matches: true
+    };
+  }
+  if (rawValue === CANONICAL_REMOTE_DOT_GIT) {
+    return {
+      observed: rawValue,
+      normalized: CANONICAL_REMOTE,
+      variant: "GITHUB_HTTPS_TERMINAL_DOT_GIT",
+      matches: true
+    };
+  }
+
+  assert(false, `${label} repository identity mismatch`);
+}
+
 function deriveReceiptFields(receipt) {
   const identity = receipt.identity;
+  identity.canonical_remote = normalizeCanonicalGitHubHttpsRepositoryRemote(
+    identity.canonical_remote,
+    "identity canonical_remote"
+  ).normalized;
+  if (identity.running_image_source_label !== "NOT_RECORDED") {
+    identity.running_image_source_label = normalizeCanonicalGitHubHttpsRepositoryRemote(
+      identity.running_image_source_label,
+      "running_image_source_label"
+    ).normalized;
+  }
   const imageIds = [
     identity.runtime_image_env_image_id,
     identity.api_running_image_id,
@@ -683,7 +735,7 @@ function validateIdentity(identity) {
     "runtime_revision_known_in_canonical_repo",
     "runtime_revision_ancestor_of_verified_origin_main"
   ], "identity");
-  assert(identity.canonical_remote === CANONICAL_REMOTE, "identity canonical_remote mismatch");
+  normalizeCanonicalGitHubHttpsRepositoryRemote(identity.canonical_remote, "identity canonical_remote");
   assert(isGitSha(identity.server_checkout_commit) || identity.server_checkout_commit === "NOT_RECORDED", "server_checkout_commit malformed");
   assert(typeof identity.server_checkout_clean === "boolean" || identity.server_checkout_clean === "NOT_RECORDED", "server_checkout_clean invalid");
   assert(isGitSha(identity.local_origin_main_ref) || identity.local_origin_main_ref === "NOT_RECORDED", "local_origin_main_ref malformed");
@@ -712,7 +764,7 @@ function validateIdentity(identity) {
 
   if (identity.running_image_revision_label !== "NOT_RECORDED") {
     assert(isGitSha(identity.running_image_revision_label), "running_image_revision_label malformed");
-    assert(identity.running_image_source_label === CANONICAL_REMOTE, "running_image_source_label wrong canonical remote");
+    normalizeCanonicalGitHubHttpsRepositoryRemote(identity.running_image_source_label, "running_image_source_label");
     assert(identity.runtime_revision_known_in_canonical_repo === true, "runtime revision must be known in canonical repo");
     assert(gitStatus(["cat-file", "-e", `${identity.running_image_revision_label}^{commit}`]) === 0, "runtime revision not in canonical history");
     assert(identity.runtime_revision_ancestor_of_verified_origin_main === true, "runtime revision must be ancestor of verified origin/main");

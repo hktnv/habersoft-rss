@@ -27,6 +27,34 @@ const payloadFiles = [
   "collect-production-operational-evidence.sh",
   "evidence-contract.json"
 ];
+const canonicalRemote = "https://github.com/hktnv/habersoft-rss";
+const canonicalRemoteDotGit = `${canonicalRemote}.git`;
+const rejectedCanonicalRemoteFixtures = Object.freeze([
+  ["http", "http://github.com/hktnv/habersoft-rss"],
+  ["git-protocol", "git://github.com/hktnv/habersoft-rss.git"],
+  ["ssh-url", "ssh://git@github.com/hktnv/habersoft-rss.git"],
+  ["scp-like", "git@github.com:hktnv/habersoft-rss.git"],
+  ["wrong-host", "https://github.example/hktnv/habersoft-rss.git"],
+  ["wrong-owner", "https://github.com/other/habersoft-rss.git"],
+  ["wrong-repo", "https://github.com/hktnv/other.git"],
+  ["double-suffix", "https://github.com/hktnv/habersoft-rss.git.git"],
+  ["trailing-slash", "https://github.com/hktnv/habersoft-rss/"],
+  ["dot-git-trailing-slash", "https://github.com/hktnv/habersoft-rss.git/"],
+  ["subpath", "https://github.com/hktnv/habersoft-rss/subpath"],
+  ["dot-git-subpath", "https://github.com/hktnv/habersoft-rss.git/subpath"],
+  ["query", "https://github.com/hktnv/habersoft-rss?x=1"],
+  ["fragment", "https://github.com/hktnv/habersoft-rss.git#fragment"],
+  ["userinfo", "https://user@github.com/hktnv/habersoft-rss.git"],
+  ["userinfo-password", "https://user:pass@github.com/hktnv/habersoft-rss.git"],
+  ["explicit-port", "https://github.com:443/hktnv/habersoft-rss.git"],
+  ["encoded-owner", "https://github.com/hkt%6ev/habersoft-rss.git"],
+  ["encoded-repo", "https://github.com/hktnv/habersoft%2drss.git"],
+  ["leading-space", " https://github.com/hktnv/habersoft-rss.git"],
+  ["trailing-space", "https://github.com/hktnv/habersoft-rss.git "],
+  ["empty", ""],
+  ["not-recorded", "NOT_RECORDED"],
+  ["prefix-repo", "https://github.com/hktnv/habersoft-rss-evil.git"]
+]);
 
 try {
   const validHandoff = generateHandoff("valid-handoff");
@@ -141,7 +169,34 @@ try {
     createdReceiptFile
   ]);
   assert.equal(createResult.status, 0, createResult.stderr);
+  const createdReceipt = readJson(createdReceiptFile);
+  assert.equal(createdReceipt.identity.canonical_remote, canonicalRemote);
+  assert.equal(createdReceipt.identity.running_image_source_label, canonicalRemote);
   assertVerifyReceiptPasses(createdReceiptFile);
+
+  const dotGitReceipt = createCompleteReceipt({
+    identity: {
+      canonical_remote: canonicalRemoteDotGit,
+      running_image_source_label: canonicalRemoteDotGit
+    }
+  });
+  const dotGitReceiptFile = writeReceipt("dot-git-receipt.json", dotGitReceipt);
+  assertVerifyReceiptPasses(dotGitReceiptFile);
+  const dotGitEvidenceDir = writeEvidenceBundle("dot-git-evidence", dotGitReceipt);
+  const dotGitCreatedReceiptFile = path.join(temp, "dot-git-created-operational-receipt.json");
+  const dotGitCreateResult = runNode([
+    "scripts/production-operational-evidence.mjs",
+    "receipt:create",
+    "--evidence",
+    dotGitEvidenceDir,
+    "--output",
+    dotGitCreatedReceiptFile
+  ]);
+  assert.equal(dotGitCreateResult.status, 0, dotGitCreateResult.stderr);
+  const dotGitCreatedReceipt = readJson(dotGitCreatedReceiptFile);
+  assert.equal(dotGitCreatedReceipt.identity.canonical_remote, canonicalRemote);
+  assert.equal(dotGitCreatedReceipt.identity.running_image_source_label, canonicalRemote);
+  assertVerifyReceiptPasses(dotGitCreatedReceiptFile);
 
   const partialReceipt = createCompleteReceipt({
     operational_baseline: "PARTIAL",
@@ -169,6 +224,36 @@ try {
   assertVerifyReceiptPasses(partialReceiptFile);
   assertVerifyReceiptFails(partialReceiptFile, /operational baseline is not passed/u, true);
 
+  for (const [label, remote] of rejectedCanonicalRemoteFixtures) {
+    assertReceiptMutationFails(`canonical-remote-${label}`, (receipt) => {
+      receipt.identity.canonical_remote = remote;
+    }, /canonical_remote/u);
+  }
+  assertReceiptMutationFails("canonical-remote-missing", (receipt) => {
+    delete receipt.identity.canonical_remote;
+  }, /identity/u);
+  assertReceiptMutationFails("running-image-source-dot-git-subpath", (receipt) => {
+    receipt.identity.running_image_source_label = "https://github.com/hktnv/habersoft-rss.git/subpath";
+  }, /running_image_source_label/u);
+  const notRecordedEvidenceDir = writeEvidenceBundle(
+    "not-recorded-remote-evidence",
+    createCompleteReceipt({
+      identity: {
+        canonical_remote: "NOT_RECORDED"
+      }
+    })
+  );
+  const notRecordedCreateResult = runNode([
+    "scripts/production-operational-evidence.mjs",
+    "receipt:create",
+    "--evidence",
+    notRecordedEvidenceDir,
+    "--output",
+    path.join(temp, "not-recorded-remote-receipt.json")
+  ]);
+  assert.notEqual(notRecordedCreateResult.status, 0);
+  assert.match(notRecordedCreateResult.stderr, /canonical_remote/u);
+
   assertReceiptMutationFails("malformed-git", (receipt) => {
     receipt.identity.server_checkout_commit = "abc";
   }, /server_checkout_commit malformed/u);
@@ -186,7 +271,7 @@ try {
   }, /image mismatch/u);
   assertReceiptMutationFails("wrong-source", (receipt) => {
     receipt.identity.running_image_source_label = "https://example.invalid/repo";
-  }, /wrong canonical remote/u);
+  }, /running_image_source_label|wrong canonical remote/u);
   assertReceiptMutationFails("unknown-revision", (receipt) => {
     receipt.identity.running_image_revision_label = "f".repeat(40);
   }, /not in canonical history/u);
@@ -349,7 +434,7 @@ function createCompleteReceipt(overrides = {}) {
     github_release_created: false,
     operational_baseline: "PASSED",
     identity: {
-      canonical_remote: "https://github.com/hktnv/habersoft-rss",
+      canonical_remote: canonicalRemote,
       server_checkout_commit: serverCheckout,
       server_checkout_clean: true,
       local_origin_main_ref: runtimeRevision,
@@ -358,7 +443,7 @@ function createCompleteReceipt(overrides = {}) {
       worker_running_image_id: currentImage,
       inspected_image_id: currentImage,
       running_image_revision_label: runtimeRevision,
-      running_image_source_label: "https://github.com/hktnv/habersoft-rss",
+      running_image_source_label: canonicalRemote,
       image_identity_consistent: true,
       server_checkout_matches_running_revision: serverCheckout === runtimeRevision,
       runtime_revision_known_in_canonical_repo: true,
