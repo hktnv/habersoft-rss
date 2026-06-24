@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
 const SCRIPT_NAME = "repository-hygiene-verify";
@@ -18,12 +18,17 @@ const failures = [];
 requireFile(attributesPath);
 requireFile(productionGuidePath);
 requireFile(collectorPath);
+const trackedShellPaths = collectTrackedShellPaths();
 assertAttributes();
 assertNoCarriageReturn(path.join(root, attributesPath), `${attributesPath} worktree`);
 assertNoCarriageReturn(path.join(root, productionGuidePath), `${productionGuidePath} worktree`);
-assertNoCarriageReturn(path.join(root, collectorPath), `${collectorPath} worktree`);
+for (const shellPath of trackedShellPaths) {
+  assertNoCarriageReturn(path.join(root, shellPath), `${shellPath} worktree`);
+}
 assertGitStateIfAvailable();
-assertBashSyntaxIfAvailable(path.join(root, collectorPath), collectorPath);
+for (const shellPath of trackedShellPaths) {
+  assertBashSyntaxIfAvailable(path.join(root, shellPath), shellPath);
+}
 assertMirrorIfPresent();
 assertHandoffIfPresent();
 
@@ -96,7 +101,7 @@ function assertGitStateIfAvailable() {
     return;
   }
 
-  const paths = [attributesPath, productionGuidePath, collectorPath];
+  const paths = [attributesPath, productionGuidePath, ...trackedShellPaths];
   const attr = git(["check-attr", "text", "eol", "--", ...paths]);
   if (attr.status !== 0) {
     failures.push("git check-attr failed");
@@ -110,11 +115,12 @@ function assertGitStateIfAvailable() {
     }
   }
 
-  const eol = git(["ls-files", "--eol", "--", ...paths]);
+  const trackedPaths = paths.filter((relative) => git(["ls-files", "--error-unmatch", "--", relative]).status === 0);
+  const eol = git(["ls-files", "--eol", "--", ...trackedPaths]);
   if (eol.status !== 0) {
     failures.push("git ls-files --eol failed");
   } else {
-    for (const relative of paths) {
+    for (const relative of trackedPaths) {
       const line = eol.stdout.split(/\r?\n/u).find((entry) => entry.endsWith(`\t${relative}`));
       if (!line || !line.includes("i/lf") || !line.includes("w/lf") || !line.includes("attr/text eol=lf")) {
         failures.push(`git eol state invalid for ${relative}`);
@@ -122,7 +128,7 @@ function assertGitStateIfAvailable() {
     }
   }
 
-  for (const relative of paths) {
+  for (const relative of trackedPaths) {
     const blob = git(["show", `HEAD:${relative}`], { encoding: "buffer" });
     if (blob.status !== 0) {
       failures.push(`git blob read failed for ${relative}`);
@@ -182,13 +188,31 @@ function assertHandoffIfPresent() {
   if (handoffDir === undefined || !existsSync(handoffDir)) {
     return;
   }
-  const collector = path.join(handoffDir, "collect-production-operational-evidence.sh");
-  if (!existsSync(collector) || !statSync(collector).isFile()) {
-    failures.push("handoff collector missing");
+  const scripts = readdirSync(handoffDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".sh"))
+    .map((entry) => path.join(handoffDir, entry.name));
+  if (scripts.length === 0) {
+    failures.push("handoff shell script missing");
     return;
   }
-  assertNoCarriageReturn(collector, "generated handoff collector");
-  assertBashSyntaxIfAvailable(collector, "generated handoff collector");
+  for (const script of scripts) {
+    const label = path.basename(script) === "collect-production-operational-evidence.sh"
+      ? "generated handoff collector"
+      : `generated handoff script ${path.basename(script)}`;
+    assertNoCarriageReturn(script, label);
+    assertBashSyntaxIfAvailable(script, label);
+  }
+}
+
+function collectTrackedShellPaths() {
+  const scriptsDir = path.join(root, "scripts");
+  if (!existsSync(scriptsDir)) {
+    return [collectorPath];
+  }
+  return readdirSync(scriptsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".sh"))
+    .map((entry) => `scripts/${entry.name}`)
+    .sort();
 }
 
 function git(gitArgs, options = {}) {

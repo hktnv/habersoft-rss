@@ -25,3 +25,13 @@ local-staging-rehearsal-receipt.*.json
 local-staging-rehearsal/
 deploy/runtime-image.env
 production-git-handoff-receipt.json
+operator-state/
+*.dump
+*.dump.tmp*
+main-service-production.dump
+backup-capture-metadata.json
+backup-capture-receipt.json
+off-host-restore-receipt.json
+production-backup-restore-receipt.json
+production-backup-returned-v1/
+production-backup-restore-handoff-v1/

@@ -1,0 +1,605 @@
+import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync
+} from "node:fs";
+import path from "node:path";
+import { EXPECTED_MIGRATIONS, RELEASE_IDENTITY } from "./release-identity.mjs";
+
+const CONTRACT_VERSION = "production-backup-restore-evidence-v1";
+const MILESTONE = "MS-019C";
+const CANONICAL_REMOTE = "https://github.com/hktnv/habersoft-rss";
+const PARENT_OPERATIONAL_RECEIPT_SHA256 = "3a5624a5cab3044a1797d9c8ee78e92828a28233a67f759b8bf6845a7ecc4620";
+const STAGING_BACKUP_SHA256 = "595ee0617d86f5886aca25ae99486f064ce06e081d16fec19fec74cdd8db9bfc";
+const POSTGRES_IMAGE = "postgres:17.9-bookworm";
+const CAPTURE_SOURCE = "scripts/production-backup-restore-capture.sh";
+const RESTORE_SOURCE = "scripts/production-backup-restore-off-host-verify.sh";
+const CAPTURE_BUNDLE = "capture-production-postgres-backup.sh";
+const RESTORE_BUNDLE = "verify-off-host-postgres-restore.sh";
+const HANDOFF_FILES = Object.freeze([
+  "README.md",
+  CAPTURE_BUNDLE,
+  RESTORE_BUNDLE,
+  "backup-restore-contract.json",
+  "manifest.json",
+  "checksums.sha256"
+]);
+const CHECKSUM_FILES = HANDOFF_FILES.filter((file) => file !== "checksums.sha256");
+const CANONICAL_TABLES = Object.freeze([
+  "feeds",
+  "entries",
+  "entry_details",
+  "site_feeds",
+  "agent_feed_check_events",
+  "agent_runtime_status"
+]);
+
+const [command, ...rawArgs] = process.argv.slice(2);
+const args = parseArgs(rawArgs);
+
+try {
+  switch (command) {
+    case "handoff":
+    case "handoff:generate":
+      generateHandoff(args);
+      break;
+    case "handoff:verify":
+      verifyHandoffCommand(args);
+      break;
+    case "handoff:freeze":
+      freezeHandoffCommand(args);
+      break;
+    case "receipt:create":
+      createCombinedReceiptCommand(args);
+      break;
+    case "receipt:verify":
+      verifyCombinedReceiptCommand(args);
+      break;
+    default:
+      fail("usage: production-backup-restore-evidence <handoff|handoff:verify|handoff:freeze|receipt:create|receipt:verify>");
+  }
+} catch (error) {
+  fail(error.message);
+}
+
+function generateHandoff(options) {
+  const outputDir = externalPath(options.output ?? options["output-dir"], "output");
+  prepareEmptyOutputDir(outputDir);
+  const generatedAt = new Date().toISOString();
+  const sourceCommit = gitOutput(["rev-parse", "HEAD"]);
+  const captureText = readText(CAPTURE_SOURCE).replaceAll("__MS019C_SOURCE_COMMIT__", sourceCommit);
+  const restoreText = readText(RESTORE_SOURCE);
+  writeText(path.join(outputDir, CAPTURE_BUNDLE), captureText, 0o755);
+  writeText(path.join(outputDir, RESTORE_BUNDLE), restoreText, 0o755);
+  writeText(path.join(outputDir, "README.md"), renderReadme(generatedAt), 0o644);
+  writeJson(path.join(outputDir, "backup-restore-contract.json"), createContract(), 0o644);
+  const manifest = createManifest(outputDir, generatedAt, sourceCommit);
+  writeJson(path.join(outputDir, "manifest.json"), manifest, 0o644);
+  writeChecksums(outputDir, CHECKSUM_FILES);
+  const verified = verifyHandoff(outputDir);
+  console.log(JSON.stringify({
+    status: "production-backup-restore-handoff-generated",
+    bundle: outputDir,
+    verified: verified.ok,
+    manifest_sha256: sha256(readFileSync(path.join(outputDir, "manifest.json"))),
+    capture_script_sha256: sha256(readFileSync(path.join(outputDir, CAPTURE_BUNDLE))),
+    restore_wrapper_sha256: sha256(readFileSync(path.join(outputDir, RESTORE_BUNDLE))),
+    production_contact_performed: false,
+    backup_performed: false,
+    restore_performed: false
+  }, null, 2));
+}
+
+function verifyHandoffCommand(options) {
+  const bundle = externalPath(options.bundle ?? options.input, "bundle");
+  const result = verifyHandoff(bundle);
+  console.log(JSON.stringify({
+    status: "production-backup-restore-handoff-verified",
+    bundle,
+    files: result.files,
+    manifest_sha256: sha256(readFileSync(path.join(bundle, "manifest.json"))),
+    capture_script_sha256: result.manifest.capture_script.sha256,
+    restore_wrapper_sha256: result.manifest.restore_wrapper.sha256,
+    production_contact_performed: false,
+    backup_performed: false,
+    restore_performed: false
+  }, null, 2));
+}
+
+function freezeHandoffCommand(options) {
+  const bundle = externalPath(options.bundle, "bundle");
+  const output = externalPath(options.output, "output");
+  assert(!existsSync(output), "freeze output must not already exist");
+  const result = verifyHandoff(bundle);
+  const freeze = {
+    schema_version: 1,
+    freeze_type: "production-backup-restore-handoff-freeze",
+    milestone: MILESTONE,
+    contract_version: CONTRACT_VERSION,
+    source_commit: result.manifest.generation_source_commit,
+    bundle_files: result.files,
+    manifest_sha256: sha256(readFileSync(path.join(bundle, "manifest.json"))),
+    capture_script_sha256: result.manifest.capture_script.sha256,
+    restore_wrapper_sha256: result.manifest.restore_wrapper.sha256,
+    generated_at_utc: new Date().toISOString(),
+    production_contact_performed: false,
+    production_mutation_performed: false,
+    backup_performed: false,
+    restore_performed: false
+  };
+  writeJson(output, freeze, 0o600);
+  console.log(JSON.stringify({
+    status: "production-backup-restore-handoff-freeze-created",
+    freeze: output,
+    freeze_sha256: sha256(readFileSync(output)),
+    manifest_sha256: freeze.manifest_sha256,
+    capture_script_sha256: freeze.capture_script_sha256,
+    restore_wrapper_sha256: freeze.restore_wrapper_sha256
+  }, null, 2));
+}
+
+function createCombinedReceiptCommand(options) {
+  const captureDir = externalPath(options["capture-dir"], "capture-dir");
+  const restoreReceiptFile = externalPath(options["restore-receipt"], "restore-receipt");
+  const output = externalPath(options.output, "output");
+  assert(!existsSync(output), "combined receipt output must not already exist");
+  const captureReceiptFile = path.join(captureDir, "backup-capture-receipt.json");
+  const captureReceipt = readJson(captureReceiptFile);
+  const restoreReceipt = readJson(restoreReceiptFile);
+  const receipt = createCombinedReceipt(captureReceipt, restoreReceipt, {
+    captureReceiptSha256: sha256(readFileSync(captureReceiptFile)),
+    restoreReceiptSha256: sha256(readFileSync(restoreReceiptFile))
+  });
+  validateCombinedReceipt(receipt, { requireBaseline: false });
+  writeJson(output, receipt, 0o600);
+  console.log(JSON.stringify({
+    status: "production-backup-restore-receipt-created",
+    receipt: output,
+    sha256: sha256(readFileSync(output)),
+    backup_restore_baseline: receipt.backup_restore_baseline
+  }, null, 2));
+}
+
+function verifyCombinedReceiptCommand(options) {
+  const receiptFile = externalPath(options.receipt ?? options.input, "receipt");
+  const receipt = readJson(receiptFile);
+  validateCombinedReceipt(receipt, { requireBaseline: options["require-backup-restore-baseline"] === "true" });
+  console.log(JSON.stringify({
+    status: "production-backup-restore-receipt-verified",
+    receipt: receiptFile,
+    sha256: sha256(readFileSync(receiptFile)),
+    backup_restore_baseline: receipt.backup_restore_baseline,
+    production_mutation_performed: false
+  }, null, 2));
+}
+
+function verifyHandoff(bundle) {
+  assert(existsSync(bundle) && statSync(bundle).isDirectory(), "bundle must be an existing directory");
+  assertExactFiles(bundle, HANDOFF_FILES);
+  const checksumMap = verifyChecksums(bundle, CHECKSUM_FILES);
+  const manifest = readJson(path.join(bundle, "manifest.json"));
+  const contract = readJson(path.join(bundle, "backup-restore-contract.json"));
+  const capture = readText(path.join(bundle, CAPTURE_BUNDLE));
+  const restore = readText(path.join(bundle, RESTORE_BUNDLE));
+  validateManifest(manifest, checksumMap);
+  validateContract(contract);
+  for (const file of ["README.md", "backup-restore-contract.json", "manifest.json", CAPTURE_BUNDLE, RESTORE_BUNDLE]) {
+    scanTextForSecrets(readText(path.join(bundle, file)), file);
+  }
+  assert(!capture.includes("\r"), "capture shell must use LF");
+  assert(!restore.includes("\r"), "restore wrapper must use LF");
+  assertBashSyntax(path.join(bundle, CAPTURE_BUNDLE), CAPTURE_BUNDLE);
+  assertBashSyntax(path.join(bundle, RESTORE_BUNDLE), RESTORE_BUNDLE);
+  scanShellForForbiddenCommands(capture, CAPTURE_BUNDLE);
+  scanShellForForbiddenCommands(restore, RESTORE_BUNDLE);
+  return { ok: true, files: HANDOFF_FILES, manifest };
+}
+
+function createCombinedReceipt(captureReceipt, restoreReceipt, hashes) {
+  const baseline =
+    captureReceipt.receipt_type === "production-backup-capture" &&
+    restoreReceipt.receipt_type === "off-host-disposable-restore" &&
+    restoreReceipt.restore_command_result === "PASSED" &&
+    restoreReceipt.migration_verification === "PASSED" &&
+    restoreReceipt.teardown?.result === "PASSED" &&
+    restoreReceipt.production_mutation_performed === false &&
+    restoreReceipt.production_restore_performed === false
+      ? "PASSED"
+      : "FAILED";
+  return {
+    schema_version: 1,
+    contract_version: CONTRACT_VERSION,
+    receipt_type: "production-backup-restore-acceptance",
+    milestone: MILESTONE,
+    service: RELEASE_IDENTITY.application,
+    environment: "production",
+    parent_ms019b_operational_receipt_sha256: PARENT_OPERATIONAL_RECEIPT_SHA256,
+    backup_capture_receipt_sha256: hashes.captureReceiptSha256,
+    backup_sha256: captureReceipt.backup?.sha256,
+    backup_bytes: captureReceipt.backup?.bytes,
+    captured_at_utc: captureReceipt.captured_at_utc,
+    off_host_restore_receipt_sha256: hashes.restoreReceiptSha256,
+    restored_at_utc: restoreReceipt.restored_at_utc,
+    structural_verification: "PASSED",
+    migration_verification: restoreReceipt.migration_verification,
+    teardown_result: restoreReceipt.teardown?.result,
+    canonical_repository: CANONICAL_REMOTE,
+    backup_restore_baseline: baseline,
+    production_mutation_performed: false,
+    deployment_performed: false,
+    migration_performed_by_codex: false,
+    production_restore_performed: false,
+    secrets_included: false
+  };
+}
+
+function validateCombinedReceipt(receipt, options) {
+  scanTextForSecrets(JSON.stringify(receipt), "combined receipt");
+  assert(receipt.schema_version === 1, "receipt schema mismatch");
+  assert(receipt.contract_version === CONTRACT_VERSION, "receipt contract mismatch");
+  assert(receipt.receipt_type === "production-backup-restore-acceptance", "receipt type mismatch");
+  assert(receipt.parent_ms019b_operational_receipt_sha256 === PARENT_OPERATIONAL_RECEIPT_SHA256, "parent MS-019B receipt mismatch");
+  assert(isSha256(receipt.backup_capture_receipt_sha256), "capture receipt SHA malformed");
+  assert(isSha256(receipt.backup_sha256), "backup SHA malformed");
+  assert(receipt.backup_sha256 !== STAGING_BACKUP_SHA256, "staging backup SHA cannot substitute production backup SHA");
+  assert(Number.isInteger(receipt.backup_bytes) && receipt.backup_bytes > 0, "backup size invalid");
+  assert(isSha256(receipt.off_host_restore_receipt_sha256), "restore receipt SHA malformed");
+  assert(receipt.structural_verification === "PASSED", "structural verification must pass");
+  assert(["PASSED", "FAILED"].includes(receipt.migration_verification), "migration verification status invalid");
+  assert(["PASSED", "FAILED"].includes(receipt.teardown_result), "teardown status invalid");
+  assert(receipt.production_mutation_performed === false, "production mutation flag must be false");
+  assert(receipt.production_restore_performed === false, "production restore flag must be false");
+  assert(receipt.secrets_included === false, "secrets flag must be false");
+  const expectedBaseline =
+    receipt.migration_verification === "PASSED" &&
+    receipt.teardown_result === "PASSED"
+      ? "PASSED"
+      : "FAILED";
+  assert(receipt.backup_restore_baseline === expectedBaseline, `backup_restore_baseline must be ${expectedBaseline}`);
+  if (options.requireBaseline === true) {
+    assert(receipt.backup_restore_baseline === "PASSED", "backup restore baseline is not passed");
+  }
+}
+
+function createManifest(outputDir, generatedAt, sourceCommit) {
+  return {
+    schema_version: 1,
+    bundle_type: "production-backup-restore-handoff",
+    contract_version: CONTRACT_VERSION,
+    milestone: MILESTONE,
+    service: RELEASE_IDENTITY.application,
+    source_environment: "production",
+    restore_environment: "off-host-disposable",
+    application_version: RELEASE_IDENTITY.version,
+    application_status: RELEASE_IDENTITY.status,
+    canonical_remote: CANONICAL_REMOTE,
+    parent_ms019b_operational_receipt_sha256: PARENT_OPERATIONAL_RECEIPT_SHA256,
+    backup_format: "POSTGRESQL_CUSTOM",
+    production_compose_context_mode: "EXPLICIT_PRODUCTION_COMPOSE_TWO_ENV_FILES",
+    postgres_image: POSTGRES_IMAGE,
+    expected_tables: [...CANONICAL_TABLES],
+    expected_migrations: [...EXPECTED_MIGRATIONS],
+    generated_by: "scripts/production-backup-restore-evidence.mjs",
+    generated_at_utc: generatedAt,
+    generation_source_commit: sourceCommit,
+    capture_script: {
+      filename: CAPTURE_BUNDLE,
+      sha256: sha256(readFileSync(path.join(outputDir, CAPTURE_BUNDLE))),
+      executable_intended: true
+    },
+    restore_wrapper: {
+      filename: RESTORE_BUNDLE,
+      sha256: sha256(readFileSync(path.join(outputDir, RESTORE_BUNDLE))),
+      executable_intended: true
+    },
+    payload_files: ["README.md", CAPTURE_BUNDLE, RESTORE_BUNDLE, "backup-restore-contract.json"].map((file) => fileMetadata(outputDir, file)),
+    production_contact_performed: false,
+    production_mutation_performed: false,
+    deployment_performed: false,
+    migration_performed: false,
+    backup_performed: false,
+    restore_performed: false,
+    artifact_publication_performed: false,
+    git_tag_created: false,
+    github_release_created: false,
+    secrets_included: false
+  };
+}
+
+function createContract() {
+  return {
+    schema_version: 1,
+    contract_version: CONTRACT_VERSION,
+    milestone: MILESTONE,
+    service: RELEASE_IDENTITY.application,
+    parent_ms019b_operational_receipt_sha256: PARENT_OPERATIONAL_RECEIPT_SHA256,
+    backup_capture: {
+      format: "POSTGRESQL_CUSTOM",
+      output_files: [
+        "main-service-production.dump",
+        "backup-capture-metadata.json",
+        "backup-capture-receipt.json",
+        "checksums.sha256"
+      ],
+      compose_context_mode: "EXPLICIT_PRODUCTION_COMPOSE_TWO_ENV_FILES",
+      production_read_only: true,
+      no_secret_output: true,
+      no_overwrite: true
+    },
+    off_host_restore: {
+      docker_context_allowed_classes: ["LOCAL_UNIX_SOCKET", "LOCAL_WINDOWS_NPIPE"],
+      docker_context_rejected_classes: ["SSH", "REMOTE_TCP", "PRODUCTION_ALIAS", "UNKNOWN"],
+      postgres_image: POSTGRES_IMAGE,
+      disposable_resources_required: true,
+      host_port_policy: "NO_HOST_PORT",
+      expected_tables: [...CANONICAL_TABLES],
+      expected_migrations: [...EXPECTED_MIGRATIONS],
+      teardown_required: true
+    },
+    combined_receipt: {
+      parent_ms019b_receipt_sha256: PARENT_OPERATIONAL_RECEIPT_SHA256,
+      strict_flag: "--require-backup-restore-baseline",
+      staging_backup_sha_rejected: STAGING_BACKUP_SHA256
+    },
+    safety_flags: {
+      production_contact_performed: false,
+      production_mutation_performed: false,
+      deployment_performed: false,
+      migration_performed: false,
+      backup_performed_by_handoff_generation: false,
+      restore_performed_by_handoff_generation: false,
+      artifact_publication_performed: false,
+      git_tag_created: false,
+      github_release_created: false,
+      secrets_included: false
+    }
+  };
+}
+
+function renderReadme(generatedAt) {
+  return `# MS-019C Production Backup Restore Handoff
+
+This bundle prepares a production PostgreSQL custom-format backup capture and later off-host disposable restore verification for main-service.
+
+Generating or verifying this bundle does not contact production, take a backup, restore a database, mutate services, deploy, publish an artifact, create a Git tag or create a GitHub Release.
+
+Production capture command shape:
+
+\`\`\`bash
+cd /opt/habersoft-rss
+<approved-ms-019c-handoff-dir>/capture-production-postgres-backup.sh \\
+  --repository-dir /opt/habersoft-rss \\
+  --compose-file deploy/production/compose.yaml \\
+  --shared-env .env.production \\
+  --runtime-image-env deploy/runtime-image.env \\
+  --output-dir <new-empty-production-backup-output-dir>
+\`\`\`
+
+The output directory must stay outside the repository checkout and must be transferred through an operator-approved secure channel. Extract the exact returned files flat into the local external intake directory for the next Codex resume. Do not put a ZIP/archive in the canonical intake directory.
+
+Do not paste or upload backup bytes, DB URLs, passwords, raw metadata, raw PostgreSQL output, row data or secrets.
+
+Generated at UTC: ${generatedAt}
+`;
+}
+
+function validateManifest(manifest, checksumMap) {
+  assert(manifest.schema_version === 1, "manifest schema mismatch");
+  assert(manifest.bundle_type === "production-backup-restore-handoff", "manifest bundle type mismatch");
+  assert(manifest.contract_version === CONTRACT_VERSION, "manifest contract mismatch");
+  assert(manifest.milestone === MILESTONE, "manifest milestone mismatch");
+  assert(manifest.service === RELEASE_IDENTITY.application, "manifest service mismatch");
+  assert(manifest.canonical_remote === CANONICAL_REMOTE, "manifest canonical remote mismatch");
+  assert(manifest.parent_ms019b_operational_receipt_sha256 === PARENT_OPERATIONAL_RECEIPT_SHA256, "manifest parent receipt mismatch");
+  assert(manifest.backup_format === "POSTGRESQL_CUSTOM", "manifest backup format mismatch");
+  assert(manifest.postgres_image === POSTGRES_IMAGE, "manifest PostgreSQL image mismatch");
+  assertSameArray(manifest.expected_tables, [...CANONICAL_TABLES], "manifest table inventory mismatch");
+  assertSameArray(manifest.expected_migrations, [...EXPECTED_MIGRATIONS], "manifest migration inventory mismatch");
+  assert(isGitSha(manifest.generation_source_commit), "manifest source commit malformed");
+  assert(manifest.capture_script?.filename === CAPTURE_BUNDLE, "manifest capture script mismatch");
+  assert(manifest.capture_script.sha256 === checksumMap.get(CAPTURE_BUNDLE), "manifest capture script checksum mismatch");
+  assert(manifest.restore_wrapper?.filename === RESTORE_BUNDLE, "manifest restore wrapper mismatch");
+  assert(manifest.restore_wrapper.sha256 === checksumMap.get(RESTORE_BUNDLE), "manifest restore wrapper checksum mismatch");
+  for (const key of [
+    "production_contact_performed",
+    "production_mutation_performed",
+    "deployment_performed",
+    "migration_performed",
+    "backup_performed",
+    "restore_performed",
+    "artifact_publication_performed",
+    "git_tag_created",
+    "github_release_created",
+    "secrets_included"
+  ]) {
+    assert(manifest[key] === false, `manifest ${key} must be false`);
+  }
+}
+
+function validateContract(contract) {
+  assert(contract.schema_version === 1, "contract schema mismatch");
+  assert(contract.contract_version === CONTRACT_VERSION, "contract version mismatch");
+  assert(contract.parent_ms019b_operational_receipt_sha256 === PARENT_OPERATIONAL_RECEIPT_SHA256, "contract parent receipt mismatch");
+  assert(contract.backup_capture?.format === "POSTGRESQL_CUSTOM", "contract backup format mismatch");
+  assert(contract.backup_capture?.compose_context_mode === "EXPLICIT_PRODUCTION_COMPOSE_TWO_ENV_FILES", "contract compose mode mismatch");
+  assert(contract.off_host_restore?.postgres_image === POSTGRES_IMAGE, "contract PostgreSQL image mismatch");
+  assertSameArray(contract.off_host_restore?.expected_tables, [...CANONICAL_TABLES], "contract tables mismatch");
+  assertSameArray(contract.off_host_restore?.expected_migrations, [...EXPECTED_MIGRATIONS], "contract migrations mismatch");
+}
+
+function assertExactFiles(directory, expected) {
+  const entries = readdirSync(directory, { withFileTypes: true });
+  const names = entries.map((entry) => entry.name).sort();
+  assertSameArray(names, [...expected].sort(), `unexpected handoff inventory: ${names.join(",")}`);
+  for (const entry of entries) {
+    const stat = lstatSync(path.join(directory, entry.name));
+    assert(stat.isFile(), `handoff entry must be a file: ${entry.name}`);
+    assert(!entry.name.endsWith(".zip") && !entry.name.endsWith(".tar"), "handoff must not include archive");
+  }
+}
+
+function verifyChecksums(directory, files) {
+  const lines = readText(path.join(directory, "checksums.sha256"))
+    .trim()
+    .split(/\r?\n/u)
+    .filter((line) => line !== "");
+  const map = new Map(lines.map((line) => {
+    const match = /^([a-f0-9]{64})  ([A-Za-z0-9._-]+)$/u.exec(line);
+    assert(match !== null, "checksum line malformed");
+    return [match[2], match[1]];
+  }));
+  for (const file of files) {
+    assert(map.get(file) === sha256(readFileSync(path.join(directory, file))), `checksum mismatch for ${file}`);
+  }
+  assert(map.size === files.length, "checksum file must cover exact payload files");
+  return map;
+}
+
+function scanShellForForbiddenCommands(text, label) {
+  const forbidden = [
+    /\bdocker\s+compose\b[\s\S]*(?:\bup\b|\bdown\b|\brestart\b|\brun\b|\brm\b|\bstop\b|\bkill\b)/iu,
+    /\bdocker\s+(?:system|volume)\s+prune\b/iu,
+    /\bprisma\s+db\s+push\b/iu,
+    /\b(printenv|env|set)\b.*(?:DATABASE|POSTGRES|AGENT|TOKEN|SECRET)/iu,
+    /\bcat\b.*\.env/iu,
+    /\blogs\b/iu
+  ];
+  for (const pattern of forbidden) {
+    assert(!pattern.test(text), `${label} contains forbidden shell command`);
+  }
+}
+
+function scanTextForSecrets(text, label) {
+  const forbidden = [
+    /DATABASE_URL\s*=/iu,
+    /POSTGRES_PASSWORD\s*=/iu,
+    /TENANT_RATE_LIMIT_KEY_SECRET\s*=/iu,
+    /AGENT_KEY\s*=/iu,
+    /-----BEGIN [A-Z ]*PRIVATE KEY-----/u,
+    /Bearer\s+[A-Za-z0-9._-]+/u,
+    /feed_url|tenant_id|raw_sql|dump_bytes/iu
+  ];
+  for (const pattern of forbidden) {
+    assert(!pattern.test(text), `${label} contains forbidden sensitive content`);
+  }
+}
+
+function assertBashSyntax(file, label) {
+  const result = spawnSync("bash", ["-n", toBashPath(file)], { encoding: "utf8", shell: false });
+  assert(result.status === 0, `${label} bash -n failed`);
+}
+
+function prepareEmptyOutputDir(outputDir) {
+  const relative = path.relative(process.cwd(), outputDir);
+  assert(relative.startsWith("..") || path.isAbsolute(relative), "handoff output must be outside the repository");
+  if (existsSync(outputDir)) {
+    assert(statSync(outputDir).isDirectory(), "output must be a directory");
+    assert(readdirSync(outputDir).length === 0, "output must be empty");
+    return;
+  }
+  mkdirSync(outputDir, { recursive: true, mode: 0o700 });
+}
+
+function writeChecksums(directory, files) {
+  const lines = files.map((file) => `${sha256(readFileSync(path.join(directory, file)))}  ${file}`);
+  writeText(path.join(directory, "checksums.sha256"), `${lines.join("\n")}\n`, 0o644);
+}
+
+function fileMetadata(directory, file) {
+  const fullPath = path.join(directory, file);
+  return {
+    path: file,
+    bytes: statSync(fullPath).size,
+    sha256: sha256(readFileSync(fullPath))
+  };
+}
+
+function readText(file) {
+  return readFileSync(file, "utf8");
+}
+
+function writeText(file, text, mode) {
+  writeFileSync(file, text.replace(/\r\n/gu, "\n"), { mode });
+  if (process.platform !== "win32" && (mode & 0o111) !== 0) {
+    chmodSync(file, mode);
+  }
+}
+
+function readJson(file) {
+  return JSON.parse(readText(file));
+}
+
+function writeJson(file, value, mode) {
+  writeText(file, `${JSON.stringify(value, null, 2)}\n`, mode);
+}
+
+function externalPath(value, label) {
+  assert(value !== undefined && value !== "", `${label} is required`);
+  return path.resolve(value);
+}
+
+function parseArgs(rawArgs) {
+  const result = {};
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index];
+    if (!arg.startsWith("--")) {
+      continue;
+    }
+    const key = arg.slice(2);
+    const next = rawArgs[index + 1];
+    result[key] = next === undefined || next.startsWith("--") ? "true" : next;
+    if (result[key] !== "true") {
+      index += 1;
+    }
+  }
+  return result;
+}
+
+function gitOutput(gitArgs) {
+  const result = spawnSync("git", gitArgs, { encoding: "utf8", shell: false });
+  assert(result.status === 0, "git command failed");
+  return result.stdout.trim();
+}
+
+function isSha256(value) {
+  return /^[a-f0-9]{64}$/u.test(String(value ?? ""));
+}
+
+function isGitSha(value) {
+  return /^[a-f0-9]{40}$/u.test(String(value ?? ""));
+}
+
+function assertSameArray(actual, expected, message) {
+  assert(JSON.stringify([...(actual ?? [])].sort()) === JSON.stringify([...expected].sort()), message);
+}
+
+function toBashPath(file) {
+  const resolved = path.resolve(file);
+  const driveMatch = /^([A-Za-z]):\\(.*)$/u.exec(resolved);
+  if (driveMatch !== null) {
+    return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2].replaceAll("\\", "/")}`;
+  }
+  return resolved.replaceAll(path.sep, "/");
+}
+
+function sha256(buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function fail(message) {
+  console.error(`production-backup-restore-evidence: ${message}`);
+  process.exit(1);
+}

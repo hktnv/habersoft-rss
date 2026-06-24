@@ -6,25 +6,41 @@ Bu belge production PostgreSQL backup prerequisite'ini, backup artifact/metadata
 
 ## Backup
 
-Backup custom-format `pg_dump -Fc` artifact'idir. Script:
+Backup custom-format `pg_dump -Fc` artifact'idir. MS-019C hazirlik akisi bu komutu versioned operator handoff icinden calistirir ve output'u yeni/bos external directory olarak ister. Canonical capture inventory:
 
 ```powershell
-npm run production:backup -- --compose-file <compose-file> --env-file <shared-env> --runtime-image-env <release-dir>/runtime-image.env --output <temp-backup>
+npm run production:backup -- --compose-file <compose-file> --shared-env <shared-env> --runtime-image-env <runtime-image-env> --output-dir <new-empty-output-dir>
 ```
 
-Script backup dump ile birlikte `<temp-backup>.metadata.json` uretir. Metadata checksum, format, database adi ve timestamp tasir; password yazmaz. `--runtime-image-env` Compose interpolation icin package-derived image identity katmanini ekler; backup icinde image veya secret saklanmaz.
+Output directory su dosyalari tasir:
+
+- `main-service-production.dump`
+- `backup-capture-metadata.json`
+- `backup-capture-receipt.json`
+- `checksums.sha256`
+
+Script explicit production Compose context kullanir: production compose file, external shared env ve `deploy/runtime-image.env`. Bare `docker compose` production backup evidence komutu degildir. Metadata/receipt backup SHA-256, byte size, custom-format contract, parent MS-019B receipt SHA ve no-mutation flags tasir; DB URL, password, raw row data, private path veya dump content yazmaz.
 
 Backup output production host disina tasinmalidir. Gercek backup path, retention schedule ve off-host transfer operasyonel runbook kapsamindadir; bu repository secret veya production dump saklamaz.
 
-MS-018B operator modelinde backup production sunucusunda operator tarafindan tetiklenir. Source delivery yine Git-only kalir; backup artifact'i, SHA-256 kaydi ve off-host kopya Git disinda tutulur. Codex production SSH veya production backup komutu calistirmaz.
+MS-018B operator modelinde backup production sunucusunda operator tarafindan tetiklenir. Source delivery yine Git-only kalir; backup artifact'i, SHA-256 kaydi ve off-host kopya Git disinda tutulur. Codex production SSH veya production backup komutu calistirmaz. MS-019C handoff bundle'i external ve secret-free'dir; generation veya verification production evidence degildir.
 
 ## Restore Verification
 
 ```powershell
-npm run production:restore:verify -- --backup <temp-backup>
+npm run production:restore:verify -- --input-dir <flat-returned-backup-dir> --receipt <external-off-host-restore-receipt>
 ```
 
-Verifier disposable PostgreSQL container baslatir, dump'i restore eder, beklenen alti canonical business table'i ve iki Prisma migration kaydini kontrol eder, sonra container'i siler. Production database overwrite etmez.
+Verifier yalniz local Docker engine endpoint sinifini kabul eder, SSH/remote TCP/production alias context'lerini reddeder. Unique disposable network, volume ve PostgreSQL container kullanir; host port yayinlamaz. Dump'i restore eder, beklenen alti canonical business table'i ve iki Prisma migration kaydini kontrol eder, sonra container/network/volume absence proof yapar. Production database overwrite etmez ve staging'e restore yapmaz.
+
+Future combined receipt:
+
+```powershell
+npm run production:backup-restore:receipt:create -- --capture-dir <flat-returned-backup-dir> --restore-receipt <external-off-host-restore-receipt> --output <external-combined-receipt>
+npm run production:backup-restore:receipt:verify -- --receipt <external-combined-receipt> --require-backup-restore-baseline
+```
+
+Combined receipt parent MS-019B operational receipt SHA-256 `3a5624a5cab3044a1797d9c8ee78e92828a28233a67f759b8bf6845a7ecc4620` degerine baglanir. Historical staging backup SHA-256 production backup SHA yerine kullanilamaz.
 
 ## Redis Siniri
 
@@ -42,9 +58,9 @@ MS-017B2 local rehearsal tooling'i PostgreSQL backup ve disposable restore verif
 
 ## Production Evidence Status
 
-MS-018C operator-confirmed production activation input'u production backup SHA-256 veya production off-host restore verification sonucu tasimaz.
+MS-018C operator-confirmed production activation input'u ve MS-019B partial operational receipt production backup SHA-256 veya production off-host restore verification sonucu tasimaz.
 
 - Production backup SHA-256: `NOT_RECORDED`
 - Production off-host restore result: `NOT_RECORDED`
 
-Bu durum production backup/restore'un failed oldugu anlamina gelmez; yalniz bu milestone'da kanit kaydedilmedigini belirtir. Backup komutu, restore verification veya production SSH bu gorevde calistirilmaz. Eksik production backup/restore evidence'i MS-019 operational evidence gap'i olarak kalir.
+Bu durum production backup/restore'un failed oldugu anlamina gelmez; yalniz current accepted evidence icinde kanit kaydedilmedigini belirtir. MS-019C hazirlik asamasi yalniz handoff/tooling uretir; gercek production backup, returned flat intake ve off-host restore receipt sonraki resume gorevinde acceptance'a cevrilebilir.

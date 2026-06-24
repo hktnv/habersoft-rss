@@ -577,23 +577,38 @@ Repository tooling server'da kullanilabiliyorsa:
 ```bash
 cd "${BACKEND_DIR}"
 
-npm run production:backup -- \
+<operator-approved-ms-019c-handoff-dir>/capture-production-postgres-backup.sh \
+  --repository-dir "${BACKEND_DIR}" \
   --compose-file "${COMPOSE_FILE}" \
-  --env-file "${SHARED_ENV}" \
+  --shared-env "${SHARED_ENV}" \
   --runtime-image-env "${IMAGE_ENV}" \
-  --output "/opt/habersoft-rss/operator-state/main-service-production-backup.dump"
+  --output-dir "<new-empty-production-backup-output-dir>"
 ```
 
-Restore verification:
+Capture output su flat dosyalardan olusur ve Git disinda tutulur:
+
+```text
+main-service-production.dump
+backup-capture-metadata.json
+backup-capture-receipt.json
+checksums.sha256
+```
+
+Bu set operator-approved secure channel ile off-host/local verification ortamina tasinir. ZIP sadece transfer container'i olabilir; canonical intake dizinine ZIP konmaz.
+
+Restore verification off-host disposable Docker ortaminda calisir:
 
 ```bash
 cd "${BACKEND_DIR}"
 
 npm run production:restore:verify -- \
-  --backup "/opt/habersoft-rss/operator-state/main-service-production-backup.dump"
+  --input-dir "<flat-returned-production-backup-dir>" \
+  --receipt "<external-off-host-restore-receipt>"
 ```
 
-Host Node/npm kullanilmayacaksa operator native PostgreSQL araclariyla `pg_dump -Fc` alir ve disposable restore yapar. Production restore rutin rollback degildir; sadece kanitlanmis data/schema uyumsuzlugu varsa ayrica karar verilir.
+Verifier yalniz local Docker engine endpoint sinifini kabul eder; SSH/remote TCP/production context reddedilir. Unique disposable PostgreSQL container, network ve volume kullanir, host port yayinlamaz, six canonical business table ve iki Prisma migration kaydini dogrular, sonra disposable kaynaklarin silindigini kanitlar.
+
+Host Node/npm kullanilmayacaksa operator native PostgreSQL araclariyla ayni `pg_dump -Fc` ve off-host disposable restore sozlesmesini uygular. Production restore rutin rollback degildir; sadece kanitlanmis data/schema uyumsuzlugu varsa ayrica karar verilir.
 
 ## 16. Rollback
 

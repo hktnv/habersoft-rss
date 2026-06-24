@@ -216,6 +216,8 @@ The following remain outside the accepted MS-019B-R8 receipt:
 
 These fields stay `NOT_RECORDED` or `NOT_PERFORMED` until a later bounded milestone records evidence.
 
+MS-019C owns the future production PostgreSQL backup and off-host disposable restore evidence contract. Raw dump files, capture metadata and restore receipts are external sensitive artifacts and are never part of the MS-019B operational evidence bundle. MS-019B receipt SHA-256 remains the parent identity for the future combined MS-019C receipt.
+
 ## Historical Handoff Boundary
 
 MS-019A handoff-v1 remains historically verifiable by the handoff verifier. New operator reruns must use the collector-v2 contract so the production Compose context, two env-file layers, context preflight and `NOT_RUN` dependent classification are present in the returned bundle.
