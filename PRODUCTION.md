@@ -803,6 +803,29 @@ notes: basic production activation acceptance passed; extended operational accep
 
 Secret deger yazilmaz.
 
+### 19.1 Read-only operational evidence handoff
+
+MS-019A ile read-only operational evidence handoff tooling hazirlandi. Canonical contract [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md) dosyasindadir.
+
+Bu akisin siniri:
+
+- Codex production SSH kullanmaz.
+- Handoff bundle production evidence degildir.
+- Operator collector'i production host uzerinde manuel calistirir.
+- Collector yalniz read-only allowlist kontrolleri yapar.
+- Collector secret echo, raw env dump, raw log dump, backup, restore, deployment veya service mutation yapmaz.
+- Output external operator-state alaninda tutulur ve Git'e commit edilmez.
+- Successful collector output kendi basina repository status update degildir; local verifier ve sonraki bounded milestone yalniz kanitlanan alanlari gunceller.
+
+Collector command shape:
+
+```bash
+cd <operator-approved-handoff-dir>
+./collect-production-operational-evidence.sh --output-dir <external-output-dir>
+```
+
+Returned bundle sonraki local verification milestone'unda `production-operational-evidence-receipt.json` uretmek icin kullanilir. Valid partial receipt full operational acceptance anlamina gelmez.
+
 ## 20. Gelecek backend/frontend monorepo gecisi
 
 Current phase:
@@ -859,6 +882,7 @@ Bu kosullar tamamlanmadan `rss-panel.habersoft.com` production-ready sayilmaz.
 - [README.md](README.md)
 - [.docs/README.md](.docs/README.md)
 - [.docs/production-acceptance.md](.docs/production-acceptance.md)
+- [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md)
 - [.docs/production-deployment.md](.docs/production-deployment.md)
 - [.docs/production-rollout-runbook.md](.docs/production-rollout-runbook.md)
 - [.docs/release-packaging.md](.docs/release-packaging.md)

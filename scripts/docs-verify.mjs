@@ -17,6 +17,7 @@ for (const file of requiredHandbookFiles) {
   requireFile(file);
 }
 requireFile(productionGuide);
+requireFile(".docs/production-operational-evidence.md");
 
 const markdownFiles = [productionGuide, "README.md", ...walkMarkdown(path.join(root, ".docs"))];
 
@@ -216,6 +217,7 @@ function assertProductionGuide() {
     "Codex production SSH kullanmaz",
     "MVP — Production Aktif",
     ".docs/production-acceptance.md",
+    ".docs/production-operational-evidence.md",
     "rss-panel.habersoft.com` planned/inactive",
     "backend-only repository layout",
     "habersoft-rss/backend",

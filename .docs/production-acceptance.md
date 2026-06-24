@@ -66,6 +66,8 @@ The following fields are not proven by the MS-018C operator input and must not b
 
 These gaps are not failures. They are the remaining extended operational evidence scope.
 
+MS-019A prepared the read-only operational evidence collector/handoff contract and verifier owner in [production-operational-evidence.md](production-operational-evidence.md). Actual production operational receipt has not been collected yet, so the fields above remain `NOT_RECORDED` until a later operator-run evidence milestone proves them. The MS-018C external receipt filename and SHA-256 remain unchanged.
+
 ## Delivery And Publication Boundary
 
 Production source delivery remains Git-only:

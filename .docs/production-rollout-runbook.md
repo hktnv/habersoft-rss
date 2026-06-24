@@ -121,6 +121,8 @@ Future full receipt verifier should prove identity, authorization hash, prefligh
 
 MS-018C external receipt intentionally records only the operator-confirmed basic activation evidence and leaves the remaining fields explicit `NOT_RECORDED`.
 
+MS-019A prepared the future read-only operational evidence handoff and receipt verifier in [production-operational-evidence.md](production-operational-evidence.md). That flow is for later operator-run evidence capture; it does not replace the current production activation status and does not make backup/restore or publication evidence passed. The copyable collector command shape is kept in that canonical document so this runbook does not duplicate the contract.
+
 ## Forbidden operations
 
 Do not invent production host facts, bypass TLS validation, use staging target as production, reuse staging secrets, expose DB/Redis/worker publicly, bind API directly to public Internet, use HTTP JWKS, reset production DB, rewrite migrations, prune Docker globally, publish artifacts, create Git tag or create GitHub Release.
