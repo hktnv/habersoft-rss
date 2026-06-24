@@ -352,6 +352,12 @@ SHARED_ENV="${BACKEND_DIR}/.env.production"
 IMAGE_ENV="${BACKEND_DIR}/deploy/runtime-image.env"
 ```
 
+Production Compose context zorunlu olarak bu uc path ile baglanir. Bare `docker compose ...` production command'i degildir; repo root `compose.yaml` local/default model icindir ve production shared env layer'ini yuklemez. Production icin command shape her zaman:
+
+```bash
+docker compose --env-file "${SHARED_ENV}" --env-file "${IMAGE_ENV}" -f "${COMPOSE_FILE}" <subcommand>
+```
+
 Compose config dogrulama:
 
 ```bash
@@ -805,13 +811,14 @@ Secret deger yazilmaz.
 
 ### 19.1 Read-only operational evidence handoff
 
-MS-019A ile read-only operational evidence handoff tooling hazirlandi. Canonical contract [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md) dosyasindadir.
+MS-019B-R7 ile read-only operational evidence handoff-v2 tooling hazirlandi. Canonical contract [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md) dosyasindadir. MS-019A handoff-v1 historical verification icin korunur; fresh operator rerun handoff-v2 ile yapilir.
 
 Bu akisin siniri:
 
 - Codex production SSH kullanmaz.
 - Handoff bundle production evidence degildir.
 - Operator collector'i production host uzerinde manuel calistirir.
+- Collector production Compose context'i explicit `--env-file "${SHARED_ENV}" --env-file "${IMAGE_ENV}" -f "${COMPOSE_FILE}"` sekliyle baglar.
 - Collector yalniz read-only allowlist kontrolleri yapar.
 - Collector secret echo, raw env dump, raw log dump, backup, restore, deployment veya service mutation yapmaz.
 - Output external operator-state alaninda tutulur ve Git'e commit edilmez.
@@ -820,9 +827,16 @@ Bu akisin siniri:
 Collector command shape:
 
 ```bash
-cd <operator-approved-handoff-dir>
-./collect-production-operational-evidence.sh --output-dir <external-output-dir>
+cd /opt/habersoft-rss
+<operator-approved-handoff-v2-dir>/collect-production-operational-evidence.sh \
+  --repository-dir /opt/habersoft-rss \
+  --compose-file deploy/production/compose.yaml \
+  --shared-env .env.production \
+  --runtime-image-env deploy/runtime-image.env \
+  --output-dir <new-empty-output-dir>
 ```
+
+Collector once production Compose context preflight'ini calistirir. Bu preflight blocked olursa migration ve worker health dependent kontrolleri `FAILED` degil `NOT_RUN` olarak siniflanir; bu invocation-context hatasini production runtime failure iddiasindan ayirir.
 
 Returned bundle sonraki local verification milestone'unda `production-operational-evidence-receipt.json` uretmek icin kullanilir. Valid partial receipt full operational acceptance anlamina gelmez.
 

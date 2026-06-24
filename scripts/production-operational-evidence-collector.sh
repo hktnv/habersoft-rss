@@ -4,18 +4,25 @@ set -eu
 umask 077
 
 usage() {
-  printf '%s\n' "usage: collect-production-operational-evidence.sh --output-dir <new-empty-dir> [--compose-file <file>] [--image-env-file <file>] [--shared-env-file <file>] [--previous-pointer-file <file>] [--public-base-url <url>] [--api-loopback-base-url <url>]" >&2
+  printf '%s\n' "usage: collect-production-operational-evidence.sh --output-dir <new-empty-dir> [--repository-dir <production-repository-root>] [--compose-file <file>] [--shared-env <file>] [--runtime-image-env <file>] [--previous-pointer-file <file>] [--public-base-url <url>] [--api-loopback-base-url <url>]" >&2
   exit 2
 }
 
 OUTPUT_DIR=
-COMPOSE_FILE="deploy/production/compose.yaml"
-IMAGE_ENV_FILE="deploy/runtime-image.env"
+REPOSITORY_DIR=
+COMPOSE_FILE=
+IMAGE_ENV_FILE=
 SHARED_ENV_FILE=
 PREVIOUS_POINTER_FILE=
 PUBLIC_BASE_URL="https://rss.habersoft.com"
 API_LOOPBACK_BASE_URL="http://127.0.0.1:3200"
-COLLECTOR_SOURCE_COMMIT="__MS019A_SOURCE_COMMIT__"
+COLLECTOR_SOURCE_COMMIT="__MS019B_R7_SOURCE_COMMIT__"
+INVOCATION_DIR=$(pwd -P)
+case "$COLLECTOR_SOURCE_COMMIT" in
+  __MS019B_*)
+    COLLECTOR_SOURCE_COMMIT="NOT_RECORDED"
+    ;;
+esac
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -27,6 +34,21 @@ while [ "$#" -gt 0 ]; do
     --compose-file)
       [ "$#" -ge 2 ] || usage
       COMPOSE_FILE=$2
+      shift 2
+      ;;
+    --repository-dir)
+      [ "$#" -ge 2 ] || usage
+      REPOSITORY_DIR=$2
+      shift 2
+      ;;
+    --shared-env)
+      [ "$#" -ge 2 ] || usage
+      SHARED_ENV_FILE=$2
+      shift 2
+      ;;
+    --runtime-image-env)
+      [ "$#" -ge 2 ] || usage
+      IMAGE_ENV_FILE=$2
       shift 2
       ;;
     --image-env-file)
@@ -62,6 +84,54 @@ done
 
 [ -n "$OUTPUT_DIR" ] || usage
 
+resolve_file_from_backend() {
+  local value=$1
+  case "$value" in
+    /*)
+      printf '%s\n' "$value"
+      ;;
+    *)
+      printf '%s\n' "$BACKEND_DIR/$value"
+      ;;
+  esac
+}
+
+if [ -n "$REPOSITORY_DIR" ]; then
+  REPO_ROOT=$(git -C "$REPOSITORY_DIR" rev-parse --show-toplevel 2>/dev/null || printf 'NOT_RECORDED')
+else
+  REPO_ROOT=$(git -C "$INVOCATION_DIR" rev-parse --show-toplevel 2>/dev/null || printf 'NOT_RECORDED')
+fi
+if [ "$REPO_ROOT" = "NOT_RECORDED" ]; then
+  printf '%s\n' "collector: production repository root could not be resolved" >&2
+  exit 1
+fi
+if [ -f "$REPO_ROOT/backend/package.json" ]; then
+  BACKEND_DIR="$REPO_ROOT/backend"
+else
+  BACKEND_DIR="$REPO_ROOT"
+fi
+
+[ -n "$COMPOSE_FILE" ] || COMPOSE_FILE="deploy/production/compose.yaml"
+[ -n "$SHARED_ENV_FILE" ] || SHARED_ENV_FILE=".env.production"
+[ -n "$IMAGE_ENV_FILE" ] || IMAGE_ENV_FILE="deploy/runtime-image.env"
+
+COMPOSE_FILE=$(resolve_file_from_backend "$COMPOSE_FILE")
+SHARED_ENV_FILE=$(resolve_file_from_backend "$SHARED_ENV_FILE")
+IMAGE_ENV_FILE=$(resolve_file_from_backend "$IMAGE_ENV_FILE")
+
+case "$(basename "$SHARED_ENV_FILE")" in
+  .env)
+    printf '%s\n' "collector: shared production env must not be root .env" >&2
+    exit 1
+    ;;
+esac
+for required_file in "$COMPOSE_FILE" "$SHARED_ENV_FILE" "$IMAGE_ENV_FILE"; do
+  if [ ! -f "$required_file" ]; then
+    printf '%s\n' "collector: required production Compose context file is missing" >&2
+    exit 1
+  fi
+done
+
 if [ -e "$OUTPUT_DIR" ]; then
   [ -d "$OUTPUT_DIR" ] || fail_code=1
   if [ "${fail_code:-0}" -ne 0 ] || [ "$(find "$OUTPUT_DIR" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" != "0" ]; then
@@ -84,24 +154,26 @@ utc_now() {
 }
 
 hash_file() {
+  local file=$1
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | awk '{print $1}'
+    sha256sum "$file" | awk '{print $1}'
   else
-    shasum -a 256 "$1" | awk '{print $1}'
+    shasum -a 256 "$file" | awk '{print $1}'
   fi
 }
 
 emit() {
-  key=$1
-  value=$2
-  case "$key" in
+  local record_key=$1
+  local record_value=$2
+  local safe_value
+  case "$record_key" in
     *"	"*|*".."*|/*)
       printf '%s\n' "collector: invalid record key" >&2
       exit 1
       ;;
   esac
-  safe_value=$(printf '%s' "$value" | tr '\r\n\t' '   ')
-  printf '%s\t%s\n' "$key" "$safe_value" >> "$RECORDS_FILE"
+  safe_value=$(printf '%s' "$record_value" | tr '\r\n\t' '   ')
+  printf '%s\t%s\n' "$record_key" "$safe_value" >> "$RECORDS_FILE"
 }
 
 emit_status() {
@@ -110,8 +182,8 @@ emit_status() {
 }
 
 emit "schema_version" "1"
-emit "contract_version" "production-operational-evidence-v1"
-emit "milestone" "MS-019A"
+emit "contract_version" "production-operational-evidence-v2"
+emit "milestone" "MS-019B-R7"
 emit "service" "main-service"
 emit "environment" "production"
 emit "application_version" "0.1.0-ms-017"
@@ -127,10 +199,10 @@ emit "artifact_published" "false"
 emit "git_tag_created" "false"
 emit "github_release_created" "false"
 
-remote_url=$(git remote get-url origin 2>/dev/null || printf 'NOT_RECORDED')
-checkout_commit=$(git rev-parse HEAD 2>/dev/null || printf 'NOT_RECORDED')
-origin_main_ref=$(git rev-parse --verify origin/main 2>/dev/null || printf 'NOT_RECORDED')
-if git status --porcelain 2>/dev/null | grep -q .; then
+remote_url=$(git -C "$BACKEND_DIR" remote get-url origin 2>/dev/null || printf 'NOT_RECORDED')
+checkout_commit=$(git -C "$BACKEND_DIR" rev-parse HEAD 2>/dev/null || printf 'NOT_RECORDED')
+origin_main_ref=$(git -C "$BACKEND_DIR" rev-parse --verify origin/main 2>/dev/null || printf 'NOT_RECORDED')
+if git -C "$BACKEND_DIR" status --porcelain 2>/dev/null | grep -q .; then
   checkout_clean=false
 else
   checkout_clean=true
@@ -154,21 +226,65 @@ fi
 emit "identity.runtime_image_env_image_id" "$runtime_image"
 
 compose_cmd() {
-  if [ -n "$SHARED_ENV_FILE" ]; then
-    docker compose --env-file "$SHARED_ENV_FILE" --env-file "$IMAGE_ENV_FILE" -f "$COMPOSE_FILE" "$@"
-  else
-    docker compose --env-file "$IMAGE_ENV_FILE" -f "$COMPOSE_FILE" "$@"
-  fi
+  docker compose --env-file "$SHARED_ENV_FILE" --env-file "$IMAGE_ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
 inspect_field() {
-  container_id=$1
-  template=$2
+  local container_id=$1
+  local template=$2
   docker inspect --format "$template" "$container_id" 2>/dev/null || printf 'NOT_RECORDED'
 }
 
-service_names=$(compose_cmd ps --services 2>/dev/null | tr '\n' ',' | sed 's/,$//' || printf 'NOT_RECORDED')
+compose_context_tmp=$(mktemp)
+if compose_cmd config --services > "$compose_context_tmp" 2>/dev/null; then
+  compose_context_ok=true
+  emit_status "compose_context" "PASSED" "DIRECT_OBSERVED"
+else
+  compose_context_ok=false
+  emit_status "compose_context" "BLOCKED" "DIRECT_OBSERVED"
+fi
+
+if [ "$compose_context_ok" != "true" ]; then
+  emit "identity.api_running_image_id" "NOT_RECORDED"
+  emit "identity.worker_running_image_id" "NOT_RECORDED"
+  emit "identity.inspected_image_id" "NOT_RECORDED"
+  emit "identity.running_image_revision_label" "NOT_RECORDED"
+  emit "identity.running_image_source_label" "NOT_RECORDED"
+  emit "services.observed_service_names" "NOT_RECORDED"
+  for service in postgres redis migrate main-service-api main-service-worker; do
+    emit "services.observed_service_states.$service.status" "NOT_RECORDED"
+    emit "services.observed_service_states.$service.health" "NOT_RECORDED"
+  done
+  emit "services.api_loopback_binding.result" "BLOCKED"
+  emit "services.api_loopback_binding.host_ip" "NOT_RECORDED"
+  emit "services.api_loopback_binding.host_port" "NOT_RECORDED"
+  emit "services.api_loopback_binding.container_port" "3000"
+  emit "services.public_database_port_absent" "BLOCKED"
+  emit "services.public_redis_port_absent" "BLOCKED"
+  emit "services.worker_host_port_absent" "BLOCKED"
+  emit "migration.result" "NOT_RUN"
+  emit "migration.evidence_source" "BLOCKED"
+  emit "migration.pending_or_failed" "NOT_RECORDED"
+  emit "migration.output_sha256" "NOT_RECORDED"
+  emit "worker_scheduler.worker_health" "NOT_RUN"
+  emit "worker_scheduler.worker_health_evidence_source" "BLOCKED"
+  emit "worker_scheduler.output_sha256" "NOT_RECORDED"
+  emit "worker_scheduler.queue" "main-service.maintenance"
+  emit "worker_scheduler.scheduler" "cleanup.daily"
+  emit "worker_scheduler.job" "cleanup.run.v1"
+  emit "worker_scheduler.timezone" "UTC"
+  emit "worker_scheduler.global_concurrency" "1"
+  emit "worker_scheduler.local_concurrency" "1"
+  emit "worker_scheduler.scheduler_evidence_source" "NOT_RUN"
+else
+  service_names=$(compose_cmd ps --services 2>/dev/null | tr '\n' ',' | sed 's/,$//' || printf 'NOT_RECORDED')
 emit "services.observed_service_names" "$service_names"
+postgres_port_absent="PASSED"
+redis_port_absent="PASSED"
+worker_port_absent="PASSED"
+api_loopback_result="FAILED"
+api_host_ip="NOT_RECORDED"
+api_host_port="NOT_RECORDED"
 
 for service in postgres redis migrate main-service-api main-service-worker; do
   cid=$(compose_cmd ps -q "$service" 2>/dev/null || true)
@@ -183,8 +299,50 @@ for service in postgres redis migrate main-service-api main-service-worker; do
   emit "services.observed_service_states.$service.oom_killed" "$(inspect_field "$cid" '{{.State.OOMKilled}}')"
   emit "services.observed_service_states.$service.started_at" "$(inspect_field "$cid" '{{.State.StartedAt}}')"
   emit "services.observed_service_states.$service.image_id" "$(inspect_field "$cid" '{{.Image}}')"
-  emit "services.observed_service_states.$service.port_projection" "$(inspect_field "$cid" '{{range $p,$b := .NetworkSettings.Ports}}{{printf "%s=" $p}}{{range $b}}{{printf "%s:%s," .HostIp .HostPort}}{{end}}{{println}}{{end}}')"
+  case "$service" in
+    main-service-api)
+      emit "stability.api.restart_count" "$(inspect_field "$cid" '{{.RestartCount}}')"
+      emit "stability.api.oom_killed" "$(inspect_field "$cid" '{{.State.OOMKilled}}')"
+      emit "stability.api.state" "$(inspect_field "$cid" '{{.State.Status}}')"
+      emit "stability.api.started_at" "$(inspect_field "$cid" '{{.State.StartedAt}}')"
+      ;;
+    main-service-worker)
+      emit "stability.worker.restart_count" "$(inspect_field "$cid" '{{.RestartCount}}')"
+      emit "stability.worker.oom_killed" "$(inspect_field "$cid" '{{.State.OOMKilled}}')"
+      emit "stability.worker.state" "$(inspect_field "$cid" '{{.State.Status}}')"
+      emit "stability.worker.started_at" "$(inspect_field "$cid" '{{.State.StartedAt}}')"
+      ;;
+  esac
+  port_projection=$(inspect_field "$cid" '{{range $p,$b := .NetworkSettings.Ports}}{{printf "%s=" $p}}{{range $b}}{{printf "%s:%s," .HostIp .HostPort}}{{end}}{{println}}{{end}}')
+  emit "services.observed_service_states.$service.port_projection" "$port_projection"
+  case "$service" in
+    postgres)
+      [ -z "$port_projection" ] || postgres_port_absent="FAILED"
+      ;;
+    redis)
+      [ -z "$port_projection" ] || redis_port_absent="FAILED"
+      ;;
+    main-service-worker)
+      [ -z "$port_projection" ] || worker_port_absent="FAILED"
+      ;;
+    main-service-api)
+      case "$port_projection" in
+        *"3000/tcp=127.0.0.1:3200,"*)
+          api_loopback_result="PASSED"
+          api_host_ip="127.0.0.1"
+          api_host_port="3200"
+          ;;
+      esac
+      ;;
+  esac
 done
+emit "services.api_loopback_binding.result" "$api_loopback_result"
+emit "services.api_loopback_binding.host_ip" "$api_host_ip"
+emit "services.api_loopback_binding.host_port" "$api_host_port"
+emit "services.api_loopback_binding.container_port" "3000"
+emit "services.public_database_port_absent" "$postgres_port_absent"
+emit "services.public_redis_port_absent" "$redis_port_absent"
+emit "services.worker_host_port_absent" "$worker_port_absent"
 
 api_cid=$(compose_cmd ps -q main-service-api 2>/dev/null || true)
 worker_cid=$(compose_cmd ps -q main-service-worker 2>/dev/null || true)
@@ -235,9 +393,11 @@ else
 fi
 worker_hash=$(hash_file "$worker_tmp")
 if [ "$worker_exit" -eq 0 ]; then
-  emit_status "worker_scheduler.worker_health" "PASSED" "DIRECT_OBSERVED"
+  emit "worker_scheduler.worker_health" "PASSED"
+  emit "worker_scheduler.worker_health_evidence_source" "DIRECT_OBSERVED"
 else
-  emit_status "worker_scheduler.worker_health" "FAILED" "DIRECT_OBSERVED"
+  emit "worker_scheduler.worker_health" "FAILED"
+  emit "worker_scheduler.worker_health_evidence_source" "DIRECT_OBSERVED"
 fi
 emit "worker_scheduler.output_sha256" "$worker_hash"
 if grep -q '"queue":"main-service.maintenance"' "$worker_tmp" && grep -q '"scheduler_id":"cleanup.daily"' "$worker_tmp"; then
@@ -258,26 +418,43 @@ else
   emit "worker_scheduler.scheduler_evidence_source" "CONTRACT_DERIVED"
 fi
 rm -f "$worker_tmp"
+fi
+rm -f "$compose_context_tmp"
 
 http_probe() {
-  key=$1
-  url=$2
-  expected_code=$3
+  local probe_key=$1
+  local probe_url=$2
+  local expected_code=$3
+  local body_file
+  local code
   body_file=$(mktemp)
-  code=$(curl --silent --show-error --max-time 10 --max-redirs 0 --output "$body_file" --write-out '%{http_code}' "$url" 2>/dev/null || printf '000')
-  emit "$key.http_status" "$code"
+  code=$(curl --silent --show-error --max-time 10 --max-redirs 0 --output "$body_file" --write-out '%{http_code}' "$probe_url" 2>/dev/null || printf '000')
+  emit "$probe_key.http_status" "$code"
   if [ "$code" = "$expected_code" ]; then
-    emit "$key.result" "PASSED"
+    emit "$probe_key.result" "PASSED"
   else
-    emit "$key.result" "FAILED"
+    emit "$probe_key.result" "FAILED"
   fi
   if grep -q '"status":"live"' "$body_file"; then
-    emit "$key.response_status" "live"
+    emit "$probe_key.response_status" "live"
   elif grep -q '"status":"ready"' "$body_file"; then
-    emit "$key.response_status" "ready"
+    emit "$probe_key.response_status" "ready"
   else
-    emit "$key.response_status" "NOT_RECORDED"
+    emit "$probe_key.response_status" "NOT_RECORDED"
   fi
+  case "$probe_key" in
+    health_boundary.*_ready)
+      if grep -Eq '"postgres"[[:space:]]*:[[:space:]]*"up"' "$body_file"; then
+        emit "health_boundary.postgres" "up"
+      fi
+      if grep -Eq '"redis"[[:space:]]*:[[:space:]]*"up"' "$body_file"; then
+        emit "health_boundary.redis" "up"
+      fi
+      if grep -Eq '"tenantAuth"[[:space:]]*:[[:space:]]*"up"' "$body_file"; then
+        emit "health_boundary.tenantAuth" "up"
+      fi
+      ;;
+  esac
   rm -f "$body_file"
 }
 
@@ -291,6 +468,8 @@ http_probe "health_boundary.agent_unauth" "$PUBLIC_BASE_URL/agent/feeds/due?limi
 
 redirect_headers=$(mktemp)
 redirect_code=$(curl --silent --show-error --max-time 10 --output /dev/null --dump-header "$redirect_headers" --write-out '%{http_code}' "http://rss.habersoft.com/health/live" 2>/dev/null || printf '000')
+redirect_location=$(sed -n 's/^[Ll]ocation:[[:space:]]*//p' "$redirect_headers" | head -n 1 | tr -d '\r')
+[ -n "$redirect_location" ] || redirect_location="NOT_RECORDED"
 if [ "$redirect_code" = "301" ] || [ "$redirect_code" = "302" ] || [ "$redirect_code" = "307" ] || [ "$redirect_code" = "308" ]; then
   if grep -Eiq '^location: https://rss\.habersoft\.com/health/live' "$redirect_headers"; then
     emit_status "health_boundary.http_to_https_redirect" "PASSED" "DIRECT_OBSERVED"
@@ -300,11 +479,12 @@ if [ "$redirect_code" = "301" ] || [ "$redirect_code" = "302" ] || [ "$redirect_
 else
   emit_status "health_boundary.http_to_https_redirect" "FAILED" "DIRECT_OBSERVED"
 fi
+emit "health_boundary.http_to_https_redirect.location" "$redirect_location"
 rm -f "$redirect_headers"
 
 if command -v openssl >/dev/null 2>&1; then
   cert_dates=$(printf '' | openssl s_client -servername rss.habersoft.com -connect rss.habersoft.com:443 2>/dev/null | openssl x509 -noout -fingerprint -sha256 -dates 2>/dev/null || true)
-  fingerprint=$(printf '%s\n' "$cert_dates" | sed -n 's/^sha256 Fingerprint=//p' | tr -d ':')
+  fingerprint=$(printf '%s\n' "$cert_dates" | sed -n 's/^sha256 Fingerprint=//p' | tr -d ':' | tr 'A-F' 'a-f')
   not_before=$(printf '%s\n' "$cert_dates" | sed -n 's/^notBefore=//p')
   not_after=$(printf '%s\n' "$cert_dates" | sed -n 's/^notAfter=//p')
   if [ -n "$fingerprint" ]; then

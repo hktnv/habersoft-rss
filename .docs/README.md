@@ -18,7 +18,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [README.md](README.md) | Repository-local PROD dokumantasyon girisi, envanter ve uyum kaydi. |
 | [../PRODUCTION.md](../PRODUCTION.md) | Git-only production source delivery, operator Git pull/build/run, OpenLiteSpeed handoff ve kabul checklist'i. |
 | [production-acceptance.md](production-acceptance.md) | Current production activation status, operator-confirmed evidence, external receipt identity ve claim boundary. |
-| [production-operational-evidence.md](production-operational-evidence.md) | MS-019A read-only operational evidence contract, operator handoff bundle, collector safety ve receipt verifier semantics. |
+| [production-operational-evidence.md](production-operational-evidence.md) | MS-019B-R7 read-only operational evidence contract, v2 operator handoff bundle, collector safety ve receipt verifier semantics. |
 | [repository-conventions.md](repository-conventions.md) | Windows checkout, `.gitattributes`, POSIX shell LF, safe renormalize ve production guide mirror byte-equality sozlesmesi. |
 | [service-handbook/README.md](service-handbook/README.md) | Sade servis el kitabi girisi, aktorler ve okuma sirasi. |
 | [service-handbook/main-servis-kilavuzu.md](service-handbook/main-servis-kilavuzu.md) | Main-service runtime rolleri, veri iliskileri, port modeli ve operasyon sinirlari. |
@@ -118,7 +118,7 @@ MS-018B Git production handoff notu: Production source delivery Git-only olarak 
 
 MS-018C production activation notu: Operator 2026-06-22 tarihinde internal loopback ve public HTTPS `/health/live` ile `/health/ready` checks icin HTTP `200`, `status=live/ready`, `postgres=up`, `redis=up` ve `tenantAuth=up` kanitini verdi. Current production status ve external receipt kimligi [production-acceptance.md](production-acceptance.md) dosyasinda kanoniktir. Production exact commit/image, worker/scheduler, backup/restore, TLS detail, pointers ve stability evidence `NOT_RECORDED` kalir; bu eksikler basic active status'u geriye donuk olarak pending yapmaz.
 
-MS-019A operational evidence handoff notu: [production-operational-evidence.md](production-operational-evidence.md) read-only collector/handoff contract'inin ve receipt verifier semantics'in sahibidir. Actual production operational receipt henuz toplanmadi; exact production commit/image, worker/scheduler, backup/restore, TLS detail, pointers ve stability fields yalniz kanit geldikce guncellenir.
+MS-019B-R7 operational evidence handoff notu: [production-operational-evidence.md](production-operational-evidence.md) read-only collector/handoff-v2 contract'inin ve receipt verifier semantics'in sahibidir. Actual production operational receipt henuz toplanmadi; exact production commit/image, worker/scheduler, backup/restore, TLS detail, pointers ve stability fields yalniz kanit geldikce guncellenir.
 
 MS-019B hygiene prep notu: [repository-conventions.md](repository-conventions.md), Windows `core.autocrlf`, `.gitattributes`, POSIX shell LF ve production guide mirror byte-equality sozlesmesinin canonical repository-local sahibidir. Actual operator-run returned production evidence bundle henuz bu hazirlik commit'inde yoktur; production acceptance status degismez.
 

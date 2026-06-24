@@ -142,6 +142,11 @@ try {
   assert.doesNotMatch(collectorText, /\bset\s+-x\b/u);
   assert.doesNotMatch(collectorText, /\bgit\s+(?:fetch|pull|switch|checkout|reset|clean)\b/u);
   assert.doesNotMatch(collectorText, /\bdocker\s+compose\s+(?:up|down|restart|stop|rm|run|create)\b/u);
+  assert.match(collectorText, /docker compose --env-file "\$SHARED_ENV_FILE" --env-file "\$IMAGE_ENV_FILE" -f "\$COMPOSE_FILE" "\$@"/u);
+  assert.doesNotMatch(collectorText, /\bdocker compose (?!--env-file "\$SHARED_ENV_FILE" --env-file "\$IMAGE_ENV_FILE" -f "\$COMPOSE_FILE")/u);
+  assert.match(collectorText, /compose_cmd config --services/u);
+  assert.match(collectorText, /"migration.result" "NOT_RUN"/u);
+  assert.match(collectorText, /"worker_scheduler.worker_health" "NOT_RUN"/u);
   assert.doesNotMatch(collectorText, /\.Config\.Env/u);
   assertLfOnly("scripts/production-operational-evidence-collector.sh", "tracked collector");
   const bashCheck = spawnSync("bash", ["-n", "scripts/production-operational-evidence-collector.sh"], {
@@ -152,6 +157,9 @@ try {
   if (bashCheck.error === undefined && bashCheck.status !== null) {
     assert.equal(bashCheck.status, 0, bashCheck.stderr);
   }
+  assertCollectorComposeContextPasses("dot-git", canonicalRemoteDotGit);
+  assertCollectorComposeContextPasses("suffixless", canonicalRemote);
+  assertCollectorComposeContextBlocks();
 
   const completeReceipt = createCompleteReceipt();
   const completeReceiptFile = writeReceipt("complete-receipt.json", completeReceipt);
@@ -402,6 +410,81 @@ function assertRepositoryHygieneFixtureFails(label, options, pattern) {
   assert.match(result.stderr, pattern);
 }
 
+function assertCollectorComposeContextPasses(label, remote) {
+  const fixture = writeCollectorFixture(`collector-${label}`, { remote });
+  const outputDir = path.join(fixture.root, "collector-output");
+  mkdirSync(outputDir);
+  const result = runCollectorFixture(fixture, outputDir);
+  assert.equal(result.status, 0, result.stderr);
+  const records = readEvidenceRecords(outputDir);
+  assert.equal(records.get("compose_context.result"), "PASSED", readFileSync(fixture.trace, "utf8"));
+  assert.equal(records.get("compose_context.evidence_source"), "DIRECT_OBSERVED");
+  assert.equal(records.get("identity.canonical_remote"), remote);
+  assert.equal(records.get("services.observed_service_names"), "postgres,redis,migrate,main-service-api,main-service-worker");
+  assert.equal(records.get("services.api_loopback_binding.result"), "PASSED");
+  assert.equal(records.get("services.public_database_port_absent"), "PASSED");
+  assert.equal(records.get("services.public_redis_port_absent"), "PASSED");
+  assert.equal(records.get("services.worker_host_port_absent"), "PASSED");
+  assert.equal(records.get("migration.result"), "PASSED");
+  assert.equal(records.get("worker_scheduler.worker_health"), "PASSED");
+  assert.equal(records.get("worker_scheduler.worker_health_evidence_source"), "DIRECT_OBSERVED");
+  assert.equal(records.get("worker_scheduler.scheduler_evidence_source"), "DIRECT_OBSERVED");
+  assert.equal(records.has("health_boundary.public_ready.http_status.result"), false);
+  assert.equal(records.get("health_boundary.public_ready.result"), "PASSED");
+  assertDockerTraceUsesProductionContext(fixture.trace);
+  assertCollectorReceiptPasses(outputDir, {
+    composeContext: "PASSED",
+    migration: "PASSED",
+    workerHealth: "PASSED"
+  });
+}
+
+function assertCollectorComposeContextBlocks() {
+  const fixture = writeCollectorFixture("collector-context-blocked", {
+    remote: canonicalRemoteDotGit,
+    composeFail: true
+  });
+  const outputDir = path.join(fixture.root, "collector-output");
+  mkdirSync(outputDir);
+  const result = runCollectorFixture(fixture, outputDir);
+  assert.equal(result.status, 0, result.stderr);
+  const records = readEvidenceRecords(outputDir);
+  assert.equal(records.get("compose_context.result"), "BLOCKED");
+  assert.equal(records.get("services.observed_service_names"), "NOT_RECORDED");
+  assert.equal(records.get("migration.result"), "NOT_RUN");
+  assert.equal(records.get("migration.evidence_source"), "BLOCKED");
+  assert.equal(records.get("worker_scheduler.worker_health"), "NOT_RUN");
+  assert.equal(records.get("worker_scheduler.worker_health_evidence_source"), "BLOCKED");
+  assert.equal(records.get("worker_scheduler.scheduler_evidence_source"), "NOT_RUN");
+  assert.doesNotMatch(readFileSync(path.join(outputDir, "evidence-records.tsv"), "utf8"), /DATABASE_URL|POSTGRES_PASSWORD|redacted compose context error/u);
+  assertDockerTraceUsesProductionContext(fixture.trace);
+  assertCollectorReceiptPasses(outputDir, {
+    composeContext: "BLOCKED",
+    migration: "NOT_RUN",
+    workerHealth: "NOT_RUN"
+  });
+}
+
+function assertCollectorReceiptPasses(outputDir, expected) {
+  const receiptFile = path.join(path.dirname(outputDir), `${path.basename(outputDir)}-receipt.json`);
+  const createResult = runNode([
+    "scripts/production-operational-evidence.mjs",
+    "receipt:create",
+    "--evidence",
+    outputDir,
+    "--output",
+    receiptFile
+  ]);
+  assert.equal(createResult.status, 0, createResult.stderr);
+  const receipt = readJson(receiptFile);
+  assert.equal(receipt.contract_version, "production-operational-evidence-v2");
+  assert.equal(receipt.milestone, "MS-019B-R7");
+  assert.equal(receipt.compose_context.result, expected.composeContext);
+  assert.equal(receipt.migration.result, expected.migration);
+  assert.equal(receipt.worker_scheduler.worker_health, expected.workerHealth);
+  assertVerifyReceiptPasses(receiptFile);
+}
+
 function assertReceiptMutationFails(label, mutate, pattern) {
   const receipt = createCompleteReceipt();
   mutate(receipt);
@@ -590,6 +673,213 @@ function writeEvidenceBundle(label, receipt) {
     `${sha256(readFileSync(path.join(dir, "collector-metadata.txt")))}  collector-metadata.txt\n${sha256(readFileSync(path.join(dir, "evidence-records.tsv")))}  evidence-records.tsv\n`
   );
   return dir;
+}
+
+function writeCollectorFixture(label, options) {
+  const root = path.join(temp, label);
+  const backend = path.join(root, "repo");
+  const deployProduction = path.join(backend, "deploy", "production");
+  const deploy = path.join(backend, "deploy");
+  const fakeBin = path.join(root, "fake-bin");
+  const trace = path.join(root, "docker-trace.txt");
+  mkdirSync(deployProduction, { recursive: true });
+  mkdirSync(fakeBin, { recursive: true });
+  writeFileSync(path.join(backend, "package.json"), "{}\n");
+  writeFileSync(path.join(deployProduction, "compose.yaml"), "name: main-service-production\nservices:\n  postgres: {}\n  redis: {}\n  migrate: {}\n  main-service-api: {}\n  main-service-worker: {}\n");
+  writeFileSync(path.join(backend, ".env.production"), "LOG_LEVEL=info\nAPI_HOST_PORT=3200\n");
+  writeFileSync(path.join(deploy, "runtime-image.env"), `MAIN_SERVICE_IMAGE=${imageId("1")}\n`);
+  runGit(["init"], backend);
+  runGit(["config", "user.email", "fixture@example.invalid"], backend);
+  runGit(["config", "user.name", "Fixture"], backend);
+  runGit(["remote", "add", "origin", options.remote], backend);
+  runGit(["add", "."], backend);
+  runGit(["commit", "-m", "fixture"], backend);
+  const revision = gitOutput(["rev-parse", "origin/main"]);
+  writeFakeDocker(fakeBin, trace, revision);
+  writeFakeCurl(fakeBin);
+  writeFakeOpenSsl(fakeBin);
+  return { root, backend, fakeBin, trace, composeFail: options.composeFail === true };
+}
+
+function runCollectorFixture(fixture, outputDir) {
+  const fakeBin = toBashPath(fixture.fakeBin);
+  const repositoryDir = toBashPath(fixture.backend);
+  const collectorOutputDir = toBashPath(outputDir);
+  const dockerTrace = toBashPath(fixture.trace);
+  const composeFail = fixture.composeFail ? "1" : "0";
+  const command = [
+    `PATH=${shQuote(fakeBin)}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
+    `DOCKER_TRACE=${shQuote(dockerTrace)}`,
+    `COLLECTOR_FIXTURE_COMPOSE_FAIL=${shQuote(composeFail)}`,
+    "exec bash scripts/production-operational-evidence-collector.sh",
+    `--repository-dir ${shQuote(repositoryDir)}`,
+    "--compose-file deploy/production/compose.yaml",
+    "--shared-env .env.production",
+    "--runtime-image-env deploy/runtime-image.env",
+    `--output-dir ${shQuote(collectorOutputDir)}`,
+    "--public-base-url https://rss.habersoft.com",
+    "--api-loopback-base-url http://127.0.0.1:3200"
+  ].join(" ");
+  return spawnSync("bash", ["-lc", command], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    shell: false,
+    env: process.env
+  });
+}
+
+function writeFakeDocker(fakeBin, trace, revision) {
+  writeExecutable(path.join(fakeBin, "docker"), `#!/usr/bin/env bash
+set -eu
+printf '%s\\n' "$*" >> "\${DOCKER_TRACE}"
+image_id='${imageId("1")}'
+revision='${revision}'
+case "$*" in
+  compose*"config --services"*)
+    if [ "\${COLLECTOR_FIXTURE_COMPOSE_FAIL:-0}" = "1" ]; then
+      printf '%s\\n' "redacted compose context error" >&2
+      exit 1
+    fi
+    printf '%s\\n' postgres redis migrate main-service-api main-service-worker
+    exit 0
+    ;;
+  compose*"ps --services"*)
+    printf '%s\\n' postgres redis migrate main-service-api main-service-worker
+    exit 0
+    ;;
+  compose*"ps -q postgres"*) printf '%s\\n' cid-postgres; exit 0 ;;
+  compose*"ps -q redis"*) printf '%s\\n' cid-redis; exit 0 ;;
+  compose*"ps -q migrate"*) printf '%s\\n' cid-migrate; exit 0 ;;
+  compose*"ps -q main-service-api"*) printf '%s\\n' cid-api; exit 0 ;;
+  compose*"ps -q main-service-worker"*) printf '%s\\n' cid-worker; exit 0 ;;
+  compose*"exec -T main-service-api npm run migrate:status"*)
+    printf '%s\\n' "Database schema is up to date"
+    exit 0
+    ;;
+  compose*"exec -T main-service-worker npm run worker:health"*)
+    printf '%s\\n' '{"queue":"main-service.maintenance","scheduler_id":"cleanup.daily"}'
+    exit 0
+    ;;
+esac
+if [ "\${1:-}" = "image" ] && [ "\${2:-}" = "inspect" ]; then
+  case "$*" in
+    *".Id"*) printf '%s\\n' "$image_id" ;;
+    *"org.opencontainers.image.revision"*) printf '%s\\n' "$revision" ;;
+    *"org.opencontainers.image.source"*) printf '%s\\n' '${canonicalRemote}' ;;
+    *) printf '%s\\n' "NOT_RECORDED" ;;
+  esac
+  exit 0
+fi
+if [ "\${1:-}" = "inspect" ]; then
+  cid=\${4:-}
+  case "$*" in
+    *".State.Status"*)
+      if [ "$cid" = "cid-migrate" ]; then printf '%s\\n' exited; else printf '%s\\n' running; fi
+      ;;
+    *".State.Health"*)
+      if [ "$cid" = "cid-migrate" ]; then printf '%s\\n' not_applicable; else printf '%s\\n' healthy; fi
+      ;;
+    *".RestartCount"*) printf '%s\\n' 0 ;;
+    *".State.OOMKilled"*) printf '%s\\n' false ;;
+    *".State.StartedAt"*) printf '%s\\n' "2026-06-24T00:00:00Z" ;;
+    *".Image"*) printf '%s\\n' "$image_id" ;;
+    *"NetworkSettings.Ports"*)
+      if [ "$cid" = "cid-api" ]; then printf '%s\\n' "3000/tcp=127.0.0.1:3200,"; else printf '%s\\n' ""; fi
+      ;;
+    *) printf '%s\\n' "NOT_RECORDED" ;;
+  esac
+  exit 0
+fi
+printf '%s\\n' "unsupported docker fixture command" >&2
+exit 1
+`);
+}
+
+function writeFakeCurl(fakeBin) {
+  writeExecutable(path.join(fakeBin, "curl"), `#!/usr/bin/env bash
+set -eu
+out=
+dump=
+url=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) out=$2; shift 2 ;;
+    --dump-header) dump=$2; shift 2 ;;
+    --write-out) shift 2 ;;
+    --*) shift ;;
+    *) url=$1; shift ;;
+  esac
+done
+if [ -n "$dump" ]; then
+  printf '%s\\n' "location: https://rss.habersoft.com/health/live" > "$dump"
+  printf '%s' "301"
+  exit 0
+fi
+case "$url" in
+  *"/health/live"*) [ -n "$out" ] && printf '%s\\n' '{"status":"live"}' > "$out"; printf '%s' "200" ;;
+  *"/health/ready"*) [ -n "$out" ] && printf '%s\\n' '{"status":"ready","dependencies":{"postgres":"up","redis":"up","tenantAuth":"up"}}' > "$out"; printf '%s' "200" ;;
+  *"/not-found"*) [ -n "$out" ] && printf '%s\\n' '{}' > "$out"; printf '%s' "404" ;;
+  *"/api/feeds"*) [ -n "$out" ] && printf '%s\\n' '{}' > "$out"; printf '%s' "401" ;;
+  *"/agent/feeds/due"*) [ -n "$out" ] && printf '%s\\n' '{}' > "$out"; printf '%s' "401" ;;
+  *) [ -n "$out" ] && printf '%s\\n' '{}' > "$out"; printf '%s' "000" ;;
+esac
+`);
+}
+
+function writeFakeOpenSsl(fakeBin) {
+  writeExecutable(path.join(fakeBin, "openssl"), `#!/usr/bin/env bash
+set -eu
+if [ "\${1:-}" = "x509" ]; then
+  printf '%s\\n' "sha256 Fingerprint=CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC:CC"
+  printf '%s\\n' "notBefore=Jan  1 00:00:00 2026 GMT"
+  printf '%s\\n' "notAfter=Dec 31 23:59:59 2026 GMT"
+  exit 0
+fi
+printf '%s\\n' "CERT"
+`);
+}
+
+function writeExecutable(file, text) {
+  writeFileSync(file, text.replace(/\r\n/gu, "\n"));
+  try {
+    spawnSync("chmod", ["755", file], { shell: false });
+  } catch {
+    // chmod is unavailable on some Windows shells; bash can still execute via explicit interpreter.
+  }
+}
+
+function readEvidenceRecords(outputDir) {
+  return new Map(readFileSync(path.join(outputDir, "evidence-records.tsv"), "utf8")
+    .trim()
+    .split(/\r?\n/u)
+    .map((line) => {
+      const [key, ...rest] = line.split("\t");
+      return [key, rest.join("\t")];
+    }));
+}
+
+function assertDockerTraceUsesProductionContext(traceFile) {
+  const trace = readFileSync(traceFile, "utf8");
+  assert.match(trace, /--env-file .*\.env\.production --env-file .*deploy\/runtime-image\.env -f .*deploy\/production\/compose\.yaml/u);
+  assert.doesNotMatch(trace, /\bdocker compose\b/u);
+}
+
+function toBashPath(file) {
+  const resolved = path.resolve(file);
+  const driveMatch = /^([A-Za-z]):\\(.*)$/u.exec(resolved);
+  if (driveMatch !== null) {
+    return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2].replaceAll("\\", "/")}`;
+  }
+  return resolved.replaceAll(path.sep, "/");
+}
+
+function shQuote(value) {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function runGit(args, cwd) {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8", shell: false });
+  assert.equal(result.status, 0, result.stderr);
 }
 
 function writeRepositoryHygieneFixture(label, options) {

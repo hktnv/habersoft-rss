@@ -2,15 +2,15 @@
 
 ## Sorumluluk
 
-Bu belge MS-019A icin `main-service` production operational evidence contract, read-only operator collector/handoff akisi, returned evidence bundle modeli ve receipt verifier semantiginin canonical repository-local sahibidir.
+Bu belge `main-service` production operational evidence contract, read-only operator collector/handoff akisi, returned evidence bundle modeli ve receipt verifier semantiginin canonical repository-local sahibidir. Current operator handoff contract MS-019B-R7 `production-operational-evidence-v2` sozlesmesidir; MS-019A handoff-v1 historical verification icin korunur.
 
 Bu belge current production activation status sahibi degildir. Current status ve MS-018C receipt identity [production-acceptance.md](production-acceptance.md) dosyasindadir.
 
-MS-019A production kaniti toplamaz, production sunucusuna Codex baglantisi kurmaz, production servisini degistirmez, backup/restore yapmaz ve release publication karari uretmez.
+MS-019B-R7 production kaniti toplamaz, production sunucusuna Codex baglantisi kurmaz, production servisini degistirmez, backup/restore yapmaz ve release publication karari uretmez.
 
 ## Boundary
 
-MS-019A sonucunda hazirlanan tooling:
+MS-019B-R7 sonucunda hazirlanan tooling:
 
 - external operator handoff bundle uretir,
 - generated bundle manifest/checksum/secret/forbidden-command kapilarini dogrular,
@@ -19,6 +19,28 @@ MS-019A sonucunda hazirlanan tooling:
 - partial evidence ile full operational baseline'i ayirir.
 
 Tooling hazir olmasi `production evidence collected` anlamina gelmez. Successful handoff verification da current `NOT_RECORDED` alanlari `PASSED` yapmaz.
+
+## Compose Context Contract
+
+Production operational evidence collector-v2 yalniz explicit production Compose context ile calisir:
+
+```sh
+docker compose --env-file "${SHARED_ENV}" --env-file "${IMAGE_ENV}" -f "${COMPOSE_FILE}" <subcommand>
+```
+
+Bare `docker compose ...` production evidence command'i degildir. Repository root `compose.yaml` local/default model icindir; production evidence collector'i `deploy/production/compose.yaml`, external shared production env dosyasi ve `deploy/runtime-image.env` image identity layer'ini birlikte kullanir.
+
+Collector-v2 input contract:
+
+- `--repository-dir <production-repository-root>`
+- `--compose-file deploy/production/compose.yaml`
+- `--shared-env .env.production`
+- `--runtime-image-env deploy/runtime-image.env`
+- `--output-dir <new-empty-output-dir>`
+
+Relative file paths production repository root altinda cozulur. Shared env dosyasi okunur ama secret degerleri echo edilmez veya output'a yazilmaz. Runtime image env allowlist'i yalniz `MAIN_SERVICE_IMAGE` alanini identity kaniti olarak kaydeder.
+
+Collector once `compose_context.result` preflight'ini `docker compose --env-file ... --env-file ... -f ... config --services` ile sinar. Bu preflight `BLOCKED` olursa dependent Compose kontrolleri mutation yapmadan durur; migration ve worker health `FAILED` degil `NOT_RUN` olarak siniflanir. Bu ayrim, invocation-context hatasi ile gercek production runtime failure'ini karistirmamak icindir.
 
 ## Exact Runtime Identity Model
 
@@ -113,17 +135,23 @@ These fields do not prove long-term stability, absence of error bursts, uptime S
 
 ## Handoff And Receipt Flow
 
-Local MS-019A handoff generation:
+Local MS-019B-R7 handoff-v2 generation:
 
 ```powershell
 npm run production:evidence:handoff -- --output <external-handoff-dir>
 npm run production:evidence:handoff:verify -- --bundle <external-handoff-dir>
 ```
 
-Future operator collection:
+Operator collection v2 command shape:
 
 ```sh
-./collect-production-operational-evidence.sh --output-dir <external-output-dir>
+cd /opt/habersoft-rss
+<approved-handoff-v2>/collect-production-operational-evidence.sh \
+  --repository-dir /opt/habersoft-rss \
+  --compose-file deploy/production/compose.yaml \
+  --shared-env .env.production \
+  --runtime-image-env deploy/runtime-image.env \
+  --output-dir <new-empty-output-dir>
 ```
 
 Future local receipt creation and verification:
@@ -149,8 +177,9 @@ Allowed receipt vocabulary is closed:
 - `BLOCKED`
 - `DIRECT_OBSERVED`
 - `CONTRACT_DERIVED`
+- `NOT_RUN`
 
-Valid partial receipt is not a full operational baseline. Examples of partial evidence are unavailable TLS tooling, absent previous pointer, scheduler output that cannot be direct parsed or missing revision label. Hard failures include image mismatch, wrong OCI source, public DB/Redis/worker port, failed migration, failed worker health, protected unauthenticated route returning 2xx, TLS verification failure or mutation/publication flag set to true.
+Valid partial receipt is not a full operational baseline. Examples of partial evidence are unavailable TLS tooling, absent previous pointer, scheduler output that cannot be direct parsed, missing revision label or blocked Compose context. `NOT_RUN` is reserved for dependent probes intentionally skipped after context preflight failure. Hard failures include image mismatch, wrong OCI source, public DB/Redis/worker port, failed migration, failed worker health, protected unauthenticated route returning 2xx, TLS verification failure or mutation/publication flag set to true.
 
 ## Secret And Privacy Gates
 
@@ -160,7 +189,7 @@ Canonical public values allowed in this evidence contract are the canonical repo
 
 ## Out Of Scope
 
-The following remain outside MS-019A:
+The following remain outside MS-019B-R7:
 
 - actual production collector execution,
 - production backup SHA-256,
@@ -174,3 +203,7 @@ The following remain outside MS-019A:
 - GitHub Release.
 
 These fields stay `NOT_RECORDED` or `NOT_PERFORMED` until a later bounded milestone records evidence.
+
+## Historical Handoff Boundary
+
+MS-019A handoff-v1 remains historically verifiable by the handoff verifier. New operator reruns must use MS-019B-R7 handoff-v2 so the production Compose context, two env-file layers, context preflight and `NOT_RUN` dependent classification are present in the returned bundle.

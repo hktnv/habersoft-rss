@@ -24,6 +24,9 @@ const CANONICAL_REMOTE_DOT_GIT = `${CANONICAL_REMOTE}.git`;
 const EXPECTED_PUBLIC_BASE_URL = "https://rss.habersoft.com";
 const EXPECTED_LOOPBACK_BASE_URL = "http://127.0.0.1:3200";
 const CONTRACT_VERSION = "production-operational-evidence-v1";
+const HANDOFF_CONTRACT_VERSION = "production-operational-evidence-v2";
+const HANDOFF_MILESTONE = "MS-019B-R7";
+const COMPOSE_CONTEXT_MODE = "EXPLICIT_PRODUCTION_COMPOSE_TWO_ENV_FILES";
 const SCRIPT_NAME = "production-operational-evidence";
 const COLLECTOR_SOURCE = "scripts/production-operational-evidence-collector.sh";
 const COLLECTOR_BUNDLE_FILE = "collect-production-operational-evidence.sh";
@@ -63,6 +66,10 @@ const SAFETY_FLAG_KEYS = Object.freeze([
   "git_tag_created",
   "github_release_created"
 ]);
+const HANDOFF_V2_SAFETY_FLAG_KEYS = Object.freeze([
+  ...SAFETY_FLAG_KEYS,
+  "migration_performed"
+]);
 
 const STATUS_VALUES = new Set([
   "PASSED",
@@ -75,7 +82,8 @@ const STATUS_VALUES = new Set([
   "DIRECT_OBSERVED",
   "CONTRACT_DERIVED",
   "NOT_PERFORMED",
-  "NOT_CREATED"
+  "NOT_CREATED",
+  "NOT_RUN"
 ]);
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -120,7 +128,9 @@ export function generateHandoff(args) {
 
   const generatedAt = new Date().toISOString();
   const generationSourceCommit = gitOutput(["rev-parse", "HEAD"]);
-  const collectorText = readText(path.resolve(COLLECTOR_SOURCE)).replaceAll("__MS019A_SOURCE_COMMIT__", generationSourceCommit);
+  const collectorText = readText(path.resolve(COLLECTOR_SOURCE))
+    .replaceAll("__MS019A_SOURCE_COMMIT__", generationSourceCommit)
+    .replaceAll("__MS019B_R7_SOURCE_COMMIT__", generationSourceCommit);
 
   writeText(path.join(outputDir, COLLECTOR_BUNDLE_FILE), collectorText, 0o755);
   writeText(path.join(outputDir, "README.md"), renderHandoffReadme(generatedAt), 0o644);
@@ -234,14 +244,15 @@ export function validateReceipt(receipt, options = {}) {
   validateReceiptShape(receipt);
   validateReceiptStaticFields(receipt);
   validateReceiptFlags(receipt);
+  const composeContext = validateComposeContext(receipt);
   validateIdentity(receipt.identity);
-  validateServices(receipt.services);
-  validateMigration(receipt.migration);
-  validateWorkerScheduler(receipt.worker_scheduler);
+  validateServices(receipt.services, composeContext);
+  validateMigration(receipt.migration, composeContext);
+  validateWorkerScheduler(receipt.worker_scheduler, composeContext);
   validateHealthBoundary(receipt.health_boundary);
   validateTls(receipt.tls);
   validatePointers(receipt.pointers);
-  validateStability(receipt.stability);
+  validateStability(receipt.stability, composeContext);
   validateOutsideScope(receipt.outside_scope);
 
   const baseline = computeOperationalBaseline(receipt);
@@ -254,7 +265,7 @@ export function validateReceipt(receipt, options = {}) {
 function renderHandoffReadme(generatedAt) {
   return `# Production Operational Evidence Handoff
 
-This bundle prepares MS-019A read-only evidence collection for main-service production.
+This bundle prepares MS-019B-R7 read-only evidence collection for main-service production with the production Compose context bound explicitly.
 
 It is not production evidence. Generating or verifying this bundle does not contact production, mutate services, deploy, back up, restore, publish an artifact, create a Git tag or create a GitHub Release.
 
@@ -262,14 +273,23 @@ Operator flow:
 
 1. Review evidence-contract.json.
 2. Copy this bundle to the production host through an operator-approved channel.
-3. Run the collector manually on the production host with a new empty output directory.
-4. Bring the returned output directory back to the local workspace for the next milestone verifier.
+3. Verify this bundle with sha256sum and bash syntax checks.
+4. Run the collector manually on the production host from the approved production repository checkout with a new empty output directory.
+5. Bring the returned output directory back to the local workspace for the next milestone verifier.
 
 Collector command shape:
 
 \`\`\`sh
-./collect-production-operational-evidence.sh --output-dir <external-output-dir>
+cd /opt/habersoft-rss
+<approved-handoff-v2>/collect-production-operational-evidence.sh \\
+  --repository-dir /opt/habersoft-rss \\
+  --compose-file deploy/production/compose.yaml \\
+  --shared-env .env.production \\
+  --runtime-image-env deploy/runtime-image.env \\
+  --output-dir <new-empty-output-dir>
 \`\`\`
+
+Do not use a bare docker compose command for production evidence collection. The collector uses the production Compose file and both env-file layers explicitly, and it records a bounded context preflight before dependent Compose checks run.
 
 The collector records bounded key/value evidence only. It does not print environment contents, raw logs, request bodies, package archives, image archives, backups or private host details.
 
@@ -280,8 +300,8 @@ Generated at UTC: ${generatedAt}
 function createEvidenceContract() {
   return {
     schema_version: 1,
-    contract_version: CONTRACT_VERSION,
-    milestone: "MS-019A",
+    contract_version: HANDOFF_CONTRACT_VERSION,
+    milestone: HANDOFF_MILESTONE,
     service: RELEASE_IDENTITY.application,
     environment: "production",
     application_version: RELEASE_IDENTITY.version,
@@ -289,6 +309,14 @@ function createEvidenceContract() {
     canonical_remote: CANONICAL_REMOTE,
     expected_public_base_url: EXPECTED_PUBLIC_BASE_URL,
     expected_loopback_base_url: EXPECTED_LOOPBACK_BASE_URL,
+    compose_context: {
+      mode: COMPOSE_CONTEXT_MODE,
+      compose_file: "deploy/production/compose.yaml",
+      shared_env_role: "external production shared env",
+      runtime_image_env_role: "deploy/runtime-image.env",
+      context_preflight_key: "compose_context.result",
+      dependent_not_run_status: "NOT_RUN"
+    },
     expected_services: [...EXPECTED_SERVICES],
     expected_public_routes: [...EXPECTED_PUBLIC_ROUTES],
     expected_migrations: [...EXPECTED_MIGRATIONS],
@@ -322,12 +350,18 @@ function createHandoffManifest(outputDir, generatedAt, generationSourceCommit, c
   return {
     schema_version: 1,
     bundle_type: "production-operational-evidence-handoff",
-    milestone: "MS-019A",
+    contract_version: HANDOFF_CONTRACT_VERSION,
+    milestone: HANDOFF_MILESTONE,
     service: RELEASE_IDENTITY.application,
     environment: "production",
     application_version: RELEASE_IDENTITY.version,
     application_status: RELEASE_IDENTITY.status,
     canonical_remote: CANONICAL_REMOTE,
+    compose_context_mode: COMPOSE_CONTEXT_MODE,
+    expected_compose_relative_path: "deploy/production/compose.yaml",
+    expected_shared_env_role: "external production shared env",
+    expected_runtime_image_env_role: "deploy/runtime-image.env",
+    output_contract_version: HANDOFF_CONTRACT_VERSION,
     expected_public_base_url: EXPECTED_PUBLIC_BASE_URL,
     expected_service_inventory: [...EXPECTED_SERVICES],
     expected_health_routes: [
@@ -349,7 +383,7 @@ function createHandoffManifest(outputDir, generatedAt, generationSourceCommit, c
       executable_intended: true
     },
     payload_files: HANDOFF_PAYLOAD_FILES.map((file) => fileMetadata(outputDir, file)),
-    safety_flags: Object.fromEntries(SAFETY_FLAG_KEYS.map((key) => [key, false])),
+    safety_flags: Object.fromEntries(HANDOFF_V2_SAFETY_FLAG_KEYS.map((key) => [key, false])),
     evidence_collected: false,
     production_contact_performed: false,
     secrets_included: false,
@@ -359,20 +393,32 @@ function createHandoffManifest(outputDir, generatedAt, generationSourceCommit, c
     restore_performed: false,
     artifact_published: false,
     git_tag_created: false,
-    github_release_created: false
+    github_release_created: false,
+    migration_performed: false
   };
 }
 
 function validateHandoffManifest(manifest, checksumMap, root) {
+  const isV2 = manifest.contract_version === HANDOFF_CONTRACT_VERSION;
   assertExactKeys(manifest, [
     "schema_version",
     "bundle_type",
+    ...(isV2 ? [
+      "contract_version"
+    ] : []),
     "milestone",
     "service",
     "environment",
     "application_version",
     "application_status",
     "canonical_remote",
+    ...(isV2 ? [
+      "compose_context_mode",
+      "expected_compose_relative_path",
+      "expected_shared_env_role",
+      "expected_runtime_image_env_role",
+      "output_contract_version"
+    ] : []),
     "expected_public_base_url",
     "expected_service_inventory",
     "expected_health_routes",
@@ -391,11 +437,22 @@ function validateHandoffManifest(manifest, checksumMap, root) {
     "restore_performed",
     "artifact_published",
     "git_tag_created",
-    "github_release_created"
+    "github_release_created",
+    ...(isV2 ? [
+      "migration_performed"
+    ] : [])
   ], "manifest");
   assert(manifest.schema_version === 1, "manifest schema_version must be 1");
   assert(manifest.bundle_type === "production-operational-evidence-handoff", "manifest bundle_type mismatch");
-  assert(manifest.milestone === "MS-019A", "manifest milestone mismatch");
+  assert(isV2 ? manifest.milestone === HANDOFF_MILESTONE : manifest.milestone === "MS-019A", "manifest milestone mismatch");
+  if (isV2) {
+    assert(manifest.contract_version === HANDOFF_CONTRACT_VERSION, "manifest contract_version mismatch");
+    assert(manifest.compose_context_mode === COMPOSE_CONTEXT_MODE, "manifest compose_context_mode mismatch");
+    assert(manifest.expected_compose_relative_path === "deploy/production/compose.yaml", "manifest production compose path mismatch");
+    assert(manifest.expected_shared_env_role === "external production shared env", "manifest shared env role mismatch");
+    assert(manifest.expected_runtime_image_env_role === "deploy/runtime-image.env", "manifest runtime image env role mismatch");
+    assert(manifest.output_contract_version === HANDOFF_CONTRACT_VERSION, "manifest output contract version mismatch");
+  }
   assert(manifest.service === RELEASE_IDENTITY.application, "manifest service mismatch");
   assert(manifest.environment === "production", "manifest environment mismatch");
   assert(manifest.application_version === RELEASE_IDENTITY.version, "manifest application_version mismatch");
@@ -421,8 +478,9 @@ function validateHandoffManifest(manifest, checksumMap, root) {
     assert(file.bytes === statSync(path.join(root, file.path)).size, `manifest payload size mismatch for ${file.path}`);
   }
 
-  assertSameArray(Object.keys(manifest.safety_flags ?? {}).sort(), [...SAFETY_FLAG_KEYS].sort(), "manifest safety flag keys mismatch");
-  for (const key of SAFETY_FLAG_KEYS) {
+  const safetyKeys = isV2 ? HANDOFF_V2_SAFETY_FLAG_KEYS : SAFETY_FLAG_KEYS;
+  assertSameArray(Object.keys(manifest.safety_flags ?? {}).sort(), [...safetyKeys].sort(), "manifest safety flag keys mismatch");
+  for (const key of safetyKeys) {
     assert(manifest.safety_flags[key] === false, `manifest safety flag ${key} must be false`);
     assert(manifest[key] === false, `manifest top-level flag ${key} must be false`);
   }
@@ -430,13 +488,23 @@ function validateHandoffManifest(manifest, checksumMap, root) {
 
 function validateEvidenceContract(contract, manifest) {
   assert(contract.schema_version === 1, "contract schema_version must be 1");
-  assert(contract.contract_version === CONTRACT_VERSION, "contract version mismatch");
-  assert(contract.milestone === "MS-019A", "contract milestone mismatch");
+  const isV2 = contract.contract_version === HANDOFF_CONTRACT_VERSION;
+  assert(isV2 || contract.contract_version === CONTRACT_VERSION, "contract version mismatch");
+  assert(isV2 ? contract.milestone === HANDOFF_MILESTONE : contract.milestone === "MS-019A", "contract milestone mismatch");
   assert(contract.service === RELEASE_IDENTITY.application, "contract service mismatch");
   assert(contract.environment === "production", "contract environment mismatch");
   assert(contract.application_version === RELEASE_IDENTITY.version, "contract version mismatch");
   assert(contract.application_status === RELEASE_IDENTITY.status, "contract status mismatch");
   assert(contract.canonical_remote === CANONICAL_REMOTE, "contract canonical_remote mismatch");
+  if (isV2) {
+    assert(manifest.contract_version === HANDOFF_CONTRACT_VERSION, "manifest/contract version mismatch");
+    assert(contract.compose_context?.mode === COMPOSE_CONTEXT_MODE, "contract compose context mode mismatch");
+    assert(contract.compose_context?.compose_file === "deploy/production/compose.yaml", "contract compose file mismatch");
+    assert(contract.compose_context?.shared_env_role === "external production shared env", "contract shared env role mismatch");
+    assert(contract.compose_context?.runtime_image_env_role === "deploy/runtime-image.env", "contract runtime image env role mismatch");
+    assert(contract.compose_context?.context_preflight_key === "compose_context.result", "contract context preflight key mismatch");
+    assert(contract.compose_context?.dependent_not_run_status === "NOT_RUN", "contract dependent NOT_RUN mismatch");
+  }
   assertSameArray(contract.expected_services, [...EXPECTED_SERVICES], "contract expected service mismatch");
   assertSameArray(contract.expected_migrations, [...EXPECTED_MIGRATIONS], "contract expected migrations mismatch");
   assert(contract.expected_public_base_url === manifest.expected_public_base_url, "contract public base mismatch");
@@ -653,10 +721,17 @@ function deriveReceiptFields(receipt) {
     isGitSha(identity.server_checkout_commit) &&
     isGitSha(identity.running_image_revision_label) &&
     identity.server_checkout_commit === identity.running_image_revision_label;
+  if (isGitSha(identity.running_image_revision_label)) {
+    identity.runtime_revision_known_in_canonical_repo =
+      gitStatus(["cat-file", "-e", `${identity.running_image_revision_label}^{commit}`]) === 0;
+    identity.runtime_revision_ancestor_of_verified_origin_main =
+      gitStatus(["merge-base", "--is-ancestor", identity.running_image_revision_label, "origin/main"]) === 0;
+  }
   receipt.operational_baseline = computeOperationalBaseline(receipt);
 }
 
 function validateReceiptShape(receipt) {
+  const isV2 = receipt.contract_version === HANDOFF_CONTRACT_VERSION;
   assertExactKeys(receipt, [
     "schema_version",
     "contract_version",
@@ -677,6 +752,9 @@ function validateReceiptShape(receipt) {
     "git_tag_created",
     "github_release_created",
     "operational_baseline",
+    ...(isV2 ? [
+      "compose_context"
+    ] : []),
     "identity",
     "services",
     "migration",
@@ -690,9 +768,10 @@ function validateReceiptShape(receipt) {
 }
 
 function validateReceiptStaticFields(receipt) {
+  const isV2 = receipt.contract_version === HANDOFF_CONTRACT_VERSION;
   assert(receipt.schema_version === 1, "receipt schema_version must be 1");
-  assert(receipt.contract_version === CONTRACT_VERSION, "receipt contract_version mismatch");
-  assert(receipt.milestone === "MS-019A", "receipt milestone mismatch");
+  assert(isV2 || receipt.contract_version === CONTRACT_VERSION, "receipt contract_version mismatch");
+  assert(isV2 ? receipt.milestone === HANDOFF_MILESTONE : receipt.milestone === "MS-019A", "receipt milestone mismatch");
   assert(receipt.service === RELEASE_IDENTITY.application, "receipt service mismatch");
   assert(receipt.environment === "production", "receipt environment mismatch");
   assert(receipt.application_version === RELEASE_IDENTITY.version, "receipt application_version mismatch");
@@ -702,6 +781,22 @@ function validateReceiptStaticFields(receipt) {
   assert(isGitSha(receipt.collector_source_commit) || receipt.collector_source_commit === "NOT_RECORDED", "collector_source_commit invalid");
   assert(isSha256(receipt.collector_sha256) || receipt.collector_sha256 === "NOT_RECORDED", "collector_sha256 invalid");
   assert(["PASSED", "PARTIAL"].includes(receipt.operational_baseline), "operational_baseline invalid");
+}
+
+function validateComposeContext(receipt) {
+  if (receipt.contract_version !== HANDOFF_CONTRACT_VERSION) {
+    return { result: "NOT_RECORDED", evidence_source: "NOT_RECORDED" };
+  }
+
+  assertExactKeys(receipt.compose_context, [
+    "result",
+    "evidence_source"
+  ], "compose_context");
+  assertStatus(receipt.compose_context.result, "compose_context.result");
+  assertStatus(receipt.compose_context.evidence_source, "compose_context.evidence_source");
+  assert(["PASSED", "BLOCKED"].includes(receipt.compose_context.result), "compose_context result invalid");
+  assert(receipt.compose_context.evidence_source === "DIRECT_OBSERVED", "compose_context evidence_source mismatch");
+  return receipt.compose_context;
 }
 
 function validateReceiptFlags(receipt) {
@@ -776,9 +871,12 @@ function validateIdentity(identity) {
   }
 }
 
-function validateServices(services) {
+function validateServices(services, composeContext) {
   assertExactKeys(services, [
     "expected_services",
+    ...(composeContext.result === "NOT_RECORDED" ? [] : [
+      "observed_service_names"
+    ]),
     "observed_service_states",
     "unexpected_services",
     "api_loopback_binding",
@@ -787,6 +885,14 @@ function validateServices(services) {
     "worker_host_port_absent"
   ], "services");
   assertSameArray(services.expected_services, [...EXPECTED_SERVICES], "expected services mismatch");
+  if (composeContext.result !== "NOT_RECORDED") {
+    assert(typeof services.observed_service_names === "string", "observed service names must be a string");
+    if (composeContext.result === "PASSED") {
+      assert(services.observed_service_names === EXPECTED_SERVICES.join(","), "observed service names mismatch");
+    } else {
+      assert(services.observed_service_names === "NOT_RECORDED", "blocked service names must not be recorded");
+    }
+  }
   assert(Array.isArray(services.unexpected_services), "unexpected_services must be an array");
   assert(services.unexpected_services.length === 0, "unexpected production service observed");
   for (const service of EXPECTED_SERVICES) {
@@ -796,6 +902,16 @@ function validateServices(services) {
   const migrate = services.observed_service_states.migrate;
   assert(migrate.status !== "running", "migrate must not be long-running in steady state");
   const api = services.api_loopback_binding;
+  if (composeContext.result === "BLOCKED") {
+    assert(api.result === "BLOCKED", "API loopback binding must be blocked when Compose context is blocked");
+    assert(api.host_ip === "NOT_RECORDED", "blocked API host binding must not be recorded");
+    assert(api.host_port === "NOT_RECORDED", "blocked API host port must not be recorded");
+    assert(Number(api.container_port) === 3000, "API container port must be 3000");
+    assert(services.public_database_port_absent === "BLOCKED", "PostgreSQL port check must be blocked when Compose context is blocked");
+    assert(services.public_redis_port_absent === "BLOCKED", "Redis port check must be blocked when Compose context is blocked");
+    assert(services.worker_host_port_absent === "BLOCKED", "worker port check must be blocked when Compose context is blocked");
+    return;
+  }
   assert(api.result === "PASSED", "API loopback binding must pass");
   assert(api.host_ip === "127.0.0.1", "API host binding must be loopback-only");
   assert(Number(api.container_port) === 3000, "API container port must be 3000");
@@ -805,20 +921,33 @@ function validateServices(services) {
   assert(services.worker_host_port_absent === "PASSED", "worker host port must be absent");
 }
 
-function validateMigration(migration) {
+function validateMigration(migration, composeContext) {
   assertSameArray(migration.expected_migrations, [...EXPECTED_MIGRATIONS], "migration expected inventory mismatch");
   assertStatus(migration.result, "migration.result");
   assertStatus(migration.evidence_source, "migration.evidence_source");
   assertStatus(migration.pending_or_failed, "migration.pending_or_failed");
   assert(isSha256(migration.output_sha256) || migration.output_sha256 === "NOT_RECORDED", "migration output_sha256 invalid");
+  if (composeContext.result === "BLOCKED") {
+    assert(migration.result === "NOT_RUN", "migration must be NOT_RUN when Compose context is blocked");
+    assert(migration.evidence_source === "BLOCKED", "migration evidence_source must be BLOCKED when Compose context is blocked");
+    assert(migration.pending_or_failed === "NOT_RECORDED", "blocked migration pending status must not be recorded");
+    assert(migration.output_sha256 === "NOT_RECORDED", "blocked migration output hash must not be recorded");
+    return;
+  }
   assert(migration.result !== "FAILED", "migration failed or pending");
   assert(migration.pending_or_failed !== "FAILED", "migration pending/failed classification");
 }
 
-function validateWorkerScheduler(worker) {
+function validateWorkerScheduler(worker, composeContext) {
   assertStatus(worker.worker_health, "worker_health");
   assertStatus(worker.worker_health_evidence_source, "worker_health_evidence_source");
   assertStatus(worker.scheduler_evidence_source, "scheduler_evidence_source");
+  if (composeContext.result === "BLOCKED") {
+    assert(worker.worker_health === "NOT_RUN", "worker health must be NOT_RUN when Compose context is blocked");
+    assert(worker.worker_health_evidence_source === "BLOCKED", "worker health evidence must be BLOCKED when Compose context is blocked");
+    assert(worker.scheduler_evidence_source === "NOT_RUN", "scheduler evidence must be NOT_RUN when Compose context is blocked");
+    return;
+  }
   assert(worker.worker_health !== "FAILED", "worker health failed");
   assert(worker.queue === "main-service.maintenance", "worker queue mismatch");
   assert(worker.scheduler === "cleanup.daily", "worker scheduler mismatch");
@@ -869,8 +998,18 @@ function validatePointers(pointers) {
   assert(isDockerImageId(pointers.previous_image_id) || pointers.previous_image_id === "NOT_RECORDED", "previous image invalid");
 }
 
-function validateStability(stability) {
+function validateStability(stability, composeContext) {
   assert(stability.observation_kind === "POINT_IN_TIME_SNAPSHOT", "stability observation kind mismatch");
+  if (composeContext.result === "BLOCKED") {
+    for (const [name, snapshot] of Object.entries({ api: stability.api, worker: stability.worker })) {
+      assert(snapshot.restart_count === "NOT_RECORDED", `${name} restart_count must not be recorded when Compose context is blocked`);
+      assert(snapshot.oom_killed === "NOT_RECORDED", `${name} oom_killed must not be recorded when Compose context is blocked`);
+      assert(snapshot.state === "NOT_RECORDED", `${name} state must not be recorded when Compose context is blocked`);
+      assert(snapshot.started_at === "NOT_RECORDED", `${name} started_at must not be recorded when Compose context is blocked`);
+    }
+    assert(stability.error_burst === "NOT_RECORDED", "error burst must remain NOT_RECORDED");
+    return;
+  }
   for (const [name, snapshot] of Object.entries({ api: stability.api, worker: stability.worker })) {
     assert(Number.isInteger(snapshot.restart_count) && snapshot.restart_count >= 0, `${name} restart_count invalid`);
     assert(typeof snapshot.oom_killed === "boolean", `${name} oom_killed invalid`);
@@ -894,6 +1033,9 @@ function validateOutsideScope(scope) {
 function computeOperationalBaseline(receipt) {
   const partialReasons = [];
   const identity = receipt.identity;
+  if (receipt.compose_context?.result === "BLOCKED") {
+    partialReasons.push("compose context");
+  }
   if (
     !identity.image_identity_consistent ||
     identity.running_image_revision_label === "NOT_RECORDED" ||

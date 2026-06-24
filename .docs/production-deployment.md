@@ -19,7 +19,7 @@ Current production activation evidence'in canonical sahibi [production-acceptanc
 
 Production model tek Linux host + Docker Engine / Docker Compose v2 modelidir. Dedicated `rss.habersoft.com` vhost TLS termination ve reverse proxy rolundedir. Host CyberPanel/OpenLiteSpeed ile yonetiliyorsa CyberPanel yalniz edge DNS/TLS/reverse-proxy siniridir; `main-service` runtime CyberPanel Node/app process modeliyle calismaz.
 
-Production source acquisition Git-only operator akisidir: lokal source tree sunucuya upload edilmez; operator sunucuda `git pull --ff-only origin main` ile exact commit'i alir, Docker image'i sunucuda build eder ve generated `deploy/runtime-image.env` ile Compose'u calistirir. Codex production SSH kullanmaz; server Git/Docker/OpenLiteSpeed/TLS islemleri operator-managed kalir.
+Production source acquisition Git-only operator akisidir: lokal source tree sunucuya upload edilmez; operator sunucuda `git pull --ff-only origin main` ile exact commit'i alir, Docker image'i sunucuda build eder ve generated `deploy/runtime-image.env` ile Compose'u calistirir. Production Compose invocation explicit `deploy/production/compose.yaml`, external shared production env ve `deploy/runtime-image.env` context'i ile yapilir; bare `docker compose ...` production command'i degildir. Codex production SSH kullanmaz; server Git/Docker/OpenLiteSpeed/TLS islemleri operator-managed kalir.
 
 Production Compose service inventory:
 
