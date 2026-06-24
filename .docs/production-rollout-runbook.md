@@ -47,19 +47,19 @@ Basic production activation acceptance, MS-018C operator evidence ile passed:
 - tenantAuth readiness: `up`
 - API loopback upstream: `127.0.0.1:3200`
 
-Extended operational acceptance partial/not fully recorded:
+Extended operational evidence MS-019B collector-v2 receipt ile partial accepted:
 
-- production exact Git commit: `NOT_RECORDED`
-- production exact image ID / revision label: `NOT_RECORDED`
-- migration status output: `NOT_RECORDED`
-- worker health: `NOT_RECORDED`
-- scheduler inventory: `NOT_RECORDED`
+- production exact Git commit / image ID / revision label: `PASSED`
+- explicit production Compose context: `PASSED`
+- migration status output: `PASSED`
+- worker health: `PASSED`
+- scheduler inventory: `PASSED`
+- TLS, redirect and auth boundary smokes: `PASSED`
+- point-in-time restart/OOM snapshot: `PASSED`
 - production backup SHA-256: `NOT_RECORDED`
 - production off-host restore result: `NOT_RECORDED`
-- TLS fingerprint/expiry: `NOT_RECORDED`
-- HTTP-to-HTTPS redirect, unknown route, Tenant unauth and Agent unauth smokes: `NOT_RECORDED`
-- current/previous production pointers: `NOT_RECORDED`
-- restart/OOM/error-burst stability: `NOT_RECORDED`
+- previous production pointer: `NOT_RECORDED`
+- long-term stability/error-burst analysis: `NOT_RECORDED`
 - edge body-limit verification: `NOT_RECORDED`
 
 Bu eksik extended evidence, basic production-active status'unu geriye donuk olarak inactive/pending duruma cevirmez. Fresh contradictory health evidence ortaya cikarsa false success uretmek yerine blocker politikasi uygulanir.
@@ -74,7 +74,7 @@ Production and staging must use different environment marker, Compose project na
 
 Operator production mutation oncesi target state'i read-only siniflandirir. Unknown or conflicting state mutation'u bloke eder.
 
-Preflight evidence current MS-018C acceptance icinde tam kaydedilmemistir. Bu nedenle exact production commit/image, migration status, worker/scheduler, backup/restore, TLS, pointer ve stability alanlari `NOT_RECORDED` kalir.
+Preflight evidence current MS-019B receipt icinde identity, migration, worker/scheduler, TLS, route smoke ve point-in-time stability alanlari icin kaydedildi. Backup/restore, previous pointer, edge body-limit, long-term stability ve error-burst alanlari `NOT_RECORDED` kalir.
 
 ## Backup gate
 
@@ -99,7 +99,7 @@ No `prisma db push`, volume prune, Redis flush, source upload, package transfer-
 
 ## Internal and Public Acceptance
 
-Current known activation evidence is limited to live/ready and readiness dependency status. Worker health, scheduler inventory, migration status, route smoke, TLS detail and stability observation remain `NOT_RECORDED`.
+Current accepted evidence live/ready, readiness dependency status, worker health, scheduler inventory, migration status, route smoke, TLS detail and point-in-time restart/OOM snapshot alanlarini kapsar. Full operational baseline, previous pointer evidence eksikligi nedeniyle henuz passed degildir.
 
 Future full operational acceptance should record these as explicit passed evidence or keep them `NOT_RECORDED`; it must not infer them from package, staging or Git base SHA.
 
@@ -113,15 +113,13 @@ DB restore is not default rollback behavior for this release because there is no
 
 ## Current/previous pointers
 
-MS-018C input did not record current or previous production pointer identity. Future receipts should record actual current/previous production identity when operator evidence exists.
+MS-019B receipt current image identity kaydeder. Previous production pointer commit/image hala `NOT_RECORDED`; future receipts should record actual previous production identity when operator evidence exists.
 
 ## Post-deployment verification
 
 Future full receipt verifier should prove identity, authorization hash, preflight, capacity, Git commit/image identity, backup/restore, migration status, internal health, public HTTPS acceptance, worker/scheduler, stability, pointers and safety flags.
 
-MS-018C external receipt intentionally records only the operator-confirmed basic activation evidence and leaves the remaining fields explicit `NOT_RECORDED`.
-
-MS-019A prepared the future read-only operational evidence handoff and receipt verifier in [production-operational-evidence.md](production-operational-evidence.md). That flow is for later operator-run evidence capture; it does not replace the current production activation status and does not make backup/restore or publication evidence passed. The copyable collector command shape is kept in that canonical document so this runbook does not duplicate the contract.
+MS-018C external receipt intentionally records only the operator-confirmed basic activation evidence. MS-019B operational receipt is tracked by identity in [production-operational-evidence.md](production-operational-evidence.md); it does not make backup/restore or publication evidence passed. The copyable collector command shape is kept in that canonical document so this runbook does not duplicate the contract.
 
 ## Forbidden operations
 

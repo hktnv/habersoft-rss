@@ -78,9 +78,9 @@ Residual non-blocker is a bounded item outside the current MVP repository accept
 Known residual non-blockers:
 
 - basic production activation acceptance passed with operator-confirmed internal/public live-ready evidence,
-- extended operational evidence is partial/not fully recorded,
-- exact production Git commit, image ID and image revision label are not recorded,
-- worker health, scheduler inventory, production backup/restore, TLS detail, pointers and restart/OOM stability evidence are not recorded,
+- extended operational evidence is partial accepted but full baseline is not passed,
+- exact production Git commit, image ID, image revision label, worker health, scheduler inventory, TLS detail and point-in-time restart/OOM snapshot are recorded by MS-019B collector-v2 evidence,
+- previous production pointer, production backup/restore, edge body-limit, long-term stability and error-burst evidence are not recorded,
 - frontend and `rss-panel.habersoft.com` are planned and not implemented,
 - release identity alignment is verified; package-derived staging image identity is not production identity,
 - MS-017 staging target/preflight, production IdP readiness-only proof, full staging deployment, backup/restore, rollback and roll-forward drills passed on approved staging,

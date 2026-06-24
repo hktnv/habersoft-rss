@@ -42,7 +42,7 @@ Production image identity modeli:
 3. generated `deploy/runtime-image.env` build edilen image ID'sini tasir,
 4. Compose shared env ve runtime image env dosyalarini birlikte kullanir.
 
-Package-derived staging image modeli production identity olarak kullanilmaz. MS-018C operator evidence exact production Git commit, Docker image ID veya image revision label kanitlamaz; bu alanlar [production-acceptance.md](production-acceptance.md) icinde `NOT_RECORDED` olarak ayrilmistir.
+Package-derived staging image modeli production identity olarak kullanilmaz. MS-019B collector-v2 receipt exact production Git commit, runtime image ID ve image revision/source label chain'ini kaydetti; current status owner [production-acceptance.md](production-acceptance.md) dosyasidir.
 
 ## Network ve Portlar
 
@@ -60,13 +60,13 @@ Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Reque
 4. API `/health/live` ve `/health/ready` ile izlenir.
 5. Worker `npm run worker:health` ile izlenir.
 
-MS-018C evidence API live/ready ve dependency readiness icin yeterlidir. Worker health output, scheduler inventory ve migration status output bu milestone inputunda kaydedilmemistir.
+MS-019B collector-v2 receipt API live/ready, dependency readiness, migration status, worker health ve scheduler evidence'i partial operational receipt kapsaminda kaydetti. Backup/restore, previous pointer, long-term stability, error-burst ve edge body-limit evidence'i hala kayitli degildir.
 
 ## Durum
 
 `main-service` backend application status'u `MVP — Production Aktif`tir.
 
-Operator 2026-06-22 tarihinde internal loopback ve public HTTPS `/health/live` ile `/health/ready` checks icin HTTP `200`, `status=live/ready`, `postgres=up`, `redis=up` ve `tenantAuth=up` evidence sagladi. Basic activation acceptance passed; extended operational acceptance partial/not fully recorded durumdadir.
+Operator 2026-06-22 tarihinde internal loopback ve public HTTPS `/health/live` ile `/health/ready` checks icin HTTP `200`, `status=live/ready`, `postgres=up`, `redis=up` ve `tenantAuth=up` evidence sagladi. MS-019B collector-v2 receipt ile extended operational evidence `PARTIAL_ACCEPTED` oldu; full operational baseline previous pointer evidence eksikligi nedeniyle passed degildir.
 
 Registry publish, Git tag ve GitHub Release yapilmamistir. Frontend implementasyonu yoktur ve `rss-panel.habersoft.com` active degildir. Bagimsiz Agent application ve bagimsiz Tenant applications ayri delivery siniridir.
 

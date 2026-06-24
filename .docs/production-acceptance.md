@@ -13,7 +13,7 @@ Bu belge production redeploy, server command log'u, exact production Git/image i
 - Evidence date: `2026-06-22`
 - Evidence source: `operator-confirmed transcript`
 - Basic activation acceptance: `PASSED`
-- Extended operational acceptance: `PARTIAL_NOT_FULLY_RECORDED`
+- Extended operational evidence: `PARTIAL_ACCEPTED`
 
 `Production Aktif` yalniz `main-service` backend application icindir. Bagimsiz Agent application, bagimsiz Tenant applications, frontend/admin panel veya `rss-panel.habersoft.com` icin readiness iddiasi degildir.
 
@@ -42,31 +42,45 @@ The actual receipt is external and untracked. Repository docs identify it by sta
 
 The receipt contains no production `.env` values, tokens, Agent keys, credentials, raw logs, private host details, package archives, images or backups.
 
+## MS-019B Operational Evidence Receipt
+
+MS-019B-R8 accepted a fresh collector-v2 returned bundle as a partial operational evidence receipt. This does not change the application status and does not claim backup/restore, publication or full operational baseline completion.
+
+- Receipt filename: `production-operational-evidence-receipt.json`
+- Receipt SHA-256: `3a5624a5cab3044a1797d9c8ee78e92828a28233a67f759b8bf6845a7ecc4620`
+- Contract: `production-operational-evidence-v2`
+- Operational baseline: `PARTIAL`
+- Partial reason: previous production pointer fields remain `NOT_RECORDED`
+- Authority tree digest: `794b760e98628864773caa109dd8ab5e1c92fa1556e7fa6c3d16827ae55298a9`
+
+Verified safe projections:
+
+| Check | Result | Boundary |
+|---|---|---|
+| Explicit production Compose context | `PASSED` | Production compose file plus shared env and runtime image env were used by collector-v2. |
+| Canonical remote | `PASSED` | Terminal `.git` variant normalized to `https://github.com/hktnv/habersoft-rss`. |
+| Runtime Git revision | `PASSED` | Revision `186a30d4c8c09c97bcd37c1f4c787e5c5e49f397` is known in canonical history and ancestor of verified `origin/main`. |
+| Server checkout clean flag | `false` | Recorded as point-in-time server state; runtime image/revision identity still matched. |
+| Runtime image identity chain | `PASSED` | Runtime env image, API image, worker image and inspected image matched. |
+| Service steady state | `PASSED` | API, worker, PostgreSQL and Redis were observed; `migrate` remains a finite role and migration evidence passed separately. |
+| Port policy | `PASSED` | API loopback bind `127.0.0.1:3200`; PostgreSQL, Redis and worker have no host port binding. |
+| Migration status | `PASSED` | Expected migrations recorded; no pending/failed migration. |
+| Worker health and scheduler | `PASSED` | Worker health and scheduler evidence were direct observed. |
+| Health, boundary, redirect and TLS | `PASSED` | Internal/public health, unauthenticated boundary smokes, HTTP-to-HTTPS redirect and TLS metadata passed. |
+| Point-in-time stability snapshot | `PASSED` | API and worker restart counts were `0`, OOMKilled `false`, state `running`; error-burst analysis remains out of scope. |
+
 ## Not Recorded
 
-The following fields are not proven by the MS-018C operator input and must not be treated as passed production identity:
+The following fields remain not proven by current accepted evidence and must not be treated as passed:
 
-- production Git commit: `NOT_RECORDED`
-- production Docker image ID: `NOT_RECORDED`
-- production image revision label: `NOT_RECORDED`
-- Docker Compose service inventory output: `NOT_RECORDED`
-- migration status output: `NOT_RECORDED`
-- worker health output: `NOT_RECORDED`
-- scheduler inventory output: `NOT_RECORDED`
 - production backup SHA-256: `NOT_RECORDED`
 - production off-host restore result: `NOT_RECORDED`
-- TLS fingerprint or expiry: `NOT_RECORDED`
-- HTTP-to-HTTPS redirect result: `NOT_RECORDED`
-- unknown route `404` smoke: `NOT_RECORDED`
-- unauthenticated Tenant route `401` smoke: `NOT_RECORDED`
-- unauthenticated Agent route `401` smoke: `NOT_RECORDED`
-- current/previous production pointer identity: `NOT_RECORDED`
-- restart counters, OOM or error-burst observation: `NOT_RECORDED`
+- previous production pointer commit/image: `NOT_RECORDED`
 - edge body-limit verification: `NOT_RECORDED`
+- long-term stability observation: `NOT_RECORDED`
+- error-burst analysis: `NOT_RECORDED`
 
-These gaps are not failures. They are the remaining extended operational evidence scope.
-
-MS-019A prepared the read-only operational evidence collector/handoff contract and verifier owner in [production-operational-evidence.md](production-operational-evidence.md). Actual production operational receipt has not been collected yet, so the fields above remain `NOT_RECORDED` until a later operator-run evidence milestone proves them. The MS-018C external receipt filename and SHA-256 remain unchanged.
+These gaps are not failures. They are the remaining extended operational evidence scope. The MS-018C external receipt filename and SHA-256 remain unchanged.
 
 ## Delivery And Publication Boundary
 

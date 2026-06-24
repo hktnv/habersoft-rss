@@ -2,15 +2,15 @@
 
 ## Sorumluluk
 
-Bu belge `main-service` production operational evidence contract, read-only operator collector/handoff akisi, returned evidence bundle modeli ve receipt verifier semantiginin canonical repository-local sahibidir. Current operator handoff contract MS-019B-R7 `production-operational-evidence-v2` sozlesmesidir; MS-019A handoff-v1 historical verification icin korunur.
+Bu belge `main-service` production operational evidence contract, read-only operator collector/handoff akisi, returned evidence bundle modeli ve receipt verifier semantiginin canonical repository-local sahibidir. Current accepted contract MS-019B-R8 `production-operational-evidence-v2` sozlesmesidir; MS-019A handoff-v1 historical verification icin korunur.
 
 Bu belge current production activation status sahibi degildir. Current status ve MS-018C receipt identity [production-acceptance.md](production-acceptance.md) dosyasindadir.
 
-MS-019B-R7 production kaniti toplamaz, production sunucusuna Codex baglantisi kurmaz, production servisini degistirmez, backup/restore yapmaz ve release publication karari uretmez.
+MS-019B-R8 returned collector-v2 evidence local olarak intake edildi. Codex production sunucusuna baglanmadi, production servisini degistirmedi, backup/restore yapmadi ve release publication karari uretmedi.
 
 ## Boundary
 
-MS-019B-R7 sonucunda hazirlanan tooling:
+MS-019B sonucunda hazirlanan tooling:
 
 - external operator handoff bundle uretir,
 - generated bundle manifest/checksum/secret/forbidden-command kapilarini dogrular,
@@ -18,7 +18,7 @@ MS-019B-R7 sonucunda hazirlanan tooling:
 - external JSON operational receipt'i dogrular,
 - partial evidence ile full operational baseline'i ayirir.
 
-Tooling hazir olmasi `production evidence collected` anlamina gelmez. Successful handoff verification da current `NOT_RECORDED` alanlari `PASSED` yapmaz.
+Handoff tooling hazir olmasi `production evidence collected` anlamina gelmez. MS-019B-R8 operational receipt external ve untracked olarak olusturuldu; yalniz receipt tarafindan kanitlanan alanlar repository-local status dokumanlarina yansitilir.
 
 ## Compose Context Contract
 
@@ -82,6 +82,8 @@ Expected port policy:
 
 Unexpected service, public DB/Redis/worker port veya non-loopback API bind `FAILED` olur; `NOT_RECORDED` olarak yumusatilmaz.
 
+Docker port projection'da `5432/tcp=` veya `6379/tcp=` gibi host binding'i bos olan satirlar public host port yayinlandigi anlamina gelmez. Receipt verifier host binding parcasini parse eder; `0.0.0.0:5432` veya benzeri gercek host binding'i ise hard failure olarak kalir.
+
 ## Migration, Worker And Scheduler
 
 Migration receipt'i expected migration inventory'yi korur:
@@ -135,7 +137,7 @@ These fields do not prove long-term stability, absence of error bursts, uptime S
 
 ## Handoff And Receipt Flow
 
-Local MS-019B-R7 handoff-v2 generation:
+Local MS-019B handoff-v2 generation:
 
 ```powershell
 npm run production:evidence:handoff -- --output <external-handoff-dir>
@@ -154,7 +156,7 @@ cd /opt/habersoft-rss
   --output-dir <new-empty-output-dir>
 ```
 
-Future local receipt creation and verification:
+Local receipt creation and verification:
 
 ```powershell
 node scripts/production-operational-evidence.mjs receipt:create --evidence <external-collected-dir> --output <external-receipt>
@@ -179,7 +181,18 @@ Allowed receipt vocabulary is closed:
 - `CONTRACT_DERIVED`
 - `NOT_RUN`
 
-Valid partial receipt is not a full operational baseline. Examples of partial evidence are unavailable TLS tooling, absent previous pointer, scheduler output that cannot be direct parsed, missing revision label or blocked Compose context. `NOT_RUN` is reserved for dependent probes intentionally skipped after context preflight failure. Hard failures include image mismatch, wrong OCI source, public DB/Redis/worker port, failed migration, failed worker health, protected unauthenticated route returning 2xx, TLS verification failure or mutation/publication flag set to true.
+Valid partial receipt is not a full operational baseline. Examples of partial evidence are unavailable TLS tooling, absent previous pointer, scheduler output that cannot be direct parsed or missing revision label. `NOT_RUN` is reserved for dependent probes intentionally skipped after context preflight failure. For MS-019B-R8 acceptance, a blocked Compose context is not acceptable. Hard failures include image mismatch, wrong OCI source, public DB/Redis/worker port, failed migration, failed worker health, protected unauthenticated route returning 2xx, TLS verification failure or mutation/publication flag set to true.
+
+MS-019B-R8 receipt result:
+
+- Receipt filename: `production-operational-evidence-receipt.json`
+- Receipt SHA-256: `3a5624a5cab3044a1797d9c8ee78e92828a28233a67f759b8bf6845a7ecc4620`
+- Authority record: `returned-bundle-authority-v6.json`
+- Authority SHA-256: `0dcc623da1442fc7383f0f3c42723e7403992ac852e39802db48ec79033e4771`
+- Returned tree digest: `794b760e98628864773caa109dd8ab5e1c92fa1556e7fa6c3d16827ae55298a9`
+- Structural verifier: `PASSED`
+- Full operational baseline verifier: `PARTIAL`, because previous production pointer fields remain `NOT_RECORDED`
+- Production mutation/deploy/backup/restore/publication flags: `false`
 
 ## Secret And Privacy Gates
 
@@ -189,9 +202,8 @@ Canonical public values allowed in this evidence contract are the canonical repo
 
 ## Out Of Scope
 
-The following remain outside MS-019B-R7:
+The following remain outside the accepted MS-019B-R8 receipt:
 
-- actual production collector execution,
 - production backup SHA-256,
 - off-host restore result,
 - edge body-limit verification,
@@ -206,4 +218,4 @@ These fields stay `NOT_RECORDED` or `NOT_PERFORMED` until a later bounded milest
 
 ## Historical Handoff Boundary
 
-MS-019A handoff-v1 remains historically verifiable by the handoff verifier. New operator reruns must use MS-019B-R7 handoff-v2 so the production Compose context, two env-file layers, context preflight and `NOT_RUN` dependent classification are present in the returned bundle.
+MS-019A handoff-v1 remains historically verifiable by the handoff verifier. New operator reruns must use the collector-v2 contract so the production Compose context, two env-file layers, context preflight and `NOT_RUN` dependent classification are present in the returned bundle.

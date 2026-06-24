@@ -14,9 +14,9 @@ Application version: `0.1.0-ms-017`.
 Application status: `MVP — Production Aktif`.
 Master baseline: `rss-habersoft-master-v12`.
 
-MS-018C operator-confirmed evidence'e gore `main-service` backend production'da aktiftir: internal/public live ve ready checks HTTP `200`, PostgreSQL/Redis/tenantAuth readiness `up`, API loopback upstream `127.0.0.1:3200`. Exact production Git commit, image ID, worker health, scheduler inventory, production backup/restore, TLS detail, pointer/stability evidence ve body-limit smoke bu milestone'da `NOT_RECORDED` kalir.
+MS-018C operator-confirmed evidence'e gore `main-service` backend production'da aktiftir: internal/public live ve ready checks HTTP `200`, PostgreSQL/Redis/tenantAuth readiness `up`, API loopback upstream `127.0.0.1:3200`.
 
-MS-019A read-only operational evidence handoff tooling hazirdir; contract ve receipt verifier semantics [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md) dosyasindadir. Actual production operational receipt henuz toplanmamistir.
+MS-019B collector-v2 operational evidence receipt partial accepted durumdadir: explicit production Compose context, runtime Git/image identity, service/port policy, migration, worker/scheduler, health, boundary, redirect, TLS ve point-in-time restart/OOM evidence passed. Full operational baseline henuz passed degildir; previous production pointer, production backup/restore, edge body-limit, long-term stability ve error-burst evidence `NOT_RECORDED` kalir. Contract ve receipt verifier semantics [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md) dosyasindadir.
 
 MS-017C staging drill tarihsel kanittir: `STAGING_USES_PRODUCTION_IDP` decision altinda approved staging target'ta candidate deployment, synthetic sentinel, PostgreSQL `pg_dump -Fc` backup, off-host restore verification, rollback to `0.1.0-ms-016`, roll-forward to `0.1.0-ms-017`, final current pointer promotion ve final running services acceptance passed. Staging package source/image kimlikleri production identity degildir.
 
