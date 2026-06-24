@@ -17,6 +17,7 @@ for (const file of requiredHandbookFiles) {
   requireFile(file);
 }
 requireFile(productionGuide);
+requireFile(".docs/repository-conventions.md");
 requireFile(".docs/production-operational-evidence.md");
 
 const markdownFiles = [productionGuide, "README.md", ...walkMarkdown(path.join(root, ".docs"))];

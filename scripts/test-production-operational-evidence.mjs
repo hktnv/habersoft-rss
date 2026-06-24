@@ -38,6 +38,8 @@ try {
   assert.equal(manifest.production_contact_performed, false);
   assert.equal(manifest.production_mutation_performed, false);
   assert.deepEqual(manifest.expected_service_inventory, EXPECTED_SERVICES);
+  assertLfOnly(path.join(validHandoff, "collect-production-operational-evidence.sh"), "generated handoff collector");
+  assertRepositoryHygienePasses();
 
   const insideRepo = path.resolve(".tmp-production-evidence-handoff-inside");
   assert.equal(runNode(["scripts/production-operational-evidence.mjs", "handoff", "--output", insideRepo]).status, 1);
@@ -97,11 +99,23 @@ try {
   refreshHandoff(falseClaimBundle);
   assertVerifyHandoffFails(falseClaimBundle, /must be false/u);
 
+  const crlfCollectorBundle = generateHandoff("crlf-collector");
+  const crlfCollector = path.join(crlfCollectorBundle, "collect-production-operational-evidence.sh");
+  writeFileSync(crlfCollector, readFileSync(crlfCollector, "utf8").replace(/\n/gu, "\r\n"));
+  refreshHandoff(crlfCollectorBundle);
+  assertVerifyHandoffFails(crlfCollectorBundle, /LF line endings/u);
+
+  assertRepositoryHygieneFixtureFails("missing-attribute", { omitAttributes: true }, /missing .*LF rule|required file missing/u);
+  assertRepositoryHygieneFixtureFails("crlf-tracked-collector", { collectorCrlf: true }, /collector.*CR byte/u);
+  assertRepositoryHygieneFixtureFails("crlf-handoff-collector", { handoffCollectorCrlf: true }, /generated handoff collector.*CR byte/u);
+  assertRepositoryHygieneFixtureFails("mirror-mismatch", { mirrorMismatch: true }, /operator mirror PRODUCTION\.md SHA-256/u);
+
   const collectorText = readFileSync("scripts/production-operational-evidence-collector.sh", "utf8");
   assert.doesNotMatch(collectorText, /\bset\s+-x\b/u);
   assert.doesNotMatch(collectorText, /\bgit\s+(?:fetch|pull|switch|checkout|reset|clean)\b/u);
   assert.doesNotMatch(collectorText, /\bdocker\s+compose\s+(?:up|down|restart|stop|rm|run|create)\b/u);
   assert.doesNotMatch(collectorText, /\.Config\.Env/u);
+  assertLfOnly("scripts/production-operational-evidence-collector.sh", "tracked collector");
   const bashCheck = spawnSync("bash", ["-n", "scripts/production-operational-evidence-collector.sh"], {
     cwd: process.cwd(),
     encoding: "utf8",
@@ -278,6 +292,26 @@ function assertVerifyReceiptFails(receipt, pattern, requireBaseline = false) {
     "--receipt",
     receipt,
     ...(requireBaseline ? ["--require-operational-baseline"] : [])
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, pattern);
+}
+
+function assertRepositoryHygienePasses() {
+  const result = runNode(["scripts/repository-hygiene-verify.mjs"]);
+  assert.equal(result.status, 0, result.stderr);
+}
+
+function assertRepositoryHygieneFixtureFails(label, options, pattern) {
+  const fixture = writeRepositoryHygieneFixture(label, options);
+  const result = runNode([
+    "scripts/repository-hygiene-verify.mjs",
+    "--root",
+    fixture.root,
+    "--production-mirror",
+    fixture.mirror,
+    "--handoff",
+    fixture.handoff
   ]);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, pattern);
@@ -473,6 +507,36 @@ function writeEvidenceBundle(label, receipt) {
   return dir;
 }
 
+function writeRepositoryHygieneFixture(label, options) {
+  const root = path.join(temp, `hygiene-${label}`);
+  const scriptsDir = path.join(root, "scripts");
+  const handoff = path.join(temp, `hygiene-${label}-handoff`);
+  const mirror = path.join(temp, `hygiene-${label}-PRODUCTION.md`);
+  mkdirSync(scriptsDir, { recursive: true });
+  mkdirSync(handoff, { recursive: true });
+
+  const attributes = [
+    ".gitattributes text eol=lf",
+    "scripts/*.sh text eol=lf",
+    "PRODUCTION.md text eol=lf"
+  ].join("\n");
+  if (!options.omitAttributes) {
+    writeFileSync(path.join(root, ".gitattributes"), `${attributes}\n`);
+  }
+
+  writeFileSync(path.join(root, "PRODUCTION.md"), "guide\n");
+  writeFileSync(mirror, options.mirrorMismatch ? "mirror\n" : "guide\n");
+  writeFileSync(
+    path.join(scriptsDir, "production-operational-evidence-collector.sh"),
+    options.collectorCrlf ? "#!/usr/bin/env bash\r\nset -eu\r\n" : "#!/usr/bin/env bash\nset -eu\n"
+  );
+  writeFileSync(
+    path.join(handoff, "collect-production-operational-evidence.sh"),
+    options.handoffCollectorCrlf ? "#!/usr/bin/env bash\r\nset -eu\r\n" : "#!/usr/bin/env bash\nset -eu\n"
+  );
+  return { root, mirror, handoff };
+}
+
 function refreshHandoff(bundle) {
   const manifestFile = path.join(bundle, "manifest.json");
   const manifest = readJson(manifestFile);
@@ -531,6 +595,10 @@ function readJson(file) {
 
 function writeJson(file, value) {
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function assertLfOnly(file, label) {
+  assert.equal(readFileSync(file).includes(13), false, `${label} must use LF line endings`);
 }
 
 function sha256(value) {

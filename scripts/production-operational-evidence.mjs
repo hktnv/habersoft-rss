@@ -205,6 +205,7 @@ export function verifyHandoffBundle(bundle) {
   scanTextForSecrets(JSON.stringify(contract), "evidence-contract.json");
   scanTextForSecrets(JSON.stringify(manifest), "manifest.json");
   scanTextForSecrets(collector, COLLECTOR_BUNDLE_FILE);
+  assert(!collector.includes("\r"), `${COLLECTOR_BUNDLE_FILE} must use LF line endings`);
   scanCollectorForForbiddenCommands(collector);
 
   return { ok: true, files: HANDOFF_FILES, manifest };

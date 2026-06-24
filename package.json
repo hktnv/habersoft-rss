@@ -27,6 +27,7 @@
     "production:evidence:handoff": "node scripts/production-operational-evidence.mjs handoff",
     "production:evidence:handoff:verify": "node scripts/production-operational-evidence.mjs handoff:verify",
     "production:evidence:receipt:verify": "node scripts/production-operational-evidence.mjs receipt:verify",
+    "repository:hygiene:verify": "node scripts/repository-hygiene-verify.mjs",
     "staging:preflight": "node scripts/staging-deployment.mjs preflight",
     "staging:deploy": "node scripts/staging-deployment.mjs deploy",
     "staging:production-idp-readiness": "node scripts/staging-deployment.mjs production-idp-readiness",
