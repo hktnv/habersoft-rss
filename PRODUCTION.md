@@ -635,18 +635,45 @@ Bu set operator-approved secure channel ile off-host/local verification ortamina
 
 Failed onceki output directory tekrar kullanilmaz. Production capture icin `bash -x`, `set -x`, raw stderr/env paste, feature branch checkout ve direct core CLI flag guessing kullanilmaz. Preflight fail olursa yalniz `MS019C_PREFLIGHT_FAILED:<CLASS>` raporlanir.
 
+Returned bundle local intake once safe authority record olusturur. Authority record flat inventory, capture checksum/tree digest, backup SHA ve no-secret/no-raw-data flags tasir; raw dump veya row data icermez.
+
+```bash
+cd "${BACKEND_DIR}"
+
+node scripts/production-backup-restore-evidence.mjs authority:create \
+  --capture-dir "<flat-returned-production-backup-dir>" \
+  --output "<external-returned-authority-record>"
+```
+
 Restore verification off-host disposable Docker ortaminda calisir:
 
 ```bash
 cd "${BACKEND_DIR}"
 
-<operator-approved-ms-019c-handoff-v2-dir>/verify-off-host-postgres-restore.sh \
-  --repository-dir "${BACKEND_DIR}" \
+npm run production:restore:verify -- \
   --input-dir "<flat-returned-production-backup-dir>" \
+  --authority "<external-returned-authority-record>" \
   --receipt "<external-off-host-restore-receipt>"
 ```
 
 Verifier yalniz local Docker engine endpoint sinifini kabul eder; SSH/remote TCP/production context reddedilir. Unique disposable PostgreSQL container, network ve volume kullanir, host port yayinlamaz, six canonical business table ve iki Prisma migration kaydini dogrular, sonra disposable kaynaklarin silindigini kanitlar.
+
+Combined receipt parent MS-019B operational receipt'e, handoff-v2 manifest/tooling lock'a, returned authority record'a ve off-host restore receipt'e baglanir:
+
+```bash
+cd "${BACKEND_DIR}"
+
+npm run production:backup-restore:receipt:create -- \
+  --capture-dir "<flat-returned-production-backup-dir>" \
+  --restore-receipt "<external-off-host-restore-receipt>" \
+  --authority "<external-returned-authority-record>" \
+  --handoff "<operator-approved-ms-019c-handoff-v2-dir>" \
+  --output "<external-combined-backup-restore-receipt>"
+
+npm run production:backup-restore:receipt:verify -- \
+  --receipt "<external-combined-backup-restore-receipt>" \
+  --require-backup-restore-baseline
+```
 
 Host Node/npm kullanilmayacaksa operator native PostgreSQL araclariyla ayni `pg_dump -Fc` ve off-host disposable restore sozlesmesini uygular. Production restore rutin rollback degildir; sadece kanitlanmis data/schema uyumsuzlugu varsa ayrica karar verilir.
 
@@ -863,6 +890,17 @@ notes: basic production activation acceptance passed; extended operational accep
 ```
 
 Secret deger yazilmaz.
+
+MS-019C current backup/restore evidence snapshot:
+
+```text
+production backup SHA-256: 1bc52dfbf43a4bdeed64c072ab6dbaaadcb09207bc6bd4958a4821ed67e871f8
+returned authority SHA-256: f4147ec51fc686aa4c07e3f8c03f79c2bed089f51f191ca7d4db8e7232cc82f8
+off-host restore receipt SHA-256: 84658697d04a357c9ba311562320b2fed893efcc81e87fc81fc8a8ca41cf9303
+combined backup/restore receipt SHA-256: 868b13b9cfe44962daa4abbec71310473e1df1d0a49e4bf156a4c3f77ed01735
+backup restore baseline: PASSED
+status: PRODUCTION_BACKUP_RESTORE_VERIFIED
+```
 
 ### 19.1 Read-only operational evidence handoff
 

@@ -204,8 +204,6 @@ Canonical public values allowed in this evidence contract are the canonical repo
 
 The following remain outside the accepted MS-019B-R8 receipt:
 
-- production backup SHA-256,
-- off-host restore result,
 - edge body-limit verification,
 - long-running stability observation,
 - raw log/error-burst analysis,
@@ -216,7 +214,7 @@ The following remain outside the accepted MS-019B-R8 receipt:
 
 These fields stay `NOT_RECORDED` or `NOT_PERFORMED` until a later bounded milestone records evidence.
 
-MS-019C owns the future production PostgreSQL backup and off-host disposable restore evidence contract. Raw dump files, capture metadata and restore receipts are external sensitive artifacts and are never part of the MS-019B operational evidence bundle. MS-019B receipt SHA-256 remains the parent identity for the future combined MS-019C receipt.
+MS-019C owns the production PostgreSQL backup and off-host disposable restore evidence contract. MS-019C returned backup-v2 intake is now accepted as `PRODUCTION_BACKUP_RESTORE_VERIFIED` with combined receipt SHA-256 `868b13b9cfe44962daa4abbec71310473e1df1d0a49e4bf156a4c3f77ed01735`. Raw dump files, capture metadata and restore receipts are external sensitive artifacts and are never part of the MS-019B operational evidence bundle. MS-019B receipt SHA-256 remains the parent identity for the combined MS-019C receipt.
 
 ## Historical Handoff Boundary
 

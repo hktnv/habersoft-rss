@@ -56,8 +56,7 @@ Extended operational evidence MS-019B collector-v2 receipt ile partial accepted:
 - scheduler inventory: `PASSED`
 - TLS, redirect and auth boundary smokes: `PASSED`
 - point-in-time restart/OOM snapshot: `PASSED`
-- production backup SHA-256: `NOT_RECORDED`
-- production off-host restore result: `NOT_RECORDED`
+- production backup/restore baseline: `PASSED` by MS-019C
 - previous production pointer: `NOT_RECORDED`
 - long-term stability/error-burst analysis: `NOT_RECORDED`
 - edge body-limit verification: `NOT_RECORDED`
@@ -74,13 +73,13 @@ Production and staging must use different environment marker, Compose project na
 
 Operator production mutation oncesi target state'i read-only siniflandirir. Unknown or conflicting state mutation'u bloke eder.
 
-Preflight evidence current MS-019B receipt icinde identity, migration, worker/scheduler, TLS, route smoke ve point-in-time stability alanlari icin kaydedildi. Backup/restore, previous pointer, edge body-limit, long-term stability ve error-burst alanlari `NOT_RECORDED` kalir.
+Preflight evidence current MS-019B receipt icinde identity, migration, worker/scheduler, TLS, route smoke ve point-in-time stability alanlari icin kaydedildi. Backup/restore MS-019C combined receipt ile verified oldu. Previous pointer, edge body-limit, long-term stability ve error-burst alanlari `NOT_RECORDED` kalir.
 
 ## Backup gate
 
 For existing production, take a PostgreSQL custom-format backup before mutation and verify disposable off-host restore. For first deployment, take the baseline backup after migrations and before public cutover.
 
-MS-018C/MS-019B accepted evidence icinde production backup SHA-256 veya off-host restore result kaydedilmedi. Bu alanlar failed degil, `NOT_RECORDED` durumundadir. Canonical procedure and evidence boundary [backup-and-restore.md](backup-and-restore.md) dosyasindadir; MS-019C handoff-v2 tooling'in main'e landed olmasi veya preflight'in passed olmasi backup/restore gate'ini passed yapmaz.
+MS-019C accepted evidence icinde production backup SHA-256, returned authority SHA-256, off-host restore receipt SHA-256 ve combined receipt SHA-256 kaydedildi; backup/restore gate'i `PRODUCTION_BACKUP_RESTORE_VERIFIED` durumundadir. Canonical procedure and evidence boundary [backup-and-restore.md](backup-and-restore.md) dosyasindadir; yalniz handoff tooling'in main'e landed olmasi veya preflight'in passed olmasi backup/restore gate'ini passed yapmaz.
 
 ## Deployment sequence
 
@@ -99,7 +98,7 @@ No `prisma db push`, volume prune, Redis flush, source upload, package transfer-
 
 ## Internal and Public Acceptance
 
-Current accepted evidence live/ready, readiness dependency status, worker health, scheduler inventory, migration status, route smoke, TLS detail and point-in-time restart/OOM snapshot alanlarini kapsar. Full operational baseline, previous pointer evidence eksikligi nedeniyle henuz passed degildir.
+Current accepted evidence live/ready, readiness dependency status, worker health, scheduler inventory, migration status, route smoke, TLS detail, point-in-time restart/OOM snapshot ve MS-019C backup/restore baseline alanlarini kapsar. Full operational baseline, previous pointer evidence eksikligi nedeniyle henuz passed degildir.
 
 Future full operational acceptance should record these as explicit passed evidence or keep them `NOT_RECORDED`; it must not infer them from package, staging or Git base SHA.
 
@@ -119,7 +118,7 @@ MS-019B receipt current image identity kaydeder. Previous production pointer com
 
 Future full receipt verifier should prove identity, authorization hash, preflight, capacity, Git commit/image identity, backup/restore, migration status, internal health, public HTTPS acceptance, worker/scheduler, stability, pointers and safety flags.
 
-MS-018C external receipt intentionally records only the operator-confirmed basic activation evidence. MS-019B operational receipt is tracked by identity in [production-operational-evidence.md](production-operational-evidence.md); it does not make backup/restore or publication evidence passed. The copyable collector command shape is kept in that canonical document so this runbook does not duplicate the contract.
+MS-018C external receipt intentionally records only the operator-confirmed basic activation evidence. MS-019B operational receipt is tracked by identity in [production-operational-evidence.md](production-operational-evidence.md), and MS-019C backup/restore receipt is tracked in [backup-and-restore.md](backup-and-restore.md). Publication evidence remains not performed. The copyable collector command shape is kept in that canonical document so this runbook does not duplicate the contract.
 
 ## Forbidden operations
 

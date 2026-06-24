@@ -14,6 +14,7 @@ Bu belge production redeploy, server command log'u, exact production Git/image i
 - Evidence source: `operator-confirmed transcript`
 - Basic activation acceptance: `PASSED`
 - Extended operational evidence: `PARTIAL_ACCEPTED`
+- Production backup/restore evidence: `PRODUCTION_BACKUP_RESTORE_VERIFIED`
 
 `Production Aktif` yalniz `main-service` backend application icindir. Bagimsiz Agent application, bagimsiz Tenant applications, frontend/admin panel veya `rss-panel.habersoft.com` icin readiness iddiasi degildir.
 
@@ -44,7 +45,7 @@ The receipt contains no production `.env` values, tokens, Agent keys, credential
 
 ## MS-019B Operational Evidence Receipt
 
-MS-019B-R8 accepted a fresh collector-v2 returned bundle as a partial operational evidence receipt. This does not change the application status and does not claim backup/restore, publication or full operational baseline completion.
+MS-019B-R8 accepted a fresh collector-v2 returned bundle as a partial operational evidence receipt. MS-019B alone does not change the application status and does not claim backup/restore, publication or full operational baseline completion.
 
 - Receipt filename: `production-operational-evidence-receipt.json`
 - Receipt SHA-256: `3a5624a5cab3044a1797d9c8ee78e92828a28233a67f759b8bf6845a7ecc4620`
@@ -69,12 +70,25 @@ Verified safe projections:
 | Health, boundary, redirect and TLS | `PASSED` | Internal/public health, unauthenticated boundary smokes, HTTP-to-HTTPS redirect and TLS metadata passed. |
 | Point-in-time stability snapshot | `PASSED` | API and worker restart counts were `0`, OOMKilled `false`, state `running`; error-burst analysis remains out of scope. |
 
+## MS-019C Backup Restore Receipt
+
+MS-019C accepted the returned production backup-v2 bundle, created a safe returned authority record, verified a disposable off-host PostgreSQL restore on a local Docker engine, and created the combined backup/restore receipt. Raw dump bytes, row data, production env values, private paths, host/user details and raw SQL are not stored in repository docs.
+
+- Returned authority filename: `production-backup-returned-v2-authority.json`
+- Returned authority SHA-256: `f4147ec51fc686aa4c07e3f8c03f79c2bed089f51f191ca7d4db8e7232cc82f8`
+- Returned tree digest: `ec9552e9a26ef5572bf3ddf001c0481ffae6b5d09ef748e797e4eba5debe2001`
+- Production backup SHA-256: `1bc52dfbf43a4bdeed64c072ab6dbaaadcb09207bc6bd4958a4821ed67e871f8`
+- Off-host restore receipt filename: `off-host-restore-receipt-v2.json`
+- Off-host restore receipt SHA-256: `84658697d04a357c9ba311562320b2fed893efcc81e87fc81fc8a8ca41cf9303`
+- Combined receipt filename: `production-backup-restore-receipt.json`
+- Combined receipt SHA-256: `868b13b9cfe44962daa4abbec71310473e1df1d0a49e4bf156a4c3f77ed01735`
+- Backup restore baseline: `PASSED`
+- Handoff-v2 manifest SHA-256: `066fd8354fa8bb1ccc43db4fb177f7f2d54b5e56e4f5665bc591d183aa8e39d8`
+
 ## Not Recorded
 
 The following fields remain not proven by current accepted evidence and must not be treated as passed:
 
-- production backup SHA-256: `NOT_RECORDED`
-- production off-host restore result: `NOT_RECORDED`
 - previous production pointer commit/image: `NOT_RECORDED`
 - edge body-limit verification: `NOT_RECORDED`
 - long-term stability observation: `NOT_RECORDED`

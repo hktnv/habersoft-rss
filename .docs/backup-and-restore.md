@@ -42,19 +42,20 @@ MS-018B operator modelinde backup production sunucusunda operator tarafindan tet
 ## Restore Verification
 
 ```powershell
-npm run production:restore:verify -- --input-dir <flat-returned-backup-dir> --receipt <external-off-host-restore-receipt>
+node scripts/production-backup-restore-evidence.mjs authority:create --capture-dir <flat-returned-backup-dir> --output <external-returned-authority-record>
+npm run production:restore:verify -- --input-dir <flat-returned-backup-dir> --authority <external-returned-authority-record> --receipt <external-off-host-restore-receipt>
 ```
 
-Restore wrapper da landed-main-pinned repository tooling closure'i dogrular ve `--preflight-only` destekler. Core capability komutu `npm run production:restore:verify -- contract:describe` seklindedir. Verifier yalniz local Docker engine endpoint sinifini kabul eder, SSH/remote TCP/production alias context'lerini reddeder. Unique disposable network, volume ve PostgreSQL container kullanir; host port yayinlamaz. Dump'i restore eder, beklenen alti canonical business table'i ve iki Prisma migration kaydini kontrol eder, sonra container/network/volume absence proof yapar. Production database overwrite etmez ve staging'e restore yapmaz.
+Returned authority record exact flat inventory, capture checksums, tree digest, parent MS-019B receipt SHA, backup SHA ve no-secret/no-raw-data flags tasir. Restore wrapper da landed-main-pinned repository tooling closure'i dogrular ve `--preflight-only` destekler. Core capability komutu `npm run production:restore:verify -- contract:describe` seklindedir. Verifier yalniz local Docker engine endpoint sinifini kabul eder, SSH/remote TCP/production alias context'lerini reddeder. Unique disposable network, volume ve PostgreSQL container kullanir; host port yayinlamaz. Dump'i restore eder, beklenen alti canonical business table'i ve iki Prisma migration kaydini kontrol eder, sonra container/network/volume absence proof yapar. Production database overwrite etmez ve staging'e restore yapmaz.
 
-Future combined receipt:
+Combined receipt:
 
 ```powershell
-npm run production:backup-restore:receipt:create -- --capture-dir <flat-returned-backup-dir> --restore-receipt <external-off-host-restore-receipt> --output <external-combined-receipt>
+npm run production:backup-restore:receipt:create -- --capture-dir <flat-returned-backup-dir> --restore-receipt <external-off-host-restore-receipt> --authority <external-returned-authority-record> --handoff <operator-approved-ms-019c-handoff-v2-dir> --output <external-combined-receipt>
 npm run production:backup-restore:receipt:verify -- --receipt <external-combined-receipt> --require-backup-restore-baseline
 ```
 
-Combined receipt parent MS-019B operational receipt SHA-256 `3a5624a5cab3044a1797d9c8ee78e92828a28233a67f759b8bf6845a7ecc4620` degerine baglanir. Historical staging backup SHA-256 production backup SHA yerine kullanilamaz.
+Combined receipt parent MS-019B operational receipt SHA-256 `3a5624a5cab3044a1797d9c8ee78e92828a28233a67f759b8bf6845a7ecc4620`, handoff-v2 manifest SHA, tooling lock SHA, returned authority SHA, off-host restore receipt SHA ve local verifier commit'ine baglanir. Historical staging backup SHA-256 production backup SHA yerine kullanilamaz.
 
 ## Redis Siniri
 
@@ -72,9 +73,14 @@ MS-017B2 local rehearsal tooling'i PostgreSQL backup ve disposable restore verif
 
 ## Production Evidence Status
 
-MS-018C operator-confirmed production activation input'u ve MS-019B partial operational receipt production backup SHA-256 veya production off-host restore verification sonucu tasimaz.
+MS-019C returned backup-v2 intake ve off-host disposable restore verification accepted durumdadir. External artifacts Git'e commit edilmez; docs yalniz safe identity projection tasir.
 
-- Production backup SHA-256: `NOT_RECORDED`
-- Production off-host restore result: `NOT_RECORDED`
+- Production backup SHA-256: `1bc52dfbf43a4bdeed64c072ab6dbaaadcb09207bc6bd4958a4821ed67e871f8`
+- Returned authority SHA-256: `f4147ec51fc686aa4c07e3f8c03f79c2bed089f51f191ca7d4db8e7232cc82f8`
+- Returned tree digest: `ec9552e9a26ef5572bf3ddf001c0481ffae6b5d09ef748e797e4eba5debe2001`
+- Off-host restore receipt SHA-256: `84658697d04a357c9ba311562320b2fed893efcc81e87fc81fc8a8ca41cf9303`
+- Combined backup/restore receipt SHA-256: `868b13b9cfe44962daa4abbec71310473e1df1d0a49e4bf156a4c3f77ed01735`
+- Production off-host restore result: `PASSED`
+- Backup restore baseline: `PASSED`
 
-Bu durum production backup/restore'un failed oldugu anlamina gelmez; yalniz current accepted evidence icinde kanit kaydedilmedigini belirtir. MS-019C hazirlik asamasi yalniz handoff/tooling uretir; gercek production backup, returned flat intake ve off-host restore receipt sonraki resume gorevinde acceptance'a cevrilebilir.
+Bu evidence production backup/restore gate'ini `PRODUCTION_BACKUP_RESTORE_VERIFIED` yapar. Full operational acceptance yine previous production pointer, edge body-limit, long-term stability ve error-burst evidence eksikleri nedeniyle partial kalir.

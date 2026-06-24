@@ -80,7 +80,7 @@ Known residual non-blockers:
 - basic production activation acceptance passed with operator-confirmed internal/public live-ready evidence,
 - extended operational evidence is partial accepted but full baseline is not passed,
 - exact production Git commit, image ID, image revision label, worker health, scheduler inventory, TLS detail and point-in-time restart/OOM snapshot are recorded by MS-019B collector-v2 evidence,
-- previous production pointer, production backup/restore, edge body-limit, long-term stability and error-burst evidence are not recorded,
+- production backup/restore evidence is verified by MS-019C; previous production pointer, edge body-limit, long-term stability and error-burst evidence are not recorded,
 - frontend and `rss-panel.habersoft.com` are planned and not implemented,
 - release identity alignment is verified; package-derived staging image identity is not production identity,
 - MS-017 staging target/preflight, production IdP readiness-only proof, full staging deployment, backup/restore, rollback and roll-forward drills passed on approved staging,

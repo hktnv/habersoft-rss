@@ -60,13 +60,13 @@ Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Reque
 4. API `/health/live` ve `/health/ready` ile izlenir.
 5. Worker `npm run worker:health` ile izlenir.
 
-MS-019B collector-v2 receipt API live/ready, dependency readiness, migration status, worker health ve scheduler evidence'i partial operational receipt kapsaminda kaydetti. Backup/restore, previous pointer, long-term stability, error-burst ve edge body-limit evidence'i hala kayitli degildir.
+MS-019B collector-v2 receipt API live/ready, dependency readiness, migration status, worker health ve scheduler evidence'i partial operational receipt kapsaminda kaydetti. MS-019C production backup/restore receipt backup restore baseline'i `PASSED` olarak kaydetti. Previous pointer, long-term stability, error-burst ve edge body-limit evidence'i hala kayitli degildir.
 
 ## Durum
 
 `main-service` backend application status'u `MVP — Production Aktif`tir.
 
-Operator 2026-06-22 tarihinde internal loopback ve public HTTPS `/health/live` ile `/health/ready` checks icin HTTP `200`, `status=live/ready`, `postgres=up`, `redis=up` ve `tenantAuth=up` evidence sagladi. MS-019B collector-v2 receipt ile extended operational evidence `PARTIAL_ACCEPTED` oldu; full operational baseline previous pointer evidence eksikligi nedeniyle passed degildir.
+Operator 2026-06-22 tarihinde internal loopback ve public HTTPS `/health/live` ile `/health/ready` checks icin HTTP `200`, `status=live/ready`, `postgres=up`, `redis=up` ve `tenantAuth=up` evidence sagladi. MS-019B collector-v2 receipt ile extended operational evidence `PARTIAL_ACCEPTED` oldu; MS-019C ile production backup/restore `PRODUCTION_BACKUP_RESTORE_VERIFIED` durumuna gecti. Full operational baseline previous pointer evidence eksikligi nedeniyle passed degildir.
 
 Registry publish, Git tag ve GitHub Release yapilmamistir. Frontend implementasyonu yoktur ve `rss-panel.habersoft.com` active degildir. Bagimsiz Agent application ve bagimsiz Tenant applications ayri delivery siniridir.
 
