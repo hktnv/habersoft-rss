@@ -1,0 +1,2 @@
+scripts/*.sh text eol=lf
+PRODUCTION.md text eol=lf
