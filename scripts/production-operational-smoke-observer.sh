@@ -4,7 +4,7 @@ set -o pipefail
 
 umask 077
 
-CONTRACT_VERSION="production-stability-observation-v1"
+CONTRACT_VERSION="production-operational-smoke-evidence-v2"
 MILESTONE="MS-019F"
 SERVICE="main-service"
 ENVIRONMENT="production"
@@ -12,13 +12,15 @@ APPLICATION_VERSION="0.1.0-ms-017"
 CANONICAL_REMOTE="https://github.com/hktnv/habersoft-rss"
 SOURCE_COMMIT="__MS019F_SOURCE_COMMIT__"
 
-WINDOW_SECONDS=86400
-PRIMARY_INTERVAL_SECONDS=300
-PRIMARY_SAMPLE_COUNT=289
-WORKER_INTERVAL_SECONDS=1800
-WORKER_SAMPLE_COUNT=49
-ERROR_BUCKET_COUNT=288
-MAX_PRIMARY_LAG_SECONDS=60
+WINDOW_SECONDS=1200
+WINDOW_MINUTES=20
+PRIMARY_INTERVAL_SECONDS=60
+PRIMARY_SAMPLE_COUNT=21
+WORKER_INTERVAL_SECONDS=300
+WORKER_SAMPLE_COUNT=5
+ERROR_BUCKET_SECONDS=60
+ERROR_BUCKET_COUNT=20
+MAX_SAMPLE_LAG_SECONDS=15
 PUBLIC_HOST="rss.habersoft.com"
 INTERNAL_BASE_URL="http://127.0.0.1:3200"
 PUBLIC_BASE_URL="https://rss.habersoft.com"
@@ -26,7 +28,7 @@ CLASSIFIER_MODE="STABLE_SEVERITY_PREFIX"
 CLASSIFIER_VERSION="production-log-severity-prefix-v1"
 
 usage() {
-  printf '%s\n' "usage: observe-production-stability.sh --repository-dir <production-repository-root> --compose-file <production-compose> --shared-env <production-shared-env> --runtime-image-env <runtime-image-env> --confirm-window-hours 24 --confirm-public-host rss.habersoft.com --output-dir <new-empty-output-dir>" >&2
+  printf '%s\n' "usage: observe-production-operational-smoke.sh --repository-dir <production-repository-root> --compose-file <production-compose> --shared-env <production-shared-env> --runtime-image-env <runtime-image-env> --confirm-window-minutes 20 --confirm-public-host rss.habersoft.com --output-dir <new-empty-output-dir>" >&2
   exit 2
 }
 
@@ -40,7 +42,7 @@ COMPOSE_FILE=
 SHARED_ENV_FILE=
 RUNTIME_IMAGE_ENV_FILE=
 OUTPUT_DIR=
-CONFIRM_WINDOW_HOURS=
+CONFIRM_WINDOW_MINUTES=
 CONFIRM_PUBLIC_HOST=
 
 while [ "$#" -gt 0 ]; do
@@ -65,9 +67,9 @@ while [ "$#" -gt 0 ]; do
       RUNTIME_IMAGE_ENV_FILE=$2
       shift 2
       ;;
-    --confirm-window-hours)
+    --confirm-window-minutes)
       [ "$#" -ge 2 ] || usage
-      CONFIRM_WINDOW_HOURS=$2
+      CONFIRM_WINDOW_MINUTES=$2
       shift 2
       ;;
     --confirm-public-host)
@@ -91,7 +93,7 @@ done
 [ -n "$SHARED_ENV_FILE" ] || usage
 [ -n "$RUNTIME_IMAGE_ENV_FILE" ] || usage
 [ -n "$OUTPUT_DIR" ] || usage
-[ "$CONFIRM_WINDOW_HOURS" = "24" ] || fail "confirm-window-hours must be 24"
+[ "$CONFIRM_WINDOW_MINUTES" = "20" ] || fail "confirm-window-minutes must be 20"
 [ "$CONFIRM_PUBLIC_HOST" = "$PUBLIC_HOST" ] || fail "confirm-public-host must be rss.habersoft.com"
 
 case "$OUTPUT_DIR" in
@@ -141,7 +143,7 @@ fi
 chmod 700 "$OUTPUT_DIR"
 
 PARENT_DIR=$(dirname "$OUTPUT_DIR")
-WORK_DIR="$PARENT_DIR/.production-stability-observer.$$"
+WORK_DIR="$PARENT_DIR/.production-operational-smoke-observer.$$"
 if [ -e "$WORK_DIR" ]; then
   fail "temporary work directory already exists"
 fi
@@ -150,7 +152,7 @@ chmod 700 "$WORK_DIR"
 printf '%s\n' "IN_PROGRESS" > "$WORK_DIR/IN_PROGRESS"
 
 METADATA_FILE="$WORK_DIR/collector-metadata.txt"
-SAMPLES_FILE="$WORK_DIR/stability-samples.tsv"
+SAMPLES_FILE="$WORK_DIR/operational-smoke-samples.tsv"
 BUCKETS_FILE="$WORK_DIR/error-signal-buckets.tsv"
 CHECKSUM_FILE="$WORK_DIR/checksums.sha256"
 
@@ -374,7 +376,7 @@ log_bucket() {
 
 write_test_bundle() {
   variant=${MS019F_TEST_VARIANT:-success}
-  start_epoch=1782864000
+  start_epoch=1782900000
   start_utc=$(utc_from_epoch "$start_epoch")
   end_epoch=$((start_epoch + WINDOW_SECONDS))
   end_utc=$(utc_from_epoch "$end_epoch")
@@ -382,7 +384,7 @@ write_test_bundle() {
   worker_token=$(hash_text "worker-test-container")
   printf 'sample_index\ttarget_elapsed_seconds\tcollected_utc\tscheduling_lag_seconds\tinternal_live_result\tinternal_ready_result\tpublic_live_result\tpublic_ready_result\tdependencies_result\ttls_result\tapi_container_result\tworker_container_result\tcompose_context_result\tworker_health_due\tworker_health_result\tsafe_result\tblocker\n' > "$SAMPLES_FILE"
   printf 'bucket_index\tservice\tstart_utc\tend_utc\tclassifier_mode\twarning_count\terror_count\tfatal_count\tcollection_exit_class\tcoverage_complete\tsafe_result\n' > "$BUCKETS_FILE"
-  for i in $(seq 0 288); do
+  for i in $(seq 0 20); do
     lag=0
     internal_live=PASSED
     internal_ready=PASSED
@@ -396,7 +398,7 @@ write_test_bundle() {
     worker_result=NOT_DUE
     safe=PASSED
     blocker=NONE
-    if [ $((i % 6)) -eq 0 ]; then
+    if [ $((i % 5)) -eq 0 ]; then
       worker_due=true
       worker_result=PASSED
     fi
@@ -411,7 +413,7 @@ write_test_bundle() {
       blocker=BLOCKED_CONTAINER_RESTART
     fi
     if [ "$variant" = "lag" ] && [ "$i" -eq 3 ]; then
-      lag=61
+      lag=16
       safe=FAILED
       blocker=BLOCKED_SCHEDULING_LAG
     fi
@@ -420,9 +422,9 @@ write_test_bundle() {
       "$internal_live" "$internal_ready" "$public_live" "$public_ready" "$dependencies" "$tls" \
       "$api_container" "$worker_container" PASSED "$worker_due" "$worker_result" "$safe" "$blocker" >> "$SAMPLES_FILE"
   done
-  for i in $(seq 0 287); do
-    bucket_start=$(utc_from_epoch $((start_epoch + i * PRIMARY_INTERVAL_SECONDS)))
-    bucket_end=$(utc_from_epoch $((start_epoch + (i + 1) * PRIMARY_INTERVAL_SECONDS)))
+  for i in $(seq 0 19); do
+    bucket_start=$(utc_from_epoch $((start_epoch + i * ERROR_BUCKET_SECONDS)))
+    bucket_end=$(utc_from_epoch $((start_epoch + (i + 1) * ERROR_BUCKET_SECONDS)))
     for service_name in api worker; do
       warn=0
       err=0
@@ -461,13 +463,18 @@ write_test_bundle() {
   write_metadata "started_at_utc" "$start_utc"
   write_metadata "ended_at_utc" "$end_utc"
   write_metadata "elapsed_seconds" "$WINDOW_SECONDS"
+  write_metadata "window_class" "BOUNDED_20M_OPERATIONAL_SMOKE"
   write_metadata "window_seconds" "$WINDOW_SECONDS"
+  write_metadata "window_minutes" "$WINDOW_MINUTES"
   write_metadata "primary_interval_seconds" "$PRIMARY_INTERVAL_SECONDS"
   write_metadata "primary_sample_count" "$PRIMARY_SAMPLE_COUNT"
   write_metadata "worker_interval_seconds" "$WORKER_INTERVAL_SECONDS"
   write_metadata "worker_sample_count" "$WORKER_SAMPLE_COUNT"
+  write_metadata "error_bucket_seconds" "$ERROR_BUCKET_SECONDS"
   write_metadata "error_bucket_count" "$ERROR_BUCKET_COUNT"
-  write_metadata "max_primary_lag_seconds" "$MAX_PRIMARY_LAG_SECONDS"
+  write_metadata "max_sample_lag_seconds" "$MAX_SAMPLE_LAG_SECONDS"
+  write_metadata "long_term_stability_claim" "false"
+  write_metadata "long_term_stability_status" "NOT_APPLICABLE_BY_GOVERNANCE_DECISION"
   write_metadata "compose_context_class" "TEST_FIXTURE"
   write_metadata "api_initial_identity_token" "$api_token"
   write_metadata "worker_initial_identity_token" "$worker_token"
@@ -525,7 +532,7 @@ else
   printf 'sample_index\ttarget_elapsed_seconds\tcollected_utc\tscheduling_lag_seconds\tinternal_live_result\tinternal_ready_result\tpublic_live_result\tpublic_ready_result\tdependencies_result\ttls_result\tapi_container_result\tworker_container_result\tcompose_context_result\tworker_health_due\tworker_health_result\tsafe_result\tblocker\n' > "$SAMPLES_FILE"
   printf 'bucket_index\tservice\tstart_utc\tend_utc\tclassifier_mode\twarning_count\terror_count\tfatal_count\tcollection_exit_class\tcoverage_complete\tsafe_result\n' > "$BUCKETS_FILE"
   previous_sample_utc=
-  for i in $(seq 0 288); do
+  for i in $(seq 0 20); do
     target=$((start_mono + i * PRIMARY_INTERVAL_SECONDS))
     now_mono=$(monotonic_seconds)
     if [ "$now_mono" -lt "$target" ]; then
@@ -561,13 +568,13 @@ else
     worker_container_result=$(container_state "$worker_cid" "$worker_initial_token" "$worker_initial_image" "$worker_initial_restart" "$worker_initial_started" WORKER)
     worker_due=false
     worker_result=NOT_DUE
-    if [ $((i % 6)) -eq 0 ]; then
+    if [ $((i % 5)) -eq 0 ]; then
       worker_due=true
       worker_result=$(worker_health_sample)
     fi
     safe_result=PASSED
     blocker=NONE
-    if [ "$lag" -gt "$MAX_PRIMARY_LAG_SECONDS" ]; then
+    if [ "$lag" -gt "$MAX_SAMPLE_LAG_SECONDS" ]; then
       safe_result=FAILED
       blocker=BLOCKED_SCHEDULING_LAG
     elif [ "$internal_live_result" != "PASSED" ] || [ "$internal_ready_result" != "PASSED" ]; then
@@ -619,13 +626,18 @@ else
   write_metadata "started_at_utc" "$start_utc"
   write_metadata "ended_at_utc" "$end_utc"
   write_metadata "elapsed_seconds" "$elapsed"
+  write_metadata "window_class" "BOUNDED_20M_OPERATIONAL_SMOKE"
   write_metadata "window_seconds" "$WINDOW_SECONDS"
+  write_metadata "window_minutes" "$WINDOW_MINUTES"
   write_metadata "primary_interval_seconds" "$PRIMARY_INTERVAL_SECONDS"
   write_metadata "primary_sample_count" "$PRIMARY_SAMPLE_COUNT"
   write_metadata "worker_interval_seconds" "$WORKER_INTERVAL_SECONDS"
   write_metadata "worker_sample_count" "$WORKER_SAMPLE_COUNT"
+  write_metadata "error_bucket_seconds" "$ERROR_BUCKET_SECONDS"
   write_metadata "error_bucket_count" "$ERROR_BUCKET_COUNT"
-  write_metadata "max_primary_lag_seconds" "$MAX_PRIMARY_LAG_SECONDS"
+  write_metadata "max_sample_lag_seconds" "$MAX_SAMPLE_LAG_SECONDS"
+  write_metadata "long_term_stability_claim" "false"
+  write_metadata "long_term_stability_status" "NOT_APPLICABLE_BY_GOVERNANCE_DECISION"
   write_metadata "compose_context_class" "EXPLICIT_PRODUCTION_COMPOSE_TWO_ENV_FILES"
   write_metadata "api_initial_identity_token" "$api_initial_token"
   write_metadata "worker_initial_identity_token" "$worker_initial_token"
@@ -652,20 +664,20 @@ else
 fi
 
 rm -f "$WORK_DIR/IN_PROGRESS"
-for file in collector-metadata.txt stability-samples.tsv error-signal-buckets.tsv; do
+for file in collector-metadata.txt operational-smoke-samples.tsv error-signal-buckets.tsv; do
   chmod 600 "$WORK_DIR/$file"
 done
 {
   printf '%s  collector-metadata.txt\n' "$(hash_file "$METADATA_FILE")"
-  printf '%s  stability-samples.tsv\n' "$(hash_file "$SAMPLES_FILE")"
+  printf '%s  operational-smoke-samples.tsv\n' "$(hash_file "$SAMPLES_FILE")"
   printf '%s  error-signal-buckets.tsv\n' "$(hash_file "$BUCKETS_FILE")"
 } > "$CHECKSUM_FILE"
 chmod 600 "$CHECKSUM_FILE"
 
 mv "$METADATA_FILE" "$OUTPUT_DIR/collector-metadata.txt"
-mv "$SAMPLES_FILE" "$OUTPUT_DIR/stability-samples.tsv"
+mv "$SAMPLES_FILE" "$OUTPUT_DIR/operational-smoke-samples.tsv"
 mv "$BUCKETS_FILE" "$OUTPUT_DIR/error-signal-buckets.tsv"
 mv "$CHECKSUM_FILE" "$OUTPUT_DIR/checksums.sha256"
 rmdir "$WORK_DIR"
 trap - EXIT
-printf '%s\n' "observer: completed bounded stability bundle"
+printf '%s\n' "observer: completed bounded operational smoke bundle"

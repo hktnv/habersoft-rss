@@ -60,13 +60,13 @@ Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Reque
 4. API `/health/live` ve `/health/ready` ile izlenir.
 5. Worker `npm run worker:health` ile izlenir.
 
-MS-019B collector-v2 receipt API live/ready, dependency readiness, migration status, worker health ve scheduler evidence'i partial operational receipt kapsaminda kaydetti. MS-019C production backup/restore receipt backup restore baseline'i `PASSED` olarak kaydetti. MS-019E-R2 edge body-limit compatibility receipt'i `PASSED` durumundadir. MS-019F bounded stability/error-signal handoff tooling hazirdir; 24-hour returned production evidence henuz kayitli degildir. Previous pointer, bounded stability ve error-signal evidence'i hala kayitli degildir.
+MS-019B collector-v2 receipt API live/ready, dependency readiness, migration status, worker health ve scheduler evidence'i partial operational receipt kapsaminda kaydetti. MS-019C production backup/restore receipt backup restore baseline'i `PASSED` olarak kaydetti. MS-019E-R2 edge body-limit compatibility receipt'i `PASSED` durumundadir. MS-019F-R1 bounded 20-minute operational-smoke/error-signal handoff-v2 tooling hazirdir; returned production evidence henuz `PENDING_OPERATOR_RUN` durumundadir. Previous pointer hala `NOT_RECORDED`; long-term stability evidence governance karariyla `NOT_APPLICABLE_BY_GOVERNANCE_DECISION` durumundadir.
 
 ## Durum
 
 `main-service` backend application status'u `MVP — Production Aktif`tir.
 
-Operator 2026-06-22 tarihinde internal loopback ve public HTTPS `/health/live` ile `/health/ready` checks icin HTTP `200`, `status=live/ready`, `postgres=up`, `redis=up` ve `tenantAuth=up` evidence sagladi. MS-019B collector-v2 receipt ile extended operational evidence `PARTIAL_ACCEPTED` oldu; MS-019C ile production backup/restore `PRODUCTION_BACKUP_RESTORE_VERIFIED` durumuna gecti. MS-019F observer/verifier handoff hazirlandi fakat production 24-hour run henuz yapilmadi. Full operational baseline previous pointer, bounded stability ve error-signal evidence eksikligi nedeniyle passed degildir.
+Operator 2026-06-22 tarihinde internal loopback ve public HTTPS `/health/live` ile `/health/ready` checks icin HTTP `200`, `status=live/ready`, `postgres=up`, `redis=up` ve `tenantAuth=up` evidence sagladi. MS-019B collector-v2 receipt ile extended operational evidence `PARTIAL_ACCEPTED` oldu; MS-019C ile production backup/restore `PRODUCTION_BACKUP_RESTORE_VERIFIED` durumuna gecti. MS-019F-R1 observer/verifier handoff-v2 hazirlandi fakat 20-minute operational-smoke returned bundle henuz operator tarafindan uretilmedi. Full operational baseline previous pointer ve bounded operational-smoke/error-signal evidence eksikligi nedeniyle passed degildir; long-term stability bu baseline icin artik requirement degildir.
 
 Registry publish, Git tag ve GitHub Release yapilmamistir. Frontend implementasyonu yoktur ve `rss-panel.habersoft.com` active degildir. Bagimsiz Agent application ve bagimsiz Tenant applications ayri delivery siniridir.
 

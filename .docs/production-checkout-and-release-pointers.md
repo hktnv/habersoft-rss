@@ -9,8 +9,7 @@ MS-019D hazirlik/handoff sonucu `OPERATOR_ACTION_REQUIRED` idi. MS-019D-R1 retur
 Out of scope:
 
 - edge body-limit evidence,
-- long-term stability evidence,
-- error-burst evidence,
+- MS-019F-R1 bounded operational-smoke/error-signal evidence,
 - deployment, migration, backup, restore veya release publication.
 
 ## Current Evidence Boundary
@@ -257,8 +256,8 @@ MS-019D tooling must keep these flags false:
 - migration execution,
 - backup/restore execution,
 - edge body-limit probing,
-- long-term stability probing,
-- error-burst/log analysis,
+- operational-smoke probing,
+- error-signal/log analysis,
 - Git tag,
 - GitHub Release,
 - artifact publication.
@@ -275,8 +274,8 @@ current pointer fresh evidence: PASSED
 previous pointer: NOT_RECORDED until returned strict pointer evidence exists
 rollback baseline for next deployment: ESTABLISHED_FROM_CURRENT_POINTER
 edge body-limit: PASSED by MS-019E-R2 receipt
-long-term stability: NOT_RECORDED
-error-burst: NOT_RECORDED
+bounded operational-smoke/error-signal: PENDING_OPERATOR_RUN by MS-019F-R1
+long-term stability: NOT_APPLICABLE_BY_GOVERNANCE_DECISION
 ```
 
-This partial acceptance updates `.docs/production-acceptance.md` with only the safe checkout/current pointer projections. Full operational acceptance remains partial because historical previous pointer, long-term stability and error-burst evidence are still absent.
+This partial acceptance updates `.docs/production-acceptance.md` with only the safe checkout/current pointer projections. Full operational acceptance remains partial because historical previous pointer is still absent and bounded operational-smoke/error-signal evidence is still pending operator run.

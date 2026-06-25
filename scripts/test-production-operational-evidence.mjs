@@ -653,7 +653,7 @@ function createCompleteReceipt(overrides = {}) {
       production_backup_sha256: "NOT_RECORDED",
       production_off_host_restore: "NOT_RECORDED",
       edge_body_limit: "NOT_RECORDED",
-      long_term_stability: "NOT_RECORDED",
+      long_term_stability: "NOT_APPLICABLE_BY_GOVERNANCE_DECISION",
       artifact_publication: "NOT_PERFORMED",
       registry_publication: "NOT_PERFORMED",
       git_tag: "NOT_CREATED",

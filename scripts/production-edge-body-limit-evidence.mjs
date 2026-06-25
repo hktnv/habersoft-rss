@@ -618,8 +618,8 @@ function createReceipt(options) {
     vendor_configured_exact_limit: 'NOT_RECORDED',
     explicitly_not_evidence_for: [
       'previous_production_pointer',
-      'long_term_stability',
-      'error_burst',
+      'operational_smoke_error_signal',
+      'long_term_stability_not_applicable_by_governance',
       'agent_application_readiness',
       'tenant_application_readiness',
     ],

@@ -1,27 +1,45 @@
-# Production Stability And Error Signals
+# Production Operational Smoke And Error Signals
 
 ## Sorumluluk
 
-Bu belge MS-019F bounded 24-hour production stability ve machine-safe error-signal evidence handoff contract'inin canonical repository-local sahibidir.
+Bu belge MS-019F-R1 bounded 20-minute operational-smoke ve same-window machine-safe error-signal handoff-v2 contract'inin canonical repository-local sahibidir.
 
-MS-019F hazirligi production evidence accepted anlamina gelmez. Handoff bundle ve verifier repository'de hazirlanir; operator daha sonra production host uzerinde read-only observer'i calistirir ve returned bundle'i local intake icin geri verir. Current production activation status ve accepted receipt identity [production-acceptance.md](production-acceptance.md) dosyasindadir; bu belge o status'u genisletmez.
+MS-019F v1 24-hour handoff governance tarafindan emekliye ayrildi ve historical external artifact olarak yalniz su class ile korunur:
+
+```text
+HISTORICAL_SUPERSEDED_GOVERNANCE_REJECTED_NEVER_RUN
+```
+
+Fresh operator run icin v1 kullanilmaz. Handoff generation production evidence degildir; Codex production'a baglanmaz, observer calistirmaz ve returned bundle kabul etmez. Current production activation status ve accepted receipt identity [production-acceptance.md](production-acceptance.md) dosyasindadir.
+
+## Governance Boundary
+
+Accepted MS-019F-R1 scope yalniz bounded 20-minute operational smoke ve ayni pencere error/fatal aggregate'idir.
+
+- window class: `BOUNDED_20M_OPERATIONAL_SMOKE`
+- long-term stability claim: `false`
+- long-term stability status: `NOT_APPLICABLE_BY_GOVERNANCE_DECISION`
+- no uptime SLO, reliability claim, alerting proof, metric retention proof or historical zero-error claim
+
+Bu belge yeni long-term stability residual'i acmaz.
 
 ## Observation Contract
 
 Observation contract closed degerlerle pinlenir:
 
-- window: `24h` / `86400` seconds
-- primary interval: `300` seconds
-- primary samples: `289`, indices `0..288`
-- worker-health interval: `1800` seconds
-- worker-health samples: `49`, indices `0..48`
-- error buckets: `288`, intervals `[sample_i, sample_i+1)`
-- max primary scheduling lag: `60` seconds
+- window: `20` minutes / `1200` seconds
+- primary interval: `60` seconds
+- primary samples: `21`, indices `0..20`
+- worker-health interval: `300` seconds
+- worker-health samples: `5`, indices `0..4`
+- error bucket seconds: `60`
+- error buckets: `20`, indices `0..19`
+- max scheduling lag: `15` seconds
 - concurrency: `1`
 - retry: `false`
 - production mutation: `false`
 
-Strict acceptance ancak final elapsed `>=86400`, all sample indices present, all bucket intervals present, max lag `<=60`, all health/worker/container gates passed ve error/fatal signal totals zero ise mumkundur.
+Strict acceptance ancak final elapsed `>=1200`, all sample indices present, all bucket intervals present, max lag `<=15`, all health/worker/container gates passed ve error/fatal signal totals zero ise mumkundur.
 
 ## Health And Worker Sampling
 
@@ -51,13 +69,9 @@ Expected worker contract:
 
 `docker compose run` bu evidence class'inda yasaktir.
 
-## Container Stability
+## Container And Error Signal
 
 Observer API ve worker container'lari icin safe identity token, image ID, restart count, `OOMKilled` ve `StartedAt` degerlerini pinler. Container replacement, non-running state, restart count/started-at change, OOMKilled true veya image ID change strict receipt'i bloke eder.
-
-Full Docker inspect JSON, container env projection veya raw host-private data retained edilmez.
-
-## Machine-Safe Error Signal
 
 MS-019F broad log grep yapmaz. Classifier mode:
 
@@ -75,45 +89,38 @@ Classifier only source-owned, machine-safe severity prefixesini sayar:
 
 Arbitrary messages containing the word `error` counted edilmez. Raw logs, line hashes, samples veya snippets output'a yazilmaz. Docker logs stream'i direct classifier'a pipe edilir ve sadece count bucket'lari retained edilir.
 
-Supported Docker log driver classes:
-
-- `DOCKER_JSON_FILE`
-- `DOCKER_LOCAL`
-
-Unsupported log collection, unsupported driver, incomplete coverage, classifier mismatch, error count `>0` veya fatal count `>0` strict receipt'i fail-closed bloke eder.
-
 ## Handoff And Verifier
 
 Repository-local tooling:
 
 ```powershell
-npm run production:stability:source:verify
-npm run production:stability:handoff -- --output-dir <external-handoff-dir>
-npm run production:stability:handoff:verify -- --handoff-dir <external-handoff-dir>
-npm run production:stability:handoff:freeze -- --handoff-dir <external-handoff-dir> --freeze-file <external-freeze-file> --fixture-result PASSED
-npm run test:production-stability-evidence
+npm run production:operational-smoke:source:verify
+npm run production:operational-smoke:handoff -- --output-dir <external-handoff-dir>
+npm run production:operational-smoke:handoff:verify -- --handoff-dir <external-handoff-dir>
+npm run production:operational-smoke:handoff:freeze -- --handoff-dir <external-handoff-dir> --freeze-file <external-freeze-file> --fixture-result PASSED
+npm run test:production-operational-smoke-evidence
 ```
 
-Generated handoff-v1 inventory:
+Generated handoff-v2 inventory:
 
 ```text
 README.md
-observe-production-stability.sh
-stability-observation-contract.json
+observe-production-operational-smoke.sh
+operational-smoke-contract.json
 manifest.json
 checksums.sha256
 ```
 
-Freeze binds the final landed source commit, manifest SHA-256, observer SHA-256, contract SHA-256, window constants, classifier mode/version, LF/bash/static-safety verification and generated fixture result. Freeze does not claim production contact or production evidence collection.
+Freeze binds the final landed source commit, manifest SHA-256, observer SHA-256, contract SHA-256, window constants, governance boundary, classifier mode/version, LF/bash/static-safety verification and generated fixture result. Freeze does not claim production contact or production evidence collection.
 
 ## Operator Command
 
 Operator verifies the bundle:
 
 ```bash
-cd <approved-ms-019f-handoff-v1-dir>
+cd <approved-ms-019f-handoff-v2-dir>
 sha256sum -c checksums.sha256
-bash -n observe-production-stability.sh
+bash -n observe-production-operational-smoke.sh
 ```
 
 Operator runs the observer from production host:
@@ -121,12 +128,12 @@ Operator runs the observer from production host:
 ```bash
 cd /opt/habersoft-rss
 
-<approved-ms-019f-handoff-v1-dir>/observe-production-stability.sh \
+<approved-ms-019f-handoff-v2-dir>/observe-production-operational-smoke.sh \
   --repository-dir /opt/habersoft-rss \
   --compose-file deploy/production/compose.yaml \
   --shared-env .env.production \
   --runtime-image-env deploy/runtime-image.env \
-  --confirm-window-hours 24 \
+  --confirm-window-minutes 20 \
   --confirm-public-host rss.habersoft.com \
   --output-dir <new-empty-output-dir>
 ```
@@ -140,7 +147,7 @@ Returned bundle must be flat and exactly:
 ```text
 checksums.sha256
 collector-metadata.txt
-stability-samples.tsv
+operational-smoke-samples.tsv
 error-signal-buckets.tsv
 ```
 
@@ -149,17 +156,17 @@ Unknown files, symlinks, checksum mismatch, CRLF, secret-shaped content, raw log
 Receipt creation and strict verification are local-only:
 
 ```powershell
-npm run production:stability:receipt:create -- --handoff-dir <external-handoff-dir> --freeze-file <external-freeze-file> --evidence-dir <returned-evidence-dir> --receipt-file <external-receipt-file>
-npm run production:stability:receipt:verify -- --receipt-file <external-receipt-file> --require-ms019f-baseline
+npm run production:operational-smoke:receipt:create -- --handoff-dir <external-handoff-dir> --freeze-file <external-freeze-file> --evidence-dir <returned-evidence-dir> --receipt-file <external-receipt-file>
+npm run production:operational-smoke:receipt:verify -- --receipt-file <external-receipt-file> --require-bounded-operational-smoke --require-bounded-error-signal --require-ms019f-v2-baseline
 ```
 
 ## Status Boundary
 
-MS-019F prepared tooling closes the handoff/verifier gap only. Until a real returned bundle is collected and strictly verified:
+MS-019F-R1 prepared tooling closes the handoff/verifier gap only. Until a real returned bundle is collected and strictly verified:
 
-- bounded 24-hour stability evidence: `NOT_RECORDED`
-- bounded error-signal evidence: `NOT_RECORDED`
-- long-term uptime/SLO evidence: `NOT_RECORDED`
+- bounded operational-smoke evidence: `PENDING_OPERATOR_RUN`
+- bounded error-signal evidence: `PENDING_OPERATOR_RUN`
+- long-term stability evidence: `NOT_APPLICABLE_BY_GOVERNANCE_DECISION`
 - historical previous production pointer: unchanged, `NOT_RECORDED`
 - accepted production status: unchanged, `MVP - Production Aktif`
 

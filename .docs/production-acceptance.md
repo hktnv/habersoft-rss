@@ -17,6 +17,8 @@ Bu belge production redeploy, server command log'u, exact production Git/image i
 - Production backup/restore evidence: `PRODUCTION_BACKUP_RESTORE_VERIFIED`
 - Production checkout/current pointer evidence: `PARTIAL_ACCEPTED`
 - Production edge body-limit evidence: `PASSED`
+- Production operational-smoke/error-signal evidence: `PENDING_OPERATOR_RUN`
+- Long-term stability evidence: `NOT_APPLICABLE_BY_GOVERNANCE_DECISION`
 
 `Production Aktif` yalniz `main-service` backend application icindir. Bagimsiz Agent application, bagimsiz Tenant applications, frontend/admin panel veya `rss-panel.habersoft.com` icin readiness iddiasi degildir.
 
@@ -70,7 +72,7 @@ Verified safe projections:
 | Migration status | `PASSED` | Expected migrations recorded; no pending/failed migration. |
 | Worker health and scheduler | `PASSED` | Worker health and scheduler evidence were direct observed. |
 | Health, boundary, redirect and TLS | `PASSED` | Internal/public health, unauthenticated boundary smokes, HTTP-to-HTTPS redirect and TLS metadata passed. |
-| Point-in-time stability snapshot | `PASSED` | API and worker restart counts were `0`, OOMKilled `false`, state `running`; error-burst analysis remains out of scope. |
+| Point-in-time restart/OOM snapshot | `PASSED` | API and worker restart counts were `0`, OOMKilled `false`, state `running`; bounded same-window error-signal analysis is owned by MS-019F-R1. |
 
 ## MS-019C Backup Restore Receipt
 
@@ -142,17 +144,18 @@ Verified safe projections:
 | Public TLS | `PASSED` | TLS verification passed for public exact and upper-control probes. |
 | Safety flags | `PASSED` | No Agent key, JWT, cookie, retry, mutation, payload retention, response retention or database write. |
 
-Exact configured edge/vendor body-limit bytes remain `NOT_RECORDED`. MS-019E does not prove authenticated Agent ingestion, unlimited body acceptance, performance, capacity, stability or error-burst absence.
+Exact configured edge/vendor body-limit bytes remain `NOT_RECORDED`. MS-019E does not prove authenticated Agent ingestion, unlimited body acceptance, performance, capacity, operational-smoke result or error-signal absence.
 
 ## Not Recorded
 
 The following fields remain not proven by current accepted evidence and must not be treated as passed:
 
 - previous production pointer commit/image: `NOT_RECORDED`
-- long-term stability observation: `NOT_RECORDED`
-- error-burst analysis: `NOT_RECORDED`
+- bounded 20-minute operational smoke: `PENDING_OPERATOR_RUN`
+- bounded same-window error/fatal signal aggregate: `PENDING_OPERATOR_RUN`
+- long-term stability observation: `NOT_APPLICABLE_BY_GOVERNANCE_DECISION`
 
-These gaps are not failures. They are the remaining extended operational evidence scope. The MS-018C external receipt filename and SHA-256 remain unchanged.
+These gaps are not failures. They are the remaining extended operational evidence scope after the governance decision retired long-term stability as a requirement. The MS-018C external receipt filename and SHA-256 remain unchanged.
 
 ## Delivery And Publication Boundary
 

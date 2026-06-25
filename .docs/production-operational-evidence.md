@@ -133,7 +133,7 @@ Restart/OOM fields are point-in-time Docker state snapshots only:
 - API restart count, OOMKilled, state and start time
 - worker restart count, OOMKilled, state and start time
 
-These fields do not prove long-term stability, absence of error bursts, uptime SLO, alerting, metric retention or log pipeline. `error_burst` remains `NOT_RECORDED` in this contract slice.
+These fields do not prove bounded operational-smoke success, same-window error/fatal aggregate absence, uptime SLO, alerting, metric retention or log pipeline. The bounded MS-019F-R1 smoke/error-signal contract is owned separately.
 
 ## Handoff And Receipt Flow
 
@@ -204,14 +204,14 @@ Canonical public values allowed in this evidence contract are the canonical repo
 
 The following remain outside the accepted MS-019B-R8 receipt:
 
-- long-running stability observation,
-- raw log/error-burst analysis,
+- bounded operational-smoke observation,
+- raw log/error-signal analysis,
 - dashboard, metrics backend or alerting,
 - registry publication,
 - Git tag,
 - GitHub Release.
 
-These fields stay `NOT_RECORDED` or `NOT_PERFORMED` until a later bounded milestone records evidence.
+Bounded operational-smoke and error-signal fields stay `PENDING_OPERATOR_RUN` until returned evidence is collected and strictly verified. Long-term stability evidence is `NOT_APPLICABLE_BY_GOVERNANCE_DECISION` and is not a future residual.
 
 MS-019C owns the production PostgreSQL backup and off-host disposable restore evidence contract. MS-019C returned backup-v2 intake is now accepted as `PRODUCTION_BACKUP_RESTORE_VERIFIED` with combined receipt SHA-256 `868b13b9cfe44962daa4abbec71310473e1df1d0a49e4bf156a4c3f77ed01735`. Raw dump files, capture metadata and restore receipts are external sensitive artifacts and are never part of the MS-019B operational evidence bundle. MS-019B receipt SHA-256 remains the parent identity for the combined MS-019C receipt.
 
@@ -219,7 +219,7 @@ MS-019D-R1 owns the returned checkout hygiene and release-pointer evidence intak
 
 MS-019E-R2 owns the accepted edge body-limit evidence in [production-edge-body-limit.md](production-edge-body-limit.md). The accepted receipt `production-edge-body-limit-receipt-v2.json` has SHA-256 `fabad4a60f1f284379e1cd903b582b53bfd1fcbf93af32e79a94a1efa6377244` and proves that public HTTPS accepts the canonical `5242880` byte application body limit. The exact vendor configured body-limit value remains `NOT_RECORDED`; this does not change the MS-019B receipt result or convert full operational baseline completion into `PASSED`.
 
-MS-019F owns the prepared bounded 24-hour stability and machine-safe error-signal handoff in [production-stability-and-error-signals.md](production-stability-and-error-signals.md). Handoff generation and local accelerated fixtures are not production evidence. Until an operator returned bundle is collected and strictly verified, bounded stability and error-signal evidence remain `NOT_RECORDED` and the MS-019B operational baseline remains partial.
+MS-019F-R1 owns the prepared bounded 20-minute operational-smoke and machine-safe error-signal handoff-v2 in [production-operational-smoke-and-error-signals.md](production-operational-smoke-and-error-signals.md). Handoff generation and local accelerated fixtures are not production evidence. Until an operator returned bundle is collected and strictly verified, bounded operational-smoke and error-signal evidence remain `PENDING_OPERATOR_RUN`; long-term stability evidence remains `NOT_APPLICABLE_BY_GOVERNANCE_DECISION`.
 
 ## Historical Handoff Boundary
 

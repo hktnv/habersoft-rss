@@ -7,23 +7,28 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { RELEASE_IDENTITY } from './release-identity.mjs';
 
-const CONTRACT_VERSION = 'production-stability-observation-v1';
-const FREEZE_SCHEMA_VERSION = 'production-stability-handoff-freeze-v1';
-const RECEIPT_SCHEMA_VERSION = 'production-stability-receipt-v1';
+const CONTRACT_VERSION = 'production-operational-smoke-evidence-v2';
+const FREEZE_SCHEMA_VERSION = 'production-operational-smoke-handoff-freeze-v2';
+const RECEIPT_SCHEMA_VERSION = 'production-operational-smoke-receipt-v2';
 const MILESTONE = 'MS-019F';
 const SERVICE_NAME = 'main-service';
 const CANONICAL_REMOTE = 'https://github.com/hktnv/habersoft-rss';
 const CLASSIFIER_MODE = 'STABLE_SEVERITY_PREFIX';
 const CLASSIFIER_VERSION = 'production-log-severity-prefix-v1';
-const WINDOW_SECONDS = 86400;
-const PRIMARY_INTERVAL_SECONDS = 300;
-const PRIMARY_SAMPLE_COUNT = 289;
-const WORKER_INTERVAL_SECONDS = 1800;
-const WORKER_SAMPLE_COUNT = 49;
-const ERROR_BUCKET_COUNT = 288;
+const WINDOW_SECONDS = 1200;
+const WINDOW_MINUTES = 20;
+const PRIMARY_INTERVAL_SECONDS = 60;
+const PRIMARY_SAMPLE_COUNT = 21;
+const WORKER_INTERVAL_SECONDS = 300;
+const WORKER_SAMPLE_COUNT = 5;
+const ERROR_BUCKET_SECONDS = 60;
+const ERROR_BUCKET_COUNT = 20;
 const ERROR_BUCKET_RECORD_COUNT = ERROR_BUCKET_COUNT * 2;
-const MAX_PRIMARY_LAG_SECONDS = 60;
+const MAX_SAMPLE_LAG_SECONDS = 15;
 const PUBLIC_HOST = 'rss.habersoft.com';
+const WINDOW_CLASS = 'BOUNDED_20M_OPERATIONAL_SMOKE';
+const LONG_TERM_STABILITY_STATUS = 'NOT_APPLICABLE_BY_GOVERNANCE_DECISION';
+const HISTORICAL_V1_SUPERSESSION_CLASS = 'HISTORICAL_SUPERSEDED_GOVERNANCE_REJECTED_NEVER_RUN';
 
 const PARENT_RECEIPT_HASHES = Object.freeze({
   ms_018c_basic_acceptance_receipt: '62b0e21bf76f21a5db04698f3d593bf1592d370eef06f50169ab63b2cc3b8163',
@@ -37,9 +42,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
 const WORKSPACE_ROOT = path.dirname(REPO_ROOT);
-const SOURCE_OBSERVER = path.join(REPO_ROOT, 'scripts', 'production-stability-observer.sh');
-const HANDOFF_OBSERVER = 'observe-production-stability.sh';
-const HANDOFF_CONTRACT = 'stability-observation-contract.json';
+const SOURCE_OBSERVER = path.join(REPO_ROOT, 'scripts', 'production-operational-smoke-observer.sh');
+const HANDOFF_OBSERVER = 'observe-production-operational-smoke.sh';
+const HANDOFF_CONTRACT = 'operational-smoke-contract.json';
 const HANDOFF_FILES = Object.freeze([
   'README.md',
   HANDOFF_OBSERVER,
@@ -56,7 +61,7 @@ const HANDOFF_CHECKSUM_FILES = Object.freeze([
 const EVIDENCE_FILES = Object.freeze([
   'checksums.sha256',
   'collector-metadata.txt',
-  'stability-samples.tsv',
+  'operational-smoke-samples.tsv',
   'error-signal-buckets.tsv',
 ]);
 const METADATA_KEYS = Object.freeze([
@@ -72,13 +77,18 @@ const METADATA_KEYS = Object.freeze([
   'started_at_utc',
   'ended_at_utc',
   'elapsed_seconds',
+  'window_class',
   'window_seconds',
+  'window_minutes',
   'primary_interval_seconds',
   'primary_sample_count',
   'worker_interval_seconds',
   'worker_sample_count',
+  'error_bucket_seconds',
   'error_bucket_count',
-  'max_primary_lag_seconds',
+  'max_sample_lag_seconds',
+  'long_term_stability_claim',
+  'long_term_stability_status',
   'compose_context_class',
   'api_initial_identity_token',
   'worker_initial_identity_token',
@@ -103,7 +113,7 @@ const METADATA_KEYS = Object.freeze([
   'backup_performed',
   'restore_performed',
 ]);
-const STABILITY_SAMPLE_COLUMNS = Object.freeze([
+const OPERATIONAL_SMOKE_SAMPLE_COLUMNS = Object.freeze([
   'sample_index',
   'target_elapsed_seconds',
   'collected_utc',
@@ -151,8 +161,9 @@ const RECEIPT_TOP_LEVEL_KEYS = Object.freeze([
   'worker_summary',
   'error_signal_summary',
   'safety_flags',
-  'bounded_24h_stability_result',
-  'bounded_24h_error_signal_result',
+  'bounded_operational_smoke_result',
+  'bounded_error_signal_result',
+  'long_term_stability_result',
   'outcome',
   'claim_boundary',
 ]);
@@ -163,20 +174,23 @@ const RECEIPT_EVIDENCE_BUNDLE_KEYS = Object.freeze([
   'tree_digest',
   'checksums_sha256',
   'collector_metadata_sha256',
-  'stability_samples_sha256',
+  'operational_smoke_samples_sha256',
   'error_signal_buckets_sha256',
 ]);
 const RECEIPT_OBSERVATION_KEYS = Object.freeze([
   'started_at_utc',
   'ended_at_utc',
   'elapsed_seconds',
+  'window_class',
   'window_seconds',
+  'window_minutes',
   'primary_interval_seconds',
   'primary_sample_count',
   'worker_interval_seconds',
   'worker_sample_count',
+  'error_bucket_seconds',
   'error_bucket_count',
-  'max_primary_lag_seconds',
+  'max_sample_lag_seconds',
   'classifier_mode',
   'classifier_version',
   'docker_log_driver_class',
@@ -234,14 +248,16 @@ const RECEIPT_SAFETY_KEYS = Object.freeze([
   'restore_performed',
 ]);
 const RECEIPT_CLAIM_BOUNDARY_KEYS = Object.freeze([
-  'bounded_claim',
-  'not_long_term_slo',
+  'bounded_operational_smoke_claim',
+  'not_long_term_stability_or_slo',
+  'long_term_stability_claim',
+  'long_term_stability_status',
   'not_zero_historical_errors',
   'historical_previous_pointer_still_not_recorded',
 ]);
-const DEFAULT_HANDOFF_DIR = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-stability-handoff-v1');
-const DEFAULT_FREEZE_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'handoff-v1-freeze.json');
-const DEFAULT_RECEIPT_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-stability-receipt.json');
+const DEFAULT_HANDOFF_DIR = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-handoff-v2');
+const DEFAULT_FREEZE_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'handoff-v2-freeze.json');
+const DEFAULT_RECEIPT_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-receipt.json');
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main().catch((error) => {
@@ -273,7 +289,12 @@ function constants() {
     WORKER_SAMPLE_COUNT,
     ERROR_BUCKET_COUNT,
     ERROR_BUCKET_RECORD_COUNT,
-    MAX_PRIMARY_LAG_SECONDS,
+    ERROR_BUCKET_SECONDS,
+    WINDOW_MINUTES,
+    MAX_SAMPLE_LAG_SECONDS,
+    WINDOW_CLASS,
+    LONG_TERM_STABILITY_STATUS,
+    HISTORICAL_V1_SUPERSESSION_CLASS,
   };
 }
 
@@ -306,7 +327,7 @@ async function main() {
       printJson(runGeneratedHandoffFixture(options));
       break;
     default:
-      fail(`usage: production-stability-evidence <source:verify|handoff|handoff:verify|handoff:freeze|handoff:freeze:verify|receipt:create|receipt:verify|fixture:e2e>`);
+      fail(`usage: production-operational-smoke-evidence <source:verify|handoff|handoff:verify|handoff:freeze|handoff:freeze:verify|receipt:create|receipt:verify|fixture:e2e>`);
   }
 }
 
@@ -317,9 +338,9 @@ function parseArgs(rawArgs) {
     receiptFile: DEFAULT_RECEIPT_FILE,
     evidenceDir: '',
     fixtureResult: 'NOT_RUN',
-    requireBoundedStabilityWindow: false,
+    requireBoundedOperationalSmoke: false,
     requireErrorSignalWindow: false,
-    requireMs019fBaseline: false,
+    requireMs019fV2Baseline: false,
   };
   const positional = [];
   for (let index = 0; index < rawArgs.length; index += 1) {
@@ -349,15 +370,15 @@ function parseArgs(rawArgs) {
       case '--fixture-result':
         options.fixtureResult = next();
         break;
-      case '--require-bounded-stability-window':
-        options.requireBoundedStabilityWindow = true;
+      case '--require-bounded-operational-smoke':
+        options.requireBoundedOperationalSmoke = true;
         break;
       case '--require-error-signal-window':
         options.requireErrorSignalWindow = true;
         break;
-      case '--require-ms019f-baseline':
-        options.requireMs019fBaseline = true;
-        options.requireBoundedStabilityWindow = true;
+      case '--require-ms019f-v2-baseline':
+        options.requireMs019fV2Baseline = true;
+        options.requireBoundedOperationalSmoke = true;
         options.requireErrorSignalWindow = true;
         break;
       default:
@@ -401,7 +422,7 @@ function verifySourceContracts() {
   assert(!/\bpino\b|\bwinston\b/u.test(apiEntry + workerEntry + mainApi + mainWorker), 'unexpected logger dependency found in bootstrap');
 
   return {
-    status: 'production-stability-source-contract-verified',
+    status: 'production-operational-smoke-source-contract-verified',
     classifier_mode: CLASSIFIER_MODE,
     classifier_version: CLASSIFIER_VERSION,
     classifier_source_owner: [
@@ -455,7 +476,7 @@ function createHandoff(outputDir) {
   ensureEmptyOutputDir(outputDir);
   const sourceCommit = currentGitCommit();
   const observer = readText(SOURCE_OBSERVER).replaceAll('__MS019F_SOURCE_COMMIT__', sourceCommit);
-  assertLfOnly('production-stability-observer.sh', observer);
+  assertLfOnly('production-operational-smoke-observer.sh', observer);
   staticScanObserver(observer);
   writeText(path.join(outputDir, HANDOFF_OBSERVER), observer, 0o700);
   writeText(path.join(outputDir, 'README.md'), handoffReadme(sourceCommit), 0o600);
@@ -472,7 +493,7 @@ function createHandoff(outputDir) {
   writeChecksums(outputDir, HANDOFF_CHECKSUM_FILES);
   verifyHandoff(outputDir);
   return {
-    status: 'production-stability-handoff-created',
+    status: 'production-operational-smoke-handoff-created',
     handoff_dir: outputDir,
     source_commit: sourceCommit,
     manifest_sha256: sha256File(path.join(outputDir, 'manifest.json')),
@@ -493,10 +514,10 @@ function verifyHandoff(handoffDir) {
   assertBashSyntax(path.join(handoffDir, HANDOFF_OBSERVER));
   validateHandoffContract(contract);
   validateHandoffManifest(manifest, checksumMap, contract);
-  assert(readme.includes('--confirm-window-hours 24'), 'README must include pinned window confirmation');
+  assert(readme.includes('--confirm-window-minutes 20'), 'README must include pinned window confirmation');
   assert(readme.includes('--confirm-public-host rss.habersoft.com'), 'README must include pinned public host');
   return {
-    status: 'production-stability-handoff-verified',
+    status: 'production-operational-smoke-handoff-verified',
     handoff_dir: handoffDir,
     manifest_sha256: sha256File(path.join(handoffDir, 'manifest.json')),
     observer_sha256: checksumMap[HANDOFF_OBSERVER],
@@ -518,19 +539,25 @@ function createFreeze(handoffDir, freezeFile, fixtureResult) {
     service: SERVICE_NAME,
     environment: 'production',
     generated_at_utc: new Date().toISOString(),
-    handoff_dir_alias: 'EXTERNAL_MS019F_HANDOFF_V1_DIR',
+    handoff_dir_alias: 'EXTERNAL_MS019F_HANDOFF_V2_DIR',
     inventory: [...HANDOFF_FILES],
     source_commit: manifest.final_landed_source_commit,
     manifest_sha256: verified.manifest_sha256,
     observer_sha256: verified.observer_sha256,
     contract_version: CONTRACT_VERSION,
     contract_sha256: verified.contract_sha256,
+    window_class: WINDOW_CLASS,
     window_seconds: WINDOW_SECONDS,
+    window_minutes: WINDOW_MINUTES,
     primary_interval_seconds: PRIMARY_INTERVAL_SECONDS,
     primary_sample_count: PRIMARY_SAMPLE_COUNT,
     worker_interval_seconds: WORKER_INTERVAL_SECONDS,
     worker_sample_count: WORKER_SAMPLE_COUNT,
+    error_bucket_seconds: ERROR_BUCKET_SECONDS,
     error_bucket_count: ERROR_BUCKET_COUNT,
+    max_sample_lag_seconds: MAX_SAMPLE_LAG_SECONDS,
+    long_term_stability_status: LONG_TERM_STABILITY_STATUS,
+    historical_v1_supersession_class: HISTORICAL_V1_SUPERSESSION_CLASS,
     classifier_mode: CLASSIFIER_MODE,
     classifier_version: CLASSIFIER_VERSION,
     lf_verified: true,
@@ -546,7 +573,7 @@ function createFreeze(handoffDir, freezeFile, fixtureResult) {
   writeJson(freezeFile, freeze);
   verifyFreeze(handoffDir, freezeFile);
   return {
-    status: 'production-stability-handoff-freeze-created',
+    status: 'production-operational-smoke-handoff-freeze-created',
     freeze_file: freezeFile,
     freeze_sha256: sha256File(freezeFile),
     manifest_sha256: freeze.manifest_sha256,
@@ -565,10 +592,16 @@ function verifyFreeze(handoffDir, freezeFile) {
   assert(freeze.observer_sha256 === verified.observer_sha256, 'freeze observer SHA mismatch');
   assert(freeze.contract_sha256 === verified.contract_sha256, 'freeze contract SHA mismatch');
   assert(freeze.contract_version === CONTRACT_VERSION, 'freeze contract version mismatch');
+  assert(freeze.window_class === WINDOW_CLASS, 'freeze window class mismatch');
   assert(freeze.window_seconds === WINDOW_SECONDS, 'freeze window mismatch');
+  assert(freeze.window_minutes === WINDOW_MINUTES, 'freeze window minutes mismatch');
   assert(freeze.primary_sample_count === PRIMARY_SAMPLE_COUNT, 'freeze primary sample count mismatch');
   assert(freeze.worker_sample_count === WORKER_SAMPLE_COUNT, 'freeze worker sample count mismatch');
+  assert(freeze.error_bucket_seconds === ERROR_BUCKET_SECONDS, 'freeze error bucket seconds mismatch');
   assert(freeze.error_bucket_count === ERROR_BUCKET_COUNT, 'freeze error bucket count mismatch');
+  assert(freeze.max_sample_lag_seconds === MAX_SAMPLE_LAG_SECONDS, 'freeze lag limit mismatch');
+  assert(freeze.long_term_stability_status === LONG_TERM_STABILITY_STATUS, 'freeze long-term status mismatch');
+  assert(freeze.historical_v1_supersession_class === HISTORICAL_V1_SUPERSESSION_CLASS, 'freeze v1 supersession mismatch');
   assert(freeze.classifier_mode === CLASSIFIER_MODE, 'freeze classifier mode mismatch');
   assert(freeze.lf_verified === true && freeze.bash_n_verified === true, 'freeze LF/bash proof missing');
   assert(freeze.static_safety_scan === 'PASSED', 'freeze static scan mismatch');
@@ -577,7 +610,7 @@ function verifyFreeze(handoffDir, freezeFile) {
   assert(freeze.production_contact_performed === false, 'freeze must not claim production contact');
   assert(freeze.production_mutation_performed === false, 'freeze must not claim production mutation');
   return {
-    status: 'production-stability-handoff-freeze-verified',
+    status: 'production-operational-smoke-handoff-freeze-verified',
     freeze_file: freezeFile,
     freeze_sha256: sha256File(freezeFile),
     manifest_sha256: freeze.manifest_sha256,
@@ -598,12 +631,13 @@ function createReceipt(options) {
   ensureDir(path.dirname(options.receiptFile));
   writeJson(options.receiptFile, receipt);
   return {
-    status: 'production-stability-receipt-created',
+    status: 'production-operational-smoke-receipt-created',
     receipt: options.receiptFile,
     sha256: sha256File(options.receiptFile),
     outcome: receipt.outcome,
-    stability_result: receipt.bounded_24h_stability_result,
-    error_signal_result: receipt.bounded_24h_error_signal_result,
+    operational_smoke_result: receipt.bounded_operational_smoke_result,
+    error_signal_result: receipt.bounded_error_signal_result,
+    long_term_stability_result: receipt.long_term_stability_result,
   };
 }
 
@@ -611,11 +645,11 @@ function verifyReceiptFile(receiptFile, options) {
   const receipt = JSON.parse(readAndValidateTextFile(path.dirname(receiptFile), path.basename(receiptFile)));
   verifyReceiptObject(receipt, options);
   return {
-    status: 'production-stability-receipt-verified',
+    status: 'production-operational-smoke-receipt-verified',
     receipt: receiptFile,
     sha256: sha256File(receiptFile),
     outcome: receipt.outcome,
-    strict_required: Boolean(options.requireBoundedStabilityWindow || options.requireErrorSignalWindow || options.requireMs019fBaseline),
+    strict_required: Boolean(options.requireBoundedOperationalSmoke || options.requireErrorSignalWindow || options.requireMs019fV2Baseline),
   };
 }
 
@@ -623,7 +657,7 @@ function createReceiptFromEvidence(evidenceDir, handoffHashes = {}) {
   assertExactInventory(evidenceDir, EVIDENCE_FILES);
   verifyChecksums(evidenceDir, EVIDENCE_FILES.filter((name) => name !== 'checksums.sha256'));
   const metadata = parseMetadata(readAndValidateTextFile(evidenceDir, 'collector-metadata.txt'));
-  const samples = parseTsv(readAndValidateTextFile(evidenceDir, 'stability-samples.tsv'));
+  const samples = parseTsv(readAndValidateTextFile(evidenceDir, 'operational-smoke-samples.tsv'));
   const buckets = parseTsv(readAndValidateTextFile(evidenceDir, 'error-signal-buckets.tsv'));
   const evidenceInventory = safeFileInventory(evidenceDir, EVIDENCE_FILES);
   const summary = summarizeEvidence(metadata, samples, buckets);
@@ -648,20 +682,23 @@ function createReceiptFromEvidence(evidenceDir, handoffHashes = {}) {
       tree_digest: treeDigest(evidenceInventory),
       checksums_sha256: sha256File(path.join(evidenceDir, 'checksums.sha256')),
       collector_metadata_sha256: sha256File(path.join(evidenceDir, 'collector-metadata.txt')),
-      stability_samples_sha256: sha256File(path.join(evidenceDir, 'stability-samples.tsv')),
+      operational_smoke_samples_sha256: sha256File(path.join(evidenceDir, 'operational-smoke-samples.tsv')),
       error_signal_buckets_sha256: sha256File(path.join(evidenceDir, 'error-signal-buckets.tsv')),
     },
     observation: {
       started_at_utc: metadata.started_at_utc,
       ended_at_utc: metadata.ended_at_utc,
       elapsed_seconds: numberField(metadata.elapsed_seconds, 'elapsed_seconds'),
+      window_class: WINDOW_CLASS,
       window_seconds: WINDOW_SECONDS,
+      window_minutes: WINDOW_MINUTES,
       primary_interval_seconds: PRIMARY_INTERVAL_SECONDS,
       primary_sample_count: PRIMARY_SAMPLE_COUNT,
       worker_interval_seconds: WORKER_INTERVAL_SECONDS,
       worker_sample_count: WORKER_SAMPLE_COUNT,
+      error_bucket_seconds: ERROR_BUCKET_SECONDS,
       error_bucket_count: ERROR_BUCKET_COUNT,
-      max_primary_lag_seconds: summary.maxSchedulingLagSeconds,
+      max_sample_lag_seconds: summary.maxSchedulingLagSeconds,
       classifier_mode: metadata.log_classifier_mode,
       classifier_version: metadata.log_classifier_version,
       docker_log_driver_class: metadata.docker_log_driver_class,
@@ -671,12 +708,15 @@ function createReceiptFromEvidence(evidenceDir, handoffHashes = {}) {
     worker_summary: summary.worker,
     error_signal_summary: summary.errorSignal,
     safety_flags: summary.safety,
-    bounded_24h_stability_result: summary.stabilityPass ? 'BOUNDED_24H_STABILITY_WINDOW_VERIFIED' : 'BOUNDED_24H_STABILITY_WINDOW_BLOCKED',
-    bounded_24h_error_signal_result: summary.errorSignalPass ? 'NO_ERROR_LEVEL_SIGNALS' : 'ERROR_SIGNAL_WINDOW_BLOCKED',
+    bounded_operational_smoke_result: summary.operationalSmokePass ? 'BOUNDED_OPERATIONAL_SMOKE_WINDOW_VERIFIED' : 'BOUNDED_OPERATIONAL_SMOKE_WINDOW_BLOCKED',
+    bounded_error_signal_result: summary.errorSignalPass ? 'NO_ERROR_LEVEL_SIGNALS' : 'ERROR_SIGNAL_WINDOW_BLOCKED',
+    long_term_stability_result: LONG_TERM_STABILITY_STATUS,
     outcome,
     claim_boundary: {
-      bounded_claim: 'BOUNDED_24H_PRODUCTION_STABILITY_AND_ERROR_SIGNAL_WINDOW_VERIFIED',
-      not_long_term_slo: true,
+      bounded_operational_smoke_claim: 'BOUNDED_20M_OPERATIONAL_SMOKE_AND_ERROR_SIGNAL_WINDOW',
+      not_long_term_stability_or_slo: true,
+      long_term_stability_claim: false,
+      long_term_stability_status: LONG_TERM_STABILITY_STATUS,
       not_zero_historical_errors: true,
       historical_previous_pointer_still_not_recorded: true,
     },
@@ -694,15 +734,20 @@ function summarizeEvidence(metadata, samples, buckets) {
   assert(/^[a-f0-9]{64}$/u.test(metadata.collector_sha256), 'metadata collector checksum malformed');
   assert(metadata.log_classifier_mode === CLASSIFIER_MODE, 'metadata classifier mode mismatch');
   assert(metadata.log_classifier_version === CLASSIFIER_VERSION, 'metadata classifier version mismatch');
+  assert(metadata.window_class === WINDOW_CLASS, 'metadata window class mismatch');
   assert(numberField(metadata.window_seconds, 'window_seconds') === WINDOW_SECONDS, 'metadata window seconds mismatch');
+  assert(numberField(metadata.window_minutes, 'window_minutes') === WINDOW_MINUTES, 'metadata window minutes mismatch');
   assert(numberField(metadata.primary_interval_seconds, 'primary_interval_seconds') === PRIMARY_INTERVAL_SECONDS, 'metadata primary interval mismatch');
   assert(numberField(metadata.primary_sample_count, 'primary_sample_count') === PRIMARY_SAMPLE_COUNT, 'metadata primary sample count mismatch');
   assert(numberField(metadata.worker_interval_seconds, 'worker_interval_seconds') === WORKER_INTERVAL_SECONDS, 'metadata worker interval mismatch');
   assert(numberField(metadata.worker_sample_count, 'worker_sample_count') === WORKER_SAMPLE_COUNT, 'metadata worker sample count mismatch');
+  assert(numberField(metadata.error_bucket_seconds, 'error_bucket_seconds') === ERROR_BUCKET_SECONDS, 'metadata error bucket seconds mismatch');
   assert(numberField(metadata.error_bucket_count, 'error_bucket_count') === ERROR_BUCKET_COUNT, 'metadata error bucket count mismatch');
-  assert(numberField(metadata.max_primary_lag_seconds, 'max_primary_lag_seconds') === MAX_PRIMARY_LAG_SECONDS, 'metadata lag limit mismatch');
+  assert(numberField(metadata.max_sample_lag_seconds, 'max_sample_lag_seconds') === MAX_SAMPLE_LAG_SECONDS, 'metadata lag limit mismatch');
+  assert(metadata.long_term_stability_claim === 'false', 'metadata long-term stability claim must be false');
+  assert(metadata.long_term_stability_status === LONG_TERM_STABILITY_STATUS, 'metadata long-term stability status mismatch');
 
-  assert(samples.length === PRIMARY_SAMPLE_COUNT, `expected ${PRIMARY_SAMPLE_COUNT} stability samples`);
+  assert(samples.length === PRIMARY_SAMPLE_COUNT, `expected ${PRIMARY_SAMPLE_COUNT} operational smoke samples`);
   assert(buckets.length === ERROR_BUCKET_RECORD_COUNT, `expected ${ERROR_BUCKET_RECORD_COUNT} error bucket records`);
   const sampleIndices = new Set();
   let internalLivePassed = 0;
@@ -718,7 +763,7 @@ function summarizeEvidence(metadata, samples, buckets) {
   let sampleFailures = 0;
   let maxLag = 0;
   for (const sample of samples) {
-    assertExactObjectKeys(sample, STABILITY_SAMPLE_COLUMNS, 'stability sample columns');
+    assertExactObjectKeys(sample, OPERATIONAL_SMOKE_SAMPLE_COLUMNS, 'operational smoke sample columns');
     const index = numberField(sample.sample_index, 'sample_index');
     sampleIndices.add(index);
     if (index < 0 || index >= PRIMARY_SAMPLE_COUNT) {
@@ -805,12 +850,12 @@ function summarizeEvidence(metadata, samples, buckets) {
     tlsPassed === PRIMARY_SAMPLE_COUNT;
   const containerPass = apiContainerFailures === 0 && workerContainerFailures === 0;
   const workerPass = workerDueCount === WORKER_SAMPLE_COUNT && workerPassed === WORKER_SAMPLE_COUNT;
-  const samplePass = samples.length === PRIMARY_SAMPLE_COUNT && sampleFailures === 0 && maxLag <= MAX_PRIMARY_LAG_SECONDS && elapsedSeconds >= WINDOW_SECONDS;
+  const samplePass = samples.length === PRIMARY_SAMPLE_COUNT && sampleFailures === 0 && maxLag <= MAX_SAMPLE_LAG_SECONDS && elapsedSeconds >= WINDOW_SECONDS;
   const logCoveragePass = coverageFailures === 0;
   const errorSignalPass = logCoveragePass && errorTotal === 0 && fatalTotal === 0;
-  const stabilityPass = samplePass && healthPass && containerPass && workerPass && safetyPass;
+  const operationalSmokePass = samplePass && healthPass && containerPass && workerPass && safetyPass;
   return {
-    stabilityPass,
+    operationalSmokePass,
     errorSignalPass,
     maxSchedulingLagSeconds: maxLag,
     health: {
@@ -866,7 +911,7 @@ function summarizeEvidence(metadata, samples, buckets) {
 function computeOutcome(summary) {
   if (!summary.safetyPass) return 'BLOCKED_EVIDENCE_INTEGRITY';
   if (summary.elapsedSeconds < WINDOW_SECONDS) return 'BLOCKED_SAMPLE_COVERAGE';
-  if (summary.maxSchedulingLagSeconds > MAX_PRIMARY_LAG_SECONDS) return 'BLOCKED_SCHEDULING_LAG';
+  if (summary.maxSchedulingLagSeconds > MAX_SAMPLE_LAG_SECONDS) return 'BLOCKED_SCHEDULING_LAG';
   if (!summary.healthPass) return 'BLOCKED_HEALTH_SAMPLE_FAILURE';
   if (!summary.containerPass) return 'BLOCKED_CONTAINER_RESTART';
   if (!summary.workerPass) return 'BLOCKED_WORKER_HEALTH';
@@ -893,9 +938,17 @@ function verifyReceiptObject(receipt, options = {}) {
   assert(receipt.environment === 'production', 'receipt environment mismatch');
   assert(receipt.contract_version === CONTRACT_VERSION, 'receipt contract mismatch');
   assertSameObject(receipt.parent_receipt_hashes, PARENT_RECEIPT_HASHES, 'parent receipt hashes mismatch');
+  assert(receipt.long_term_stability_result === LONG_TERM_STABILITY_STATUS, 'long-term stability result mismatch');
+  assert(receipt.claim_boundary.bounded_operational_smoke_claim === 'BOUNDED_20M_OPERATIONAL_SMOKE_AND_ERROR_SIGNAL_WINDOW', 'bounded operational smoke claim mismatch');
+  assert(receipt.claim_boundary.not_long_term_stability_or_slo === true, 'long-term/SLO claim boundary mismatch');
+  assert(receipt.claim_boundary.long_term_stability_claim === false, 'long-term stability claim must be false');
+  assert(receipt.claim_boundary.long_term_stability_status === LONG_TERM_STABILITY_STATUS, 'long-term stability status mismatch');
   assert(receipt.observation.window_seconds === WINDOW_SECONDS, 'receipt window mismatch');
+  assert(receipt.observation.window_class === WINDOW_CLASS, 'receipt window class mismatch');
+  assert(receipt.observation.window_minutes === WINDOW_MINUTES, 'receipt window minutes mismatch');
   assert(receipt.observation.primary_sample_count === PRIMARY_SAMPLE_COUNT, 'receipt primary sample count mismatch');
   assert(receipt.observation.worker_sample_count === WORKER_SAMPLE_COUNT, 'receipt worker sample count mismatch');
+  assert(receipt.observation.error_bucket_seconds === ERROR_BUCKET_SECONDS, 'receipt error bucket seconds mismatch');
   assert(receipt.observation.error_bucket_count === ERROR_BUCKET_COUNT, 'receipt bucket count mismatch');
   assert(receipt.observation.classifier_mode === CLASSIFIER_MODE, 'receipt classifier mismatch');
   assert(receipt.safety_flags.raw_logs_retained === false, 'raw logs must not be retained');
@@ -904,11 +957,11 @@ function verifyReceiptObject(receipt, options = {}) {
   assert(receipt.safety_flags.retry === false, 'retry must be false');
   assert(receipt.safety_flags.concurrency === 1, 'concurrency must be 1');
   assert(receipt.safety_flags.production_mutation === false, 'mutation must be false');
-  if (options.requireBoundedStabilityWindow) {
-    assert(receipt.outcome === 'SUCCESS', 'strict stability requires SUCCESS');
-    assert(receipt.bounded_24h_stability_result === 'BOUNDED_24H_STABILITY_WINDOW_VERIFIED', 'bounded stability result mismatch');
+  if (options.requireBoundedOperationalSmoke) {
+    assert(receipt.outcome === 'SUCCESS', 'strict operational smoke requires SUCCESS');
+    assert(receipt.bounded_operational_smoke_result === 'BOUNDED_OPERATIONAL_SMOKE_WINDOW_VERIFIED', 'bounded operational smoke result mismatch');
     assert(receipt.observation.elapsed_seconds >= WINDOW_SECONDS, 'elapsed window too short');
-    assert(receipt.observation.max_primary_lag_seconds <= MAX_PRIMARY_LAG_SECONDS, 'scheduling lag exceeded');
+    assert(receipt.observation.max_sample_lag_seconds <= MAX_SAMPLE_LAG_SECONDS, 'scheduling lag exceeded');
     assert(receipt.health_summary.internal_live_passed === PRIMARY_SAMPLE_COUNT, 'internal live coverage mismatch');
     assert(receipt.health_summary.public_ready_passed === PRIMARY_SAMPLE_COUNT, 'public ready coverage mismatch');
     assert(receipt.container_summary.api_identity_stable === true, 'API identity not stable');
@@ -917,7 +970,7 @@ function verifyReceiptObject(receipt, options = {}) {
   }
   if (options.requireErrorSignalWindow) {
     assert(receipt.outcome === 'SUCCESS', 'strict error signal requires SUCCESS');
-    assert(receipt.bounded_24h_error_signal_result === 'NO_ERROR_LEVEL_SIGNALS', 'error signal result mismatch');
+    assert(receipt.bounded_error_signal_result === 'NO_ERROR_LEVEL_SIGNALS', 'error signal result mismatch');
     assert(receipt.error_signal_summary.coverage_complete === true, 'log coverage incomplete');
     assert(receipt.error_signal_summary.error_total === 0, 'error signal present');
     assert(receipt.error_signal_summary.fatal_total === 0, 'fatal signal present');
@@ -944,8 +997,8 @@ function runGeneratedHandoffFixture(options) {
       '.env.production.fixture',
       '--runtime-image-env',
       'deploy/runtime-image.env.fixture',
-      '--confirm-window-hours',
-      '24',
+      '--confirm-window-minutes',
+      '20',
       '--confirm-public-host',
       PUBLIC_HOST,
       '--output-dir',
@@ -973,9 +1026,9 @@ function runGeneratedHandoffFixture(options) {
       receiptFile,
     });
     verifyReceiptFile(receiptFile, {
-      requireBoundedStabilityWindow: true,
+      requireBoundedOperationalSmoke: true,
       requireErrorSignalWindow: true,
-      requireMs019fBaseline: true,
+      requireMs019fV2Baseline: true,
     });
     const returnedNames = fs.readdirSync(returnedDir).sort();
     assertSameArray(returnedNames, [...EVIDENCE_FILES].sort(), 'fixture returned inventory mismatch');
@@ -984,7 +1037,7 @@ function runGeneratedHandoffFixture(options) {
       assert(!/stack trace|DATABASE_URL|POSTGRES_PASSWORD|AGENT_KEY|TENANT_RATE_LIMIT_KEY_SECRET|raw log|docker inspect json/iu.test(text), `fixture leaked unsafe content in ${name}`);
     }
     return {
-      status: 'production-stability-generated-handoff-e2e-passed',
+      status: 'production-operational-smoke-generated-handoff-e2e-passed',
       handoff_manifest_sha256: verify.manifest_sha256,
       returned_inventory: returnedNames,
       receipt_sha256: sha256File(receiptFile),
@@ -995,35 +1048,39 @@ function runGeneratedHandoffFixture(options) {
 }
 
 function handoffReadme(sourceCommit) {
-  return `# MS-019F Production Stability Handoff v1
+  return `# MS-019F Production Operational Smoke Handoff v2
 
-This bundle prepares a read-only bounded 24-hour production observation for main-service.
-It does not prove stability by itself and it does not authorize deployment, restart,
-environment edits, migration, backup, restore, or raw log review.
+This bundle prepares a read-only bounded 20-minute operational smoke for main-service.
+It does not prove long-term stability, an uptime SLO, or historical error absence,
+and it does not authorize deployment, restart, environment edits, migration,
+backup, restore, or raw log review.
+
+Historical handoff-v1 is classified as ${HISTORICAL_V1_SUPERSESSION_CLASS}.
+It must not be run for fresh evidence.
 
 ## Verify This Bundle
 
 \`\`\`bash
-cd <approved-ms-019f-handoff-v1-dir>
+cd <approved-ms-019f-handoff-v2-dir>
 sha256sum -c checksums.sha256
-bash -n observe-production-stability.sh
+bash -n observe-production-operational-smoke.sh
 \`\`\`
 
 ## Run The Observer
 
 Run from a durable operator-owned foreground/session context. Do not use bash -x.
 Do not deploy, restart, recreate containers, edit env files, or change the edge
-while the 24-hour window is running.
+while the 20-minute smoke window is running.
 
 \`\`\`bash
 cd /opt/habersoft-rss
 
-<approved-ms-019f-handoff-v1-dir>/observe-production-stability.sh \\
+<approved-ms-019f-handoff-v2-dir>/observe-production-operational-smoke.sh \\
   --repository-dir /opt/habersoft-rss \\
   --compose-file deploy/production/compose.yaml \\
   --shared-env .env.production \\
   --runtime-image-env deploy/runtime-image.env \\
-  --confirm-window-hours 24 \\
+  --confirm-window-minutes 20 \\
   --confirm-public-host rss.habersoft.com \\
   --output-dir <new-empty-output-dir>
 \`\`\`
@@ -1035,7 +1092,7 @@ Return exactly these files, flat, with no ZIP archive:
 
 - checksums.sha256
 - collector-metadata.txt
-- stability-samples.tsv
+- operational-smoke-samples.tsv
 - error-signal-buckets.tsv
 
 Do not return raw logs, response bodies, screenshots, env files, runtime-image.env,
@@ -1057,19 +1114,26 @@ function handoffContract(sourceCommit) {
     canonical_remote: CANONICAL_REMOTE,
     generated_from_commit: sourceCommit,
     observation: {
-      evidence_class: 'BOUNDED_24H_STABILITY_WINDOW',
+      evidence_class: WINDOW_CLASS,
       window_seconds: WINDOW_SECONDS,
-      confirm_window_hours: 24,
+      window_minutes: WINDOW_MINUTES,
+      confirm_window_minutes: 20,
       primary_interval_seconds: PRIMARY_INTERVAL_SECONDS,
       primary_sample_count: PRIMARY_SAMPLE_COUNT,
-      primary_sample_indices: '0..288',
+      primary_sample_indices: '0..20',
       worker_interval_seconds: WORKER_INTERVAL_SECONDS,
       worker_sample_count: WORKER_SAMPLE_COUNT,
-      worker_sample_indices: '0..48',
+      worker_sample_indices: '0..4',
+      error_bucket_seconds: ERROR_BUCKET_SECONDS,
       error_bucket_count: ERROR_BUCKET_COUNT,
-      max_primary_lag_seconds: MAX_PRIMARY_LAG_SECONDS,
+      max_sample_lag_seconds: MAX_SAMPLE_LAG_SECONDS,
       retry: false,
       concurrency: 1,
+    },
+    governance_boundary: {
+      long_term_stability_claim: false,
+      long_term_stability_status: LONG_TERM_STABILITY_STATUS,
+      historical_v1_supersession_class: HISTORICAL_V1_SUPERSESSION_CLASS,
     },
     health_routes: [
       'GET http://127.0.0.1:3200/health/live',
@@ -1152,7 +1216,7 @@ function handoffContract(sourceCommit) {
 function handoffManifest({ sourceCommit, observerSha, contractSha, generatedAt }) {
   return {
     schema_version: 1,
-    bundle_type: 'production-stability-handoff',
+    bundle_type: 'production-operational-smoke-handoff',
     contract_version: CONTRACT_VERSION,
     milestone: MILESTONE,
     service: SERVICE_NAME,
@@ -1161,7 +1225,7 @@ function handoffManifest({ sourceCommit, observerSha, contractSha, generatedAt }
     application_status: RELEASE_IDENTITY.status,
     final_landed_source_commit: sourceCommit,
     canonical_remote: CANONICAL_REMOTE,
-    generated_by: 'scripts/production-stability-evidence.mjs',
+    generated_by: 'scripts/production-operational-smoke-evidence.mjs',
     generated_at_utc: generatedAt,
     observer: {
       filename: HANDOFF_OBSERVER,
@@ -1173,13 +1237,19 @@ function handoffManifest({ sourceCommit, observerSha, contractSha, generatedAt }
       version: CONTRACT_VERSION,
       sha256: contractSha,
     },
+    window_class: WINDOW_CLASS,
     window_seconds: WINDOW_SECONDS,
+    window_minutes: WINDOW_MINUTES,
     primary_interval_seconds: PRIMARY_INTERVAL_SECONDS,
     primary_sample_count: PRIMARY_SAMPLE_COUNT,
     worker_interval_seconds: WORKER_INTERVAL_SECONDS,
     worker_sample_count: WORKER_SAMPLE_COUNT,
+    error_bucket_seconds: ERROR_BUCKET_SECONDS,
     error_bucket_count: ERROR_BUCKET_COUNT,
-    max_primary_lag_seconds: MAX_PRIMARY_LAG_SECONDS,
+    max_sample_lag_seconds: MAX_SAMPLE_LAG_SECONDS,
+    long_term_stability_claim: false,
+    long_term_stability_status: LONG_TERM_STABILITY_STATUS,
+    historical_v1_supersession_class: HISTORICAL_V1_SUPERSESSION_CLASS,
     health_routes: [
       'GET http://127.0.0.1:3200/health/live',
       'GET http://127.0.0.1:3200/health/ready',
@@ -1235,12 +1305,20 @@ function validateHandoffContract(contract) {
   assert(contract.service === SERVICE_NAME, 'contract service mismatch');
   assert(contract.environment === 'production', 'contract environment mismatch');
   assert(contract.canonical_remote === CANONICAL_REMOTE, 'contract remote mismatch');
+  assert(contract.observation.evidence_class === WINDOW_CLASS, 'contract evidence class mismatch');
   assert(contract.observation.window_seconds === WINDOW_SECONDS, 'contract window mismatch');
+  assert(contract.observation.window_minutes === WINDOW_MINUTES, 'contract window minutes mismatch');
+  assert(contract.observation.confirm_window_minutes === WINDOW_MINUTES, 'contract confirm window mismatch');
   assert(contract.observation.primary_sample_count === PRIMARY_SAMPLE_COUNT, 'contract primary count mismatch');
   assert(contract.observation.worker_sample_count === WORKER_SAMPLE_COUNT, 'contract worker count mismatch');
+  assert(contract.observation.error_bucket_seconds === ERROR_BUCKET_SECONDS, 'contract error bucket seconds mismatch');
   assert(contract.observation.error_bucket_count === ERROR_BUCKET_COUNT, 'contract bucket count mismatch');
+  assert(contract.observation.max_sample_lag_seconds === MAX_SAMPLE_LAG_SECONDS, 'contract lag limit mismatch');
   assert(contract.observation.retry === false, 'contract retry must be false');
   assert(contract.observation.concurrency === 1, 'contract concurrency must be 1');
+  assert(contract.governance_boundary.long_term_stability_claim === false, 'contract long-term claim must be false');
+  assert(contract.governance_boundary.long_term_stability_status === LONG_TERM_STABILITY_STATUS, 'contract long-term status mismatch');
+  assert(contract.governance_boundary.historical_v1_supersession_class === HISTORICAL_V1_SUPERSESSION_CLASS, 'contract v1 supersession mismatch');
   assert(contract.log_signal.classifier_mode === CLASSIFIER_MODE, 'contract classifier mismatch');
   assert(contract.log_signal.accepted_error_total === 0, 'contract error threshold mismatch');
   assert(contract.log_signal.accepted_fatal_total === 0, 'contract fatal threshold mismatch');
@@ -1252,7 +1330,7 @@ function validateHandoffContract(contract) {
 
 function validateHandoffManifest(manifest, checksumMap, contract) {
   assert(manifest.contract_version === CONTRACT_VERSION, 'manifest contract version mismatch');
-  assert(manifest.bundle_type === 'production-stability-handoff', 'manifest bundle type mismatch');
+  assert(manifest.bundle_type === 'production-operational-smoke-handoff', 'manifest bundle type mismatch');
   assert(manifest.milestone === MILESTONE, 'manifest milestone mismatch');
   assert(manifest.service === SERVICE_NAME, 'manifest service mismatch');
   assert(manifest.environment === 'production', 'manifest environment mismatch');
@@ -1263,10 +1341,17 @@ function validateHandoffManifest(manifest, checksumMap, contract) {
   assert(manifest.contract.filename === HANDOFF_CONTRACT, 'manifest contract filename mismatch');
   assert(manifest.contract.version === CONTRACT_VERSION, 'manifest contract version mismatch');
   assert(manifest.contract.sha256 === checksumMap[HANDOFF_CONTRACT], 'manifest contract checksum mismatch');
+  assert(manifest.window_class === WINDOW_CLASS, 'manifest window class mismatch');
   assert(manifest.window_seconds === contract.observation.window_seconds, 'manifest window mismatch');
+  assert(manifest.window_minutes === WINDOW_MINUTES, 'manifest window minutes mismatch');
   assert(manifest.primary_sample_count === PRIMARY_SAMPLE_COUNT, 'manifest primary count mismatch');
   assert(manifest.worker_sample_count === WORKER_SAMPLE_COUNT, 'manifest worker count mismatch');
+  assert(manifest.error_bucket_seconds === ERROR_BUCKET_SECONDS, 'manifest error bucket seconds mismatch');
   assert(manifest.error_bucket_count === ERROR_BUCKET_COUNT, 'manifest bucket count mismatch');
+  assert(manifest.max_sample_lag_seconds === MAX_SAMPLE_LAG_SECONDS, 'manifest lag limit mismatch');
+  assert(manifest.long_term_stability_claim === false, 'manifest long-term claim must be false');
+  assert(manifest.long_term_stability_status === LONG_TERM_STABILITY_STATUS, 'manifest long-term status mismatch');
+  assert(manifest.historical_v1_supersession_class === HISTORICAL_V1_SUPERSESSION_CLASS, 'manifest v1 supersession mismatch');
   assert(manifest.log_classifier.mode === CLASSIFIER_MODE, 'manifest classifier mode mismatch');
   assertSameArray(manifest.final_output_inventory, [...EVIDENCE_FILES], 'manifest output inventory mismatch');
   assertSameObject(manifest.parent_receipt_hashes, PARENT_RECEIPT_HASHES, 'manifest parent hashes mismatch');

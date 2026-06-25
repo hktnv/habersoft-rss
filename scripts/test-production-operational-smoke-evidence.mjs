@@ -15,15 +15,15 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { classifyLogLines, constants, verifySourceContracts } from './production-stability-evidence.mjs';
+import { classifyLogLines, constants, verifySourceContracts } from './production-operational-smoke-evidence.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
-const CLI = path.join(REPO_ROOT, 'scripts', 'production-stability-evidence.mjs');
-const HANDOFF_OBSERVER = 'observe-production-stability.sh';
-const HANDOFF_CHECKSUM_FILES = ['README.md', HANDOFF_OBSERVER, 'stability-observation-contract.json', 'manifest.json'];
-const EVIDENCE_CHECKSUM_FILES = ['collector-metadata.txt', 'stability-samples.tsv', 'error-signal-buckets.tsv'];
+const CLI = path.join(REPO_ROOT, 'scripts', 'production-operational-smoke-evidence.mjs');
+const HANDOFF_OBSERVER = 'observe-production-operational-smoke.sh';
+const HANDOFF_CHECKSUM_FILES = ['README.md', HANDOFF_OBSERVER, 'operational-smoke-contract.json', 'manifest.json'];
+const EVIDENCE_CHECKSUM_FILES = ['collector-metadata.txt', 'operational-smoke-samples.tsv', 'error-signal-buckets.tsv'];
 const EVIDENCE_FILES = ['checksums.sha256', ...EVIDENCE_CHECKSUM_FILES];
 const PUBLIC_HOST = 'rss.habersoft.com';
 const temp = mkdtempSync(path.join(os.tmpdir(), 'main-service-ms019f-tests-'));
@@ -33,14 +33,17 @@ try {
   assertConstants();
   assertClassifier();
   assertSourceContract();
+  assertGovernanceRegression();
   assertCliFixturePasses();
 
   const base = createHandoffFixture('base');
   const success = runObserverVariant(base, 'success');
   assert.equal(success.receipt.outcome, 'SUCCESS');
-  assert.equal(success.receipt.bounded_24h_stability_result, 'BOUNDED_24H_STABILITY_WINDOW_VERIFIED');
-  assert.equal(success.receipt.bounded_24h_error_signal_result, 'NO_ERROR_LEVEL_SIGNALS');
-  nodeCli(['receipt:verify', '--receipt-file', success.receiptFile, '--require-ms019f-baseline']);
+  assert.equal(success.receipt.bounded_operational_smoke_result, 'BOUNDED_OPERATIONAL_SMOKE_WINDOW_VERIFIED');
+  assert.equal(success.receipt.bounded_error_signal_result, 'NO_ERROR_LEVEL_SIGNALS');
+  assert.equal(success.receipt.long_term_stability_result, 'NOT_APPLICABLE_BY_GOVERNANCE_DECISION');
+  assert.equal(success.receipt.claim_boundary.long_term_stability_claim, false);
+  nodeCli(['receipt:verify', '--receipt-file', success.receiptFile, '--require-ms019f-v2-baseline']);
   assertReturnedInventorySafe(success.returnedDir);
 
   assertBlockedVariants(base);
@@ -54,23 +57,29 @@ try {
   assertHandoffRejectsComposeRun(base.handoffDir);
   assertHandoffRejectsRawLogFile(base.handoffDir);
 
-  console.log('test-production-stability-evidence: ok');
+  console.log('test-production-operational-smoke-evidence: ok');
 } finally {
   rmSync(temp, { recursive: true, force: true });
 }
 
 function assertConstants() {
   const value = constants();
-  assert.equal(value.CONTRACT_VERSION, 'production-stability-observation-v1');
+  assert.equal(value.CONTRACT_VERSION, 'production-operational-smoke-evidence-v2');
   assert.equal(value.CLASSIFIER_MODE, 'STABLE_SEVERITY_PREFIX');
-  assert.equal(value.WINDOW_SECONDS, 86400);
-  assert.equal(value.PRIMARY_INTERVAL_SECONDS, 300);
-  assert.equal(value.PRIMARY_SAMPLE_COUNT, 289);
-  assert.equal(value.WORKER_INTERVAL_SECONDS, 1800);
-  assert.equal(value.WORKER_SAMPLE_COUNT, 49);
-  assert.equal(value.ERROR_BUCKET_COUNT, 288);
-  assert.equal(value.ERROR_BUCKET_RECORD_COUNT, 576);
-  assert.equal(value.MAX_PRIMARY_LAG_SECONDS, 60);
+  assert.equal(value.CONTRACT_VERSION, 'production-operational-smoke-evidence-v2');
+  assert.equal(value.WINDOW_CLASS, 'BOUNDED_20M_OPERATIONAL_SMOKE');
+  assert.equal(value.WINDOW_MINUTES, 20);
+  assert.equal(value.WINDOW_SECONDS, 1200);
+  assert.equal(value.PRIMARY_INTERVAL_SECONDS, 60);
+  assert.equal(value.PRIMARY_SAMPLE_COUNT, 21);
+  assert.equal(value.WORKER_INTERVAL_SECONDS, 300);
+  assert.equal(value.WORKER_SAMPLE_COUNT, 5);
+  assert.equal(value.ERROR_BUCKET_SECONDS, 60);
+  assert.equal(value.ERROR_BUCKET_COUNT, 20);
+  assert.equal(value.ERROR_BUCKET_RECORD_COUNT, 40);
+  assert.equal(value.MAX_SAMPLE_LAG_SECONDS, 15);
+  assert.equal(value.LONG_TERM_STABILITY_STATUS, 'NOT_APPLICABLE_BY_GOVERNANCE_DECISION');
+  assert.equal(value.HISTORICAL_V1_SUPERSESSION_CLASS, 'HISTORICAL_SUPERSEDED_GOVERNANCE_REJECTED_NEVER_RUN');
 }
 
 function assertClassifier() {
@@ -107,16 +116,50 @@ function assertClassifier() {
 
 function assertSourceContract() {
   const proof = verifySourceContracts();
-  assert.equal(proof.status, 'production-stability-source-contract-verified');
+  assert.equal(proof.status, 'production-operational-smoke-source-contract-verified');
   assert.equal(proof.classifier_mode, 'STABLE_SEVERITY_PREFIX');
   assert.equal(proof.runtime_logging_changed, false);
   assert.equal(proof.raw_log_retention, false);
 }
 
+function assertGovernanceRegression() {
+  const packageJson = readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8');
+  assert.equal(packageJson.includes('test:production-stability-evidence'), false);
+  assert.equal(packageJson.includes('production:stability:'), false);
+  assert.equal(packageJson.includes('production-stability-evidence.mjs'), false);
+
+  const activeFiles = [
+    'scripts/production-operational-smoke-observer.sh',
+    'scripts/production-operational-smoke-evidence.mjs',
+  ];
+  const forbidden = [
+    'production-stability',
+    'observe-production-stability.sh',
+    'stability-samples.tsv',
+    '--confirm-window-hours',
+    'BOUNDED_24H',
+    '86400',
+    '0..288',
+    '0..48',
+  ];
+  for (const file of activeFiles) {
+    const text = readFileSync(path.join(REPO_ROOT, file), 'utf8');
+    for (const token of forbidden) {
+      assert.equal(text.includes(token), false, `${file} contains retired token ${token}`);
+    }
+  }
+
+  const doc = readFileSync(path.join(REPO_ROOT, '.docs', 'production-operational-smoke-and-error-signals.md'), 'utf8');
+  const historicalLine = doc.split('\n').find((line) => line.includes('24-hour')) ?? '';
+  assert.match(historicalLine, /historical|governance/i);
+  assert.equal(doc.includes('--confirm-window-minutes 20'), true);
+  assert.equal(doc.includes('HISTORICAL_SUPERSEDED_GOVERNANCE_REJECTED_NEVER_RUN'), true);
+}
+
 function assertCliFixturePasses() {
   const result = nodeCli(['fixture:e2e']);
   const parsed = JSON.parse(result.stdout);
-  assert.equal(parsed.status, 'production-stability-generated-handoff-e2e-passed');
+  assert.equal(parsed.status, 'production-operational-smoke-generated-handoff-e2e-passed');
   assert.deepEqual(parsed.returned_inventory, EVIDENCE_FILES.sort());
 }
 
@@ -132,7 +175,7 @@ function assertBlockedVariants(base) {
   for (const [variant, expectedOutcome] of cases) {
     const result = runObserverVariant(base, variant);
     assert.equal(result.receipt.outcome, expectedOutcome, variant);
-    nodeCliExpectFail(['receipt:verify', '--receipt-file', result.receiptFile, '--require-ms019f-baseline']);
+    nodeCliExpectFail(['receipt:verify', '--receipt-file', result.receiptFile, '--require-ms019f-v2-baseline']);
   }
 }
 
@@ -152,7 +195,7 @@ function assertUnknownReceiptFieldFails(receiptFile) {
   const receipt = readJson(receiptFile);
   receipt.unexpected_field = true;
   writeJson(badReceipt, receipt);
-  nodeCliExpectFail(['receipt:verify', '--receipt-file', badReceipt, '--require-ms019f-baseline']);
+  nodeCliExpectFail(['receipt:verify', '--receipt-file', badReceipt, '--require-ms019f-v2-baseline']);
 }
 
 function assertUnknownMetadataFieldFails(base) {
@@ -174,7 +217,7 @@ function assertUnknownMetadataFieldFails(base) {
 
 function assertMissingSampleFails(base) {
   const result = runObserverVariant(base, 'success', 'missing-sample');
-  const sampleFile = path.join(result.returnedDir, 'stability-samples.tsv');
+  const sampleFile = path.join(result.returnedDir, 'operational-smoke-samples.tsv');
   const lines = readFileSync(sampleFile, 'utf8').trimEnd().split('\n');
   writeText(sampleFile, `${lines.slice(0, -1).join('\n')}\n`);
   writeEvidenceChecksums(result.returnedDir);
@@ -193,7 +236,7 @@ function assertMissingSampleFails(base) {
 
 function assertShortElapsedStrictFails(base) {
   const result = runObserverVariant(base, 'success', 'short-elapsed');
-  replaceMetadataValue(result.returnedDir, 'elapsed_seconds', '86399');
+  replaceMetadataValue(result.returnedDir, 'elapsed_seconds', '1199');
   const receiptFile = path.join(temp, 'short-elapsed-receipt.json');
   nodeCli([
     'receipt:create',
@@ -207,7 +250,7 @@ function assertShortElapsedStrictFails(base) {
     receiptFile,
   ]);
   assert.equal(readJson(receiptFile).outcome, 'BLOCKED_SAMPLE_COVERAGE');
-  nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-baseline']);
+  nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-v2-baseline']);
 }
 
 function assertUnsafeFlagStrictFails(base) {
@@ -226,7 +269,7 @@ function assertUnsafeFlagStrictFails(base) {
     receiptFile,
   ]);
   assert.equal(readJson(receiptFile).outcome, 'BLOCKED_EVIDENCE_INTEGRITY');
-  nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-baseline']);
+  nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-v2-baseline']);
 }
 
 function assertHandoffRejectsChecksumMismatch(handoffDir) {
@@ -303,8 +346,8 @@ MS019F_TEST_MODE=1 MS019F_TEST_VARIANT=${shellQuote(variant)} "$@"
     '.env.production.fixture',
     '--runtime-image-env',
     'deploy/runtime-image.env.fixture',
-    '--confirm-window-hours',
-    '24',
+    '--confirm-window-minutes',
+    '20',
     '--confirm-public-host',
     PUBLIC_HOST,
     '--output-dir',
@@ -358,7 +401,7 @@ function rewriteHandoffChecksums(handoffDir) {
   const manifestFile = path.join(handoffDir, 'manifest.json');
   const manifest = readJson(manifestFile);
   manifest.observer.sha256 = sha256File(path.join(handoffDir, HANDOFF_OBSERVER));
-  manifest.contract.sha256 = sha256File(path.join(handoffDir, 'stability-observation-contract.json'));
+  manifest.contract.sha256 = sha256File(path.join(handoffDir, 'operational-smoke-contract.json'));
   writeJson(manifestFile, manifest);
   writeText(
     path.join(handoffDir, 'checksums.sha256'),

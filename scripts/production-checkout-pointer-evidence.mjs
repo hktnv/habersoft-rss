@@ -524,7 +524,7 @@ self-contained collector and a contract for returned evidence.
 - optional previous rollback pointer identity
 - future rollback pointer rotation state contract
 
-Out of scope: edge body-limit, long-term stability, error-burst evidence,
+Out of scope: edge body-limit, MS-019F-R1 operational-smoke/error-signal evidence,
 deployment, backup/restore, migrations, Docker build/pull/push, and any public
 traffic probe.
 
@@ -1226,8 +1226,8 @@ function makeReceiptCore(options) {
     },
     explicitly_not_evidence_for: [
       'edge_body_limit',
-      'long_term_stability',
-      'error_burst',
+      'operational_smoke_error_signal',
+      'long_term_stability_not_applicable_by_governance',
       'application_acceptance_regression',
     ],
   };

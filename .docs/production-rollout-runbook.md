@@ -59,7 +59,7 @@ Extended operational evidence MS-019B collector-v2 receipt ile partial accepted:
 - production backup/restore baseline: `PASSED` by MS-019C
 - checkout hygiene and current release pointer: `PASSED` by MS-019D-R1
 - previous production pointer: `NOT_RECORDED`
-- bounded stability/error-signal analysis: `NOT_RECORDED`; MS-019F handoff prepared, operator returned evidence pending
+- bounded operational-smoke/error-signal analysis: `PENDING_OPERATOR_RUN`; MS-019F-R1 handoff-v2 prepared, operator returned evidence pending
 - edge body-limit compatibility: `PASSED`; rerun the MS-019E collector if the application body contract or edge request-body config changes
 
 Bu eksik extended evidence, basic production-active status'unu geriye donuk olarak inactive/pending duruma cevirmez. Fresh contradictory health evidence ortaya cikarsa false success uretmek yerine blocker politikasi uygulanir.
@@ -74,7 +74,7 @@ Production and staging must use different environment marker, Compose project na
 
 Operator production mutation oncesi target state'i read-only siniflandirir. Unknown or conflicting state mutation'u bloke eder.
 
-Preflight evidence current MS-019B receipt icinde identity, migration, worker/scheduler, TLS, route smoke ve point-in-time stability alanlari icin kaydedildi. Backup/restore MS-019C combined receipt ile verified oldu. Checkout hygiene ve current release pointer evidence MS-019D-R1 receipt ile accepted oldu. Edge body-limit compatibility MS-019E-R2 receipt ile `PASSED` durumundadir. MS-019F 24-hour stability/error-signal handoff tooling hazirlandi fakat operator returned evidence henuz yoktur. Previous pointer, bounded stability ve error-signal alanlari `NOT_RECORDED` kalir.
+Preflight evidence current MS-019B receipt icinde identity, migration, worker/scheduler, TLS, route smoke ve point-in-time restart/OOM alanlari icin kaydedildi. Backup/restore MS-019C combined receipt ile verified oldu. Checkout hygiene ve current release pointer evidence MS-019D-R1 receipt ile accepted oldu. Edge body-limit compatibility MS-019E-R2 receipt ile `PASSED` durumundadir. MS-019F-R1 20-minute operational-smoke/error-signal handoff-v2 tooling hazirlandi fakat operator returned evidence henuz yoktur. Previous pointer `NOT_RECORDED`, bounded operational-smoke/error-signal `PENDING_OPERATOR_RUN`, long-term stability `NOT_APPLICABLE_BY_GOVERNANCE_DECISION` kalir.
 
 ## Backup gate
 
@@ -121,9 +121,9 @@ Checkout hygiene ve release-pointer evidence contract [production-checkout-and-r
 
 ## Post-deployment verification
 
-Future full receipt verifier should prove identity, authorization hash, preflight, capacity, Git commit/image identity, backup/restore, migration status, internal health, public HTTPS acceptance, worker/scheduler, stability, pointers and safety flags.
+Future full receipt verifier should prove identity, authorization hash, preflight, capacity, Git commit/image identity, backup/restore, migration status, internal health, public HTTPS acceptance, worker/scheduler, bounded operational-smoke/error-signal, pointers and safety flags.
 
-MS-018C external receipt intentionally records only the operator-confirmed basic activation evidence. MS-019B operational receipt is tracked by identity in [production-operational-evidence.md](production-operational-evidence.md), MS-019C backup/restore receipt is tracked in [backup-and-restore.md](backup-and-restore.md), checkout pointer evidence is tracked in [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md), edge body-limit handoff/receipt semantics are tracked in [production-edge-body-limit.md](production-edge-body-limit.md), and bounded stability/error-signal handoff semantics are tracked in [production-stability-and-error-signals.md](production-stability-and-error-signals.md). Publication evidence remains not performed. Copyable collector command shapes stay in their canonical owner documents so this runbook does not duplicate each contract.
+MS-018C external receipt intentionally records only the operator-confirmed basic activation evidence. MS-019B operational receipt is tracked by identity in [production-operational-evidence.md](production-operational-evidence.md), MS-019C backup/restore receipt is tracked in [backup-and-restore.md](backup-and-restore.md), checkout pointer evidence is tracked in [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md), edge body-limit handoff/receipt semantics are tracked in [production-edge-body-limit.md](production-edge-body-limit.md), and bounded operational-smoke/error-signal handoff-v2 semantics are tracked in [production-operational-smoke-and-error-signals.md](production-operational-smoke-and-error-signals.md). Publication evidence remains not performed. Copyable collector command shapes stay in their canonical owner documents so this runbook does not duplicate each contract.
 
 ## Forbidden operations
 

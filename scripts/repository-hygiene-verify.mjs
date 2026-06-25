@@ -129,7 +129,7 @@ function assertGitStateIfAvailable() {
   }
 
   for (const relative of trackedPaths) {
-    const blob = git(["show", `HEAD:${relative}`], { encoding: "buffer" });
+    const blob = git(["show", `:${relative}`], { encoding: "buffer" });
     if (blob.status !== 0) {
       failures.push(`git blob read failed for ${relative}`);
       continue;

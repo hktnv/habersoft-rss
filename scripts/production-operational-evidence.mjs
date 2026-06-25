@@ -628,7 +628,7 @@ function createReceiptSkeleton() {
       production_backup_sha256: "NOT_RECORDED",
       production_off_host_restore: "NOT_RECORDED",
       edge_body_limit: "NOT_RECORDED",
-      long_term_stability: "NOT_RECORDED",
+      long_term_stability: "NOT_APPLICABLE_BY_GOVERNANCE_DECISION",
       artifact_publication: "NOT_PERFORMED",
       registry_publication: "NOT_PERFORMED",
       git_tag: "NOT_CREATED",
@@ -1089,7 +1089,7 @@ function validateOutsideScope(scope) {
   assert(scope.production_backup_sha256 === "NOT_RECORDED", "backup SHA must remain NOT_RECORDED");
   assert(scope.production_off_host_restore === "NOT_RECORDED", "restore result must remain NOT_RECORDED");
   assert(scope.edge_body_limit === "NOT_RECORDED", "edge body-limit must remain NOT_RECORDED");
-  assert(scope.long_term_stability === "NOT_RECORDED", "long-term stability must remain NOT_RECORDED");
+  assert(scope.long_term_stability === "NOT_APPLICABLE_BY_GOVERNANCE_DECISION", "long-term stability must remain not applicable by governance");
   assert(scope.artifact_publication === "NOT_PERFORMED", "artifact publication must be NOT_PERFORMED");
   assert(scope.registry_publication === "NOT_PERFORMED", "registry publication must be NOT_PERFORMED");
   assert(scope.git_tag === "NOT_CREATED", "git tag must be NOT_CREATED");
