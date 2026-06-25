@@ -898,6 +898,7 @@ backup SHA-256: NOT_RECORDED
 restore verification: NOT_RECORDED
 current/previous pointers: NOT_RECORDED
 restart/OOM/stability: NOT_RECORDED
+bounded stability/error-signal: NOT_RECORDED
 artifact publication: NOT_PERFORMED
 Git tag: NOT_CREATED
 GitHub Release: NOT_CREATED
@@ -1052,6 +1053,55 @@ evidence-records.tsv
 
 Returned bundle local verifier tarafindan `production-edge-body-limit-receipt-v2.json` uretmek icin kullanilir. MS-019E-R2 receipt edge body-limit compatibility'i accepted hale getirdi. Exact vendor configured limit yine `NOT_RECORDED` kalir. Application body contract veya edge request-body config degisirse bu collector yeniden calistirilmalidir.
 
+### 19.4 Bounded 24-hour stability and error-signal handoff
+
+MS-019F ile bounded 24-hour production stability ve machine-safe error-signal observation icin read-only handoff-v1 tooling hazirlandi. Canonical contract ve receipt boundary [.docs/production-stability-and-error-signals.md](.docs/production-stability-and-error-signals.md) dosyasindadir.
+
+Bu akisin siniri:
+
+- Codex production SSH kullanmaz.
+- Handoff bundle tek basina production evidence degildir; accepted receipt gerekir.
+- Operator observer'i production host uzerinde manuel calistirir.
+- Observer 24 saat / 86400 saniye boyunca 300 saniye primary interval ile 289 sample toplar.
+- Worker health 1800 saniye interval ile 49 sample olarak `docker compose exec -T main-service-worker npm run worker:health` uzerinden kontrol edilir.
+- Error-signal contract yalniz stable severity-prefix classifier kullanir; raw log, log snippet, line hash veya broad `grep -i error` retained edilmez.
+- Observer auth credential, cookie, retry, TLS bypass, deployment, restart, migration, backup, restore veya env/edge mutation yapmaz.
+- Output external operator-state alaninda tutulur ve Git'e commit edilmez.
+
+Generated handoff dogrulama:
+
+```bash
+cd <approved-ms-019f-handoff-v1-dir>
+sha256sum -c checksums.sha256
+bash -n observe-production-stability.sh
+```
+
+Observer command shape:
+
+```bash
+cd /opt/habersoft-rss
+
+<approved-ms-019f-handoff-v1-dir>/observe-production-stability.sh \
+  --repository-dir /opt/habersoft-rss \
+  --compose-file deploy/production/compose.yaml \
+  --shared-env .env.production \
+  --runtime-image-env deploy/runtime-image.env \
+  --confirm-window-hours 24 \
+  --confirm-public-host rss.habersoft.com \
+  --output-dir <new-empty-output-dir>
+```
+
+Returned bundle exactly su dosyalari icermelidir:
+
+```text
+checksums.sha256
+collector-metadata.txt
+stability-samples.tsv
+error-signal-buckets.tsv
+```
+
+Interrupted run valid checksum bundle uretmez ve bastan calistirilir. Returned bundle local verifier tarafindan future `production-stability-receipt.json` uretmek icin kullanilir. MS-019F repository tooling hazirligi production stability veya error-signal evidence'i accepted yapmaz; bounded stability/error-signal status `NOT_RECORDED` kalir.
+
 ## 20. Gelecek backend/frontend monorepo gecisi
 
 Current phase:
@@ -1111,6 +1161,7 @@ Bu kosullar tamamlanmadan `rss-panel.habersoft.com` production-ready sayilmaz.
 - [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md)
 - [.docs/production-checkout-and-release-pointers.md](.docs/production-checkout-and-release-pointers.md)
 - [.docs/production-edge-body-limit.md](.docs/production-edge-body-limit.md)
+- [.docs/production-stability-and-error-signals.md](.docs/production-stability-and-error-signals.md)
 - [.docs/production-deployment.md](.docs/production-deployment.md)
 - [.docs/production-rollout-runbook.md](.docs/production-rollout-runbook.md)
 - [.docs/release-packaging.md](.docs/release-packaging.md)

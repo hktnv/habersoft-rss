@@ -219,6 +219,8 @@ MS-019D-R1 owns the returned checkout hygiene and release-pointer evidence intak
 
 MS-019E-R2 owns the accepted edge body-limit evidence in [production-edge-body-limit.md](production-edge-body-limit.md). The accepted receipt `production-edge-body-limit-receipt-v2.json` has SHA-256 `fabad4a60f1f284379e1cd903b582b53bfd1fcbf93af32e79a94a1efa6377244` and proves that public HTTPS accepts the canonical `5242880` byte application body limit. The exact vendor configured body-limit value remains `NOT_RECORDED`; this does not change the MS-019B receipt result or convert full operational baseline completion into `PASSED`.
 
+MS-019F owns the prepared bounded 24-hour stability and machine-safe error-signal handoff in [production-stability-and-error-signals.md](production-stability-and-error-signals.md). Handoff generation and local accelerated fixtures are not production evidence. Until an operator returned bundle is collected and strictly verified, bounded stability and error-signal evidence remain `NOT_RECORDED` and the MS-019B operational baseline remains partial.
+
 ## Historical Handoff Boundary
 
 MS-019A handoff-v1 remains historically verifiable by the handoff verifier. New operator reruns must use the collector-v2 contract so the production Compose context, two env-file layers, context preflight and `NOT_RUN` dependent classification are present in the returned bundle.
