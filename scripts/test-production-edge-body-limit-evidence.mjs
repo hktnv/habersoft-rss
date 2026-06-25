@@ -226,6 +226,9 @@ case "$mode:$target:$bytes" in
   short_upload:PUBLIC_HTTPS:5242880)
     uploaded="5242879"
     ;;
+  upper_short_upload:INTERNAL_LOOPBACK:5242881)
+    uploaded="1900544"
+    ;;
   tls_fail:PUBLIC_HTTPS:5242880)
     status="000"
     ssl="60"
@@ -276,15 +279,53 @@ function parseMetadata(file) {
   );
 }
 
-function createAndVerifyReceipt(root, evidenceDir, name, strict = false) {
+function createAndVerifyReceipt(root, evidenceDir, name, handoff, freeze, strict = false) {
+  const authority = path.join(root, `${name}-authority.json`);
+  nodeCli([
+    'authority:create',
+    '--evidence-dir',
+    evidenceDir,
+    '--authority-file',
+    authority,
+    '--handoff-dir',
+    handoff,
+    '--freeze-file',
+    freeze,
+  ]);
+  nodeCli([
+    'authority:verify',
+    '--evidence-dir',
+    evidenceDir,
+    '--authority-file',
+    authority,
+    '--handoff-dir',
+    handoff,
+    '--freeze-file',
+    freeze,
+  ]);
   const receipt = path.join(root, `${name}.json`);
-  nodeCli(['receipt:create', '--evidence-dir', evidenceDir, '--output-file', receipt]);
+  nodeCli([
+    'receipt:create',
+    '--evidence-dir',
+    evidenceDir,
+    '--authority-file',
+    authority,
+    '--handoff-dir',
+    handoff,
+    '--freeze-file',
+    freeze,
+    '--output-file',
+    receipt,
+  ]);
   const args = ['receipt:verify', '--receipt-file', receipt];
   if (strict) {
     args.push('--require-edge-body-limit-compatibility');
   }
   nodeCli(args);
-  return JSON.parse(fs.readFileSync(receipt, 'utf8'));
+  const parsed = JSON.parse(fs.readFileSync(receipt, 'utf8'));
+  assert(parsed.returned_authority.sha256 === sha256File(authority), 'receipt must bind authority hash');
+  assert(parsed.returned_authority.safe_file_count === EXPECTED_FILES.length, 'receipt must bind authority file count');
+  return parsed;
 }
 
 function assertEvidenceInventory(outputDir) {
@@ -316,6 +357,7 @@ function testHandoffAndSuccess(root) {
   nodeCli(['handoff:verify', '--handoff-dir', handoff]);
   const freeze = path.join(root, 'freeze.json');
   nodeCli(['handoff:freeze', '--handoff-dir', handoff, '--freeze-file', freeze, '--fixture-result', 'PASSED']);
+  nodeCli(['handoff:freeze:verify', '--handoff-dir', handoff, '--freeze-file', freeze]);
   const freezeJson = JSON.parse(fs.readFileSync(freeze, 'utf8'));
   assert(freezeJson.generated_handoff_fixture_result === 'PASSED', 'freeze must bind fixture result');
 
@@ -323,25 +365,26 @@ function testHandoffAndSuccess(root) {
   const evidence = path.join(root, 'returned-success');
   runCollector(handoff, evidence, fakeCurl, 'success');
   assertEvidenceInventory(evidence);
-  const receipt = createAndVerifyReceipt(root, evidence, 'receipt-success', true);
+  const receipt = createAndVerifyReceipt(root, evidence, 'receipt-success', handoff, freeze, true);
   assert(receipt.outcome === 'SUCCESS', `success fixture receipt outcome mismatch: ${receipt.outcome}`);
-  return { handoff, fakeCurl };
+  return { handoff, freeze, fakeCurl };
 }
 
-function testNegativeOutcomes(root, handoff, fakeCurl) {
+function testNegativeOutcomes(root, handoff, freeze, fakeCurl) {
   const cases = [
     ['edge_low', 'BLOCKED_EDGE_BODY_LIMIT_TOO_LOW'],
     ['connection_close', 'BLOCKED_EDGE_BODY_LIMIT_TOO_LOW'],
     ['short_upload', 'BLOCKED_EDGE_BODY_LIMIT_TOO_LOW'],
+    ['upper_short_upload', 'BLOCKED_UNEXPECTED_UPPER_CONTROL'],
     ['tls_fail', 'BLOCKED_TLS'],
     ['internal_control_fail', 'BLOCKED_APPLICATION_BODY_LIMIT_BASELINE'],
     ['public_control_fail', 'BLOCKED_PUBLIC_EDGE_UNAVAILABLE'],
-    ['status_mismatch', 'BLOCKED_EDGE_BODY_LIMIT_TOO_LOW'],
+    ['status_mismatch', 'BLOCKED_UNEXPECTED_UPPER_CONTROL'],
   ];
   for (const [mode, outcome] of cases) {
     const evidence = path.join(root, `returned-${mode}`);
     runCollector(handoff, evidence, fakeCurl, mode);
-    const receipt = createAndVerifyReceipt(root, evidence, `receipt-${mode}`);
+    const receipt = createAndVerifyReceipt(root, evidence, `receipt-${mode}`, handoff, freeze);
     assert(receipt.outcome === outcome, `${mode} should produce ${outcome}, got ${receipt.outcome}`);
     nodeCliExpectFail([
       'receipt:verify',
@@ -373,8 +416,8 @@ function main() {
   let passed = false;
   try {
     testPayloads();
-    const { handoff, fakeCurl } = testHandoffAndSuccess(root);
-    testNegativeOutcomes(root, handoff, fakeCurl);
+    const { handoff, freeze, fakeCurl } = testHandoffAndSuccess(root);
+    testNegativeOutcomes(root, handoff, freeze, fakeCurl);
     testStaticSafety(root, handoff);
     console.log('production-edge-body-limit-evidence tests passed');
     passed = true;

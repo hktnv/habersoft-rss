@@ -9,8 +9,10 @@ import { RELEASE_IDENTITY } from './release-identity.mjs';
 
 const CONTRACT_VERSION = 'production-edge-body-limit-evidence-v1';
 const RECEIPT_SCHEMA_VERSION = 'production-edge-body-limit-receipt-v1';
+const AUTHORITY_SCHEMA_VERSION = 'production-edge-body-limit-returned-authority-v1';
 const FREEZE_SCHEMA_VERSION = 'production-edge-body-limit-handoff-freeze-v1';
 const MILESTONE = 'MS-019E';
+const RECEIPT_MILESTONE = 'MS-019E-R1';
 const SERVICE_NAME = 'main-service';
 const CANONICAL_REMOTE = 'https://github.com/hktnv/habersoft-rss';
 const ROUTE = '/agent/entries';
@@ -133,6 +135,13 @@ const DEFAULT_FREEZE_FILE = path.join(
   'verification',
   'handoff-v1-freeze.json',
 );
+const DEFAULT_AUTHORITY_FILE = path.join(
+  WORKSPACE_ROOT,
+  'operator-state',
+  'ms-019e',
+  'verification',
+  'production-edge-body-limit-returned-v1-authority.json',
+);
 const DEFAULT_RECEIPT_FILE = path.join(
   WORKSPACE_ROOT,
   'operator-state',
@@ -231,6 +240,7 @@ function parseArgs(rawArgs) {
   const options = {
     handoffDir: DEFAULT_HANDOFF_DIR,
     freezeFile: DEFAULT_FREEZE_FILE,
+    authorityFile: DEFAULT_AUTHORITY_FILE,
     receiptFile: DEFAULT_RECEIPT_FILE,
     evidenceDir: '',
     fixtureResult: 'NOT_RUN',
@@ -254,6 +264,10 @@ function parseArgs(rawArgs) {
         break;
       case '--freeze-file':
         options.freezeFile = path.resolve(next());
+        break;
+      case '--authority-file':
+      case '--authority':
+        options.authorityFile = path.resolve(next());
         break;
       case '--evidence-dir':
       case '--evidence':
@@ -402,13 +416,131 @@ function freezeHandoff(options) {
   );
 }
 
+function verifyFreeze(options) {
+  const verified = verifyHandoff(options);
+  const freeze = readJsonValidated(options.freezeFile, path.basename(options.freezeFile));
+  const inventory = HANDOFF_FILES.map((file) => {
+    const absolute = path.join(options.handoffDir, file);
+    return {
+      relative_path: file,
+      bytes: fs.statSync(absolute).size,
+      sha256: sha256File(absolute),
+    };
+  });
+  assert(freeze.schema_version === FREEZE_SCHEMA_VERSION, 'freeze schema version mismatch');
+  assert(freeze.milestone === MILESTONE && freeze.service === SERVICE_NAME, 'freeze identity mismatch');
+  assert(JSON.stringify(freeze.inventory) === JSON.stringify(inventory), 'freeze inventory mismatch');
+  assert(freeze.manifest_sha256 === sha256File(path.join(options.handoffDir, 'manifest.json')), 'freeze manifest hash mismatch');
+  assert(freeze.collector_sha256 === verified.collector_sha256, 'freeze collector hash mismatch');
+  assert(freeze.contract_sha256 === sha256File(path.join(options.handoffDir, HANDOFF_CONTRACT)), 'freeze contract hash mismatch');
+  assert(freeze.contract_version === CONTRACT_VERSION, 'freeze contract version mismatch');
+  assert(freeze.final_landed_source_commit === verified.manifest.source_commit, 'freeze source commit mismatch');
+  assert(freeze.body_limit_bytes === BODY_LIMIT_BYTES, 'freeze body limit mismatch');
+  assert(freeze.generated_handoff_fixture_result === 'PASSED', 'freeze fixture result must be PASSED');
+  for (const flag of ['production_contact', 'production_mutation', 'evidence_collected', 'secrets']) {
+    assert(freeze[flag] === false, `freeze flag must be false: ${flag}`);
+  }
+  console.log(
+    JSON.stringify(
+      {
+        status: 'production-edge-body-limit-handoff-freeze-verified',
+        freeze_file: options.freezeFile,
+        freeze_sha256: sha256File(options.freezeFile),
+        manifest_sha256: freeze.manifest_sha256,
+        collector_sha256: freeze.collector_sha256,
+        fixture_result: freeze.generated_handoff_fixture_result,
+      },
+      null,
+      2,
+    ),
+  );
+  return { freeze, verified };
+}
+
+function createAuthority(options) {
+  assert(options.evidenceDir, '--evidence-dir is required');
+  const { freeze, verified } = verifyFreeze(options);
+  const inventory = returnedSafeInventory(options.evidenceDir);
+  const authority = {
+    schema_version: AUTHORITY_SCHEMA_VERSION,
+    record_type: 'PRODUCTION_EDGE_BODY_LIMIT_RETURNED_AUTHORITY',
+    milestone: RECEIPT_MILESTONE,
+    handoff_milestone: MILESTONE,
+    service: SERVICE_NAME,
+    environment: 'production',
+    submission_kind: 'LANDED_HANDOFF_V1_EDGE_BODY_PROBE',
+    authority_source: 'HUMAN_OPERATOR_EXPLICIT_SUBMISSION',
+    selected_input_alias: 'production-edge-body-limit-returned-v1',
+    created_at_utc: new Date().toISOString(),
+    authorization_effective_at_utc: new Date().toISOString(),
+    authoritative_tree_digest: returnedTreeDigest(inventory),
+    authoritative_safe_file_count: inventory.length,
+    safe_inventory: inventory,
+    expected_handoff_source_commit: verified.manifest.source_commit,
+    expected_handoff_manifest_sha256: sha256File(path.join(options.handoffDir, 'manifest.json')),
+    expected_handoff_collector_sha256: verified.collector_sha256,
+    expected_handoff_contract_sha256: sha256File(path.join(options.handoffDir, HANDOFF_CONTRACT)),
+    expected_handoff_freeze_sha256: sha256File(options.freezeFile),
+    expected_contract_version: CONTRACT_VERSION,
+    expected_body_limit_bytes: BODY_LIMIT_BYTES,
+    parent_evidence_sha256: PARENT_RECEIPT_HASHES,
+    operator_transcript_used_as_evidence: false,
+    validation_bypass_granted: false,
+    returned_files_modified_by_codex: false,
+    production_contact_performed_by_codex: false,
+    production_mutation_performed: false,
+    handoff_freeze_fixture_result: freeze.generated_handoff_fixture_result,
+  };
+  scanValueForSecrets(authority, 'authority');
+  validateAuthorityObject(authority, inventory, options);
+  ensureDir(path.dirname(options.authorityFile));
+  writeJsonNoOverwriteOrIdentical(options.authorityFile, authority);
+  console.log(
+    JSON.stringify(
+      {
+        status: 'production-edge-body-limit-returned-authority-created',
+        authority_file: options.authorityFile,
+        authority_sha256: sha256File(options.authorityFile),
+        tree_digest: authority.authoritative_tree_digest,
+        safe_file_count: authority.authoritative_safe_file_count,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function verifyAuthority(options) {
+  assert(options.evidenceDir, '--evidence-dir is required');
+  verifyFreeze(options);
+  const inventory = returnedSafeInventory(options.evidenceDir);
+  const authority = readJsonValidated(options.authorityFile, path.basename(options.authorityFile));
+  validateAuthorityObject(authority, inventory, options);
+  console.log(
+    JSON.stringify(
+      {
+        status: 'production-edge-body-limit-returned-authority-verified',
+        authority_file: options.authorityFile,
+        authority_sha256: sha256File(options.authorityFile),
+        tree_digest: authority.authoritative_tree_digest,
+        safe_file_count: authority.authoritative_safe_file_count,
+      },
+      null,
+      2,
+    ),
+  );
+  return authority;
+}
+
 function createReceipt(options) {
   assert(options.evidenceDir, '--evidence-dir is required');
+  const authority = verifyAuthority(options);
   const parsed = parseEvidenceDir(options.evidenceDir);
   const analysis = analyzeEvidence(parsed);
   const receipt = {
     schema_version: RECEIPT_SCHEMA_VERSION,
-    milestone: MILESTONE,
+    milestone: RECEIPT_MILESTONE,
+    handoff_milestone: MILESTONE,
     service: SERVICE_NAME,
     environment: 'production',
     generated_at_utc: new Date().toISOString(),
@@ -429,6 +561,13 @@ function createReceipt(options) {
       ]),
     ),
     parent_evidence_sha256: PARENT_RECEIPT_HASHES,
+    returned_authority: {
+      file: 'EXTERNAL_RETURNED_AUTHORITY_RECORD',
+      schema_version: authority.schema_version,
+      sha256: sha256File(options.authorityFile),
+      tree_digest: authority.authoritative_tree_digest,
+      safe_file_count: authority.authoritative_safe_file_count,
+    },
     evidence_bundle: {
       directory: 'EXTERNAL_RETURNED_EVIDENCE_DIR',
       inventory: [...EVIDENCE_FILES],
@@ -606,7 +745,7 @@ function analyzeEvidence(parsed) {
   } else if (missingProbeBlockers.length > 0) {
     outcome = 'BLOCKED_EVIDENCE_INTEGRITY';
     blockers.push(...missingProbeBlockers);
-  } else if (!probePassed(internalSmall) || !probePassed(internalExact) || !probePassed(internalOver)) {
+  } else if (!probePassed(internalSmall) || !probePassed(internalExact)) {
     outcome = 'BLOCKED_APPLICATION_BODY_LIMIT_BASELINE';
     blockers.push('internal_application_baseline_mismatch');
   } else if (!probePassed(publicSmall)) {
@@ -618,9 +757,12 @@ function analyzeEvidence(parsed) {
   } else if (!probePassed(publicExact) || publicExact.upload_bytes_match !== true || publicExact.uploaded_bytes !== EXACT_BODY_BYTES) {
     outcome = 'BLOCKED_EDGE_BODY_LIMIT_TOO_LOW';
     blockers.push('public_exact_limit_not_forwarded_to_auth_boundary');
-  } else if (!probePassed(publicOver)) {
-    outcome = 'BLOCKED_EDGE_BODY_LIMIT_TOO_LOW';
-    blockers.push('public_limit_plus_one_status_mismatch');
+  } else if (!probePassed(internalOver) || internalOver.upload_bytes_match !== true || internalOver.uploaded_bytes !== OVER_BODY_BYTES) {
+    outcome = 'BLOCKED_UNEXPECTED_UPPER_CONTROL';
+    blockers.push('internal_limit_plus_one_control_mismatch');
+  } else if (!probePassed(publicOver) || publicOver.upload_bytes_match !== true || publicOver.uploaded_bytes !== OVER_BODY_BYTES) {
+    outcome = 'BLOCKED_UNEXPECTED_UPPER_CONTROL';
+    blockers.push('public_limit_plus_one_control_mismatch');
   }
 
   return { probes: probeObjects, outcome, blockers: [...new Set(blockers)] };
@@ -629,11 +771,15 @@ function analyzeEvidence(parsed) {
 function validateReceiptObject(receipt, options = {}) {
   scanValueForSecrets(receipt, 'receipt');
   assert(receipt.schema_version === RECEIPT_SCHEMA_VERSION, 'receipt schema version mismatch');
-  assert(receipt.milestone === MILESTONE && receipt.service === SERVICE_NAME, 'receipt identity mismatch');
+  assert(receipt.milestone === RECEIPT_MILESTONE && receipt.handoff_milestone === MILESTONE && receipt.service === SERVICE_NAME, 'receipt identity mismatch');
   assert(receipt.contract_version === CONTRACT_VERSION, 'receipt contract mismatch');
   assert(receipt.route === ROUTE && receipt.method === METHOD && receipt.content_type === CONTENT_TYPE, 'receipt route contract mismatch');
   assert(receipt.body_limit_bytes === BODY_LIMIT_BYTES, 'receipt body limit mismatch');
-  assert(['SUCCESS', 'BLOCKED_EDGE_BODY_LIMIT_TOO_LOW', 'BLOCKED_APPLICATION_BODY_LIMIT_BASELINE', 'BLOCKED_PUBLIC_EDGE_UNAVAILABLE', 'BLOCKED_TLS', 'BLOCKED_EVIDENCE_INTEGRITY', 'OPERATOR_ACTION_REQUIRED'].includes(receipt.outcome), `unknown receipt outcome: ${receipt.outcome}`);
+  assert(receipt.returned_authority?.schema_version === AUTHORITY_SCHEMA_VERSION, 'receipt authority schema mismatch');
+  assert(typeof receipt.returned_authority?.sha256 === 'string' && /^[a-f0-9]{64}$/u.test(receipt.returned_authority.sha256), 'receipt authority hash mismatch');
+  assert(typeof receipt.returned_authority?.tree_digest === 'string' && /^[a-f0-9]{64}$/u.test(receipt.returned_authority.tree_digest), 'receipt authority tree digest mismatch');
+  assert(receipt.returned_authority?.safe_file_count === EVIDENCE_FILES.length, 'receipt authority file count mismatch');
+  assert(['SUCCESS', 'BLOCKED_EDGE_BODY_LIMIT_TOO_LOW', 'BLOCKED_APPLICATION_BODY_LIMIT_BASELINE', 'BLOCKED_PUBLIC_EDGE_UNAVAILABLE', 'BLOCKED_TLS', 'BLOCKED_EVIDENCE_INTEGRITY', 'BLOCKED_UNEXPECTED_UPPER_CONTROL', 'OPERATOR_ACTION_REQUIRED'].includes(receipt.outcome), `unknown receipt outcome: ${receipt.outcome}`);
   assert(receipt.safety_flags.auth_credential_used === false, 'receipt must not use auth credentials');
   assert(receipt.safety_flags.cookies === false, 'receipt must not use cookies');
   assert(receipt.safety_flags.retries === false, 'receipt must not use retries');
@@ -651,6 +797,57 @@ function validateReceiptObject(receipt, options = {}) {
     assert(exact?.uploaded_bytes === EXACT_BODY_BYTES, 'SUCCESS requires exact upload byte count');
     assert(exact?.tls_verification === 'PASSED', 'SUCCESS requires public TLS verification');
   }
+}
+
+function returnedSafeInventory(dir) {
+  assert(fs.existsSync(dir) && fs.statSync(dir).isDirectory(), `evidence directory does not exist: ${dir}`);
+  assertExactInventory(dir, EVIDENCE_FILES);
+  return EVIDENCE_FILES.map((relativePath) => {
+    const absolute = path.join(dir, relativePath);
+    const stat = fs.lstatSync(absolute);
+    assert(stat.size >= 0 && stat.size <= 1024 * 1024, `unreasonable returned evidence size: ${relativePath}`);
+    return {
+      relative_path: relativePath,
+      byte_size: stat.size,
+      sha256: sha256File(absolute),
+    };
+  });
+}
+
+function returnedTreeDigest(inventory) {
+  return createHash('sha256').update(JSON.stringify(inventory)).digest('hex');
+}
+
+function validateAuthorityObject(authority, inventory, options) {
+  scanValueForSecrets(authority, 'authority');
+  assert(authority.schema_version === AUTHORITY_SCHEMA_VERSION, 'authority schema version mismatch');
+  assert(authority.record_type === 'PRODUCTION_EDGE_BODY_LIMIT_RETURNED_AUTHORITY', 'authority record type mismatch');
+  assert(authority.milestone === RECEIPT_MILESTONE && authority.handoff_milestone === MILESTONE, 'authority milestone mismatch');
+  assert(authority.service === SERVICE_NAME && authority.environment === 'production', 'authority service/environment mismatch');
+  assert(authority.submission_kind === 'LANDED_HANDOFF_V1_EDGE_BODY_PROBE', 'authority submission kind mismatch');
+  assert(authority.authority_source === 'HUMAN_OPERATOR_EXPLICIT_SUBMISSION', 'authority source mismatch');
+  assert(authority.selected_input_alias === 'production-edge-body-limit-returned-v1', 'authority selected input alias mismatch');
+  assert(authority.authoritative_tree_digest === returnedTreeDigest(inventory), 'authority returned tree digest mismatch');
+  assert(authority.authoritative_safe_file_count === EVIDENCE_FILES.length, 'authority file count mismatch');
+  assert(JSON.stringify(authority.safe_inventory) === JSON.stringify(inventory), 'authority safe inventory mismatch');
+  assert(authority.expected_handoff_source_commit === readJsonValidated(path.join(options.handoffDir, 'manifest.json'), 'manifest.json').source_commit, 'authority handoff source mismatch');
+  assert(authority.expected_handoff_manifest_sha256 === sha256File(path.join(options.handoffDir, 'manifest.json')), 'authority manifest hash mismatch');
+  assert(authority.expected_handoff_collector_sha256 === sha256File(path.join(options.handoffDir, HANDOFF_COLLECTOR)), 'authority collector hash mismatch');
+  assert(authority.expected_handoff_contract_sha256 === sha256File(path.join(options.handoffDir, HANDOFF_CONTRACT)), 'authority contract hash mismatch');
+  assert(authority.expected_handoff_freeze_sha256 === sha256File(options.freezeFile), 'authority freeze hash mismatch');
+  assert(authority.expected_contract_version === CONTRACT_VERSION, 'authority contract version mismatch');
+  assert(authority.expected_body_limit_bytes === BODY_LIMIT_BYTES, 'authority body limit mismatch');
+  assert(JSON.stringify(authority.parent_evidence_sha256) === JSON.stringify(PARENT_RECEIPT_HASHES), 'authority parent hash mismatch');
+  for (const flag of [
+    'operator_transcript_used_as_evidence',
+    'validation_bypass_granted',
+    'returned_files_modified_by_codex',
+    'production_contact_performed_by_codex',
+    'production_mutation_performed',
+  ]) {
+    assert(authority[flag] === false, `authority flag must be false: ${flag}`);
+  }
+  assert(authority.handoff_freeze_fixture_result === 'PASSED', 'authority freeze fixture result mismatch');
 }
 
 function validateMetadata(metadata) {
@@ -1112,7 +1309,10 @@ function usage() {
   node scripts/production-edge-body-limit-evidence.mjs handoff [--output-dir <dir>]
   node scripts/production-edge-body-limit-evidence.mjs handoff:verify [--handoff-dir <dir>]
   node scripts/production-edge-body-limit-evidence.mjs handoff:freeze [--handoff-dir <dir>] [--freeze-file <file>] [--fixture-result PASSED]
-  node scripts/production-edge-body-limit-evidence.mjs receipt:create --evidence-dir <dir> [--output-file <file>]
+  node scripts/production-edge-body-limit-evidence.mjs handoff:freeze:verify [--handoff-dir <dir>] [--freeze-file <file>]
+  node scripts/production-edge-body-limit-evidence.mjs authority:create --evidence-dir <dir> [--authority-file <file>] [--handoff-dir <dir>] [--freeze-file <file>]
+  node scripts/production-edge-body-limit-evidence.mjs authority:verify --evidence-dir <dir> [--authority-file <file>] [--handoff-dir <dir>] [--freeze-file <file>]
+  node scripts/production-edge-body-limit-evidence.mjs receipt:create --evidence-dir <dir> [--authority-file <file>] [--output-file <file>]
   node scripts/production-edge-body-limit-evidence.mjs receipt:verify --receipt-file <file> [--require-edge-body-limit-compatibility]
 `;
 }
@@ -1133,6 +1333,15 @@ async function main() {
       break;
     case 'handoff:freeze':
       freezeHandoff(options);
+      break;
+    case 'handoff:freeze:verify':
+      verifyFreeze(options);
+      break;
+    case 'authority:create':
+      createAuthority(options);
+      break;
+    case 'authority:verify':
+      verifyAuthority(options);
       break;
     case 'receipt:create':
       createReceipt(options);

@@ -40,6 +40,8 @@
     "production:edge-body-limit:handoff": "node scripts/production-edge-body-limit-evidence.mjs handoff",
     "production:edge-body-limit:handoff:verify": "node scripts/production-edge-body-limit-evidence.mjs handoff:verify",
     "production:edge-body-limit:handoff:freeze": "node scripts/production-edge-body-limit-evidence.mjs handoff:freeze",
+    "production:edge-body-limit:authority:create": "node scripts/production-edge-body-limit-evidence.mjs authority:create",
+    "production:edge-body-limit:authority:verify": "node scripts/production-edge-body-limit-evidence.mjs authority:verify",
     "production:edge-body-limit:receipt:create": "node scripts/production-edge-body-limit-evidence.mjs receipt:create",
     "production:edge-body-limit:receipt:verify": "node scripts/production-edge-body-limit-evidence.mjs receipt:verify",
     "production:smoke": "node scripts/production-smoke.mjs",

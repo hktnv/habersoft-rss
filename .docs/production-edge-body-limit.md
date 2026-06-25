@@ -96,6 +96,7 @@ Local handoff generation:
 npm run production:edge-body-limit:handoff -- --output-dir <external-ms-019e-handoff-v1-dir>
 npm run production:edge-body-limit:handoff:verify -- --handoff-dir <external-ms-019e-handoff-v1-dir>
 npm run production:edge-body-limit:handoff:freeze -- --handoff-dir <external-ms-019e-handoff-v1-dir> --freeze-file <external-freeze-file> --fixture-result PASSED
+node scripts/production-edge-body-limit-evidence.mjs handoff:freeze:verify --handoff-dir <external-ms-019e-handoff-v1-dir> --freeze-file <external-freeze-file>
 ```
 
 Generated handoff-v1 inventory:
@@ -119,12 +120,14 @@ evidence-records.tsv
 Future receipt creation and verification:
 
 ```powershell
-npm run production:edge-body-limit:receipt:create -- --evidence-dir <returned-dir> --output-file <external-receipt>
+npm run production:edge-body-limit:authority:create -- --evidence-dir <returned-dir> --authority-file <external-authority> --handoff-dir <external-ms-019e-handoff-v1-dir> --freeze-file <external-freeze-file>
+npm run production:edge-body-limit:authority:verify -- --evidence-dir <returned-dir> --authority-file <external-authority> --handoff-dir <external-ms-019e-handoff-v1-dir> --freeze-file <external-freeze-file>
+npm run production:edge-body-limit:receipt:create -- --evidence-dir <returned-dir> --authority-file <external-authority> --handoff-dir <external-ms-019e-handoff-v1-dir> --freeze-file <external-freeze-file> --output-file <external-receipt>
 npm run production:edge-body-limit:receipt:verify -- --receipt-file <external-receipt>
 npm run production:edge-body-limit:receipt:verify -- --receipt-file <external-receipt> --require-edge-body-limit-compatibility
 ```
 
-Strict verification accepts only `SUCCESS`. It rejects edge-too-low, internal application baseline mismatch, public edge unavailable, TLS failure, checksum mismatch, unsafe flags, missing probes, byte mismatch or retained payload/response evidence.
+Strict verification accepts only `SUCCESS`. It rejects edge-too-low, internal application baseline mismatch, public edge unavailable, TLS failure, unexpected upper-control mismatch, checksum mismatch, unsafe flags, missing probes, byte mismatch or retained payload/response evidence.
 
 ## Current State
 
