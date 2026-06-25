@@ -15,6 +15,7 @@ Bu belge production redeploy, server command log'u, exact production Git/image i
 - Basic activation acceptance: `PASSED`
 - Extended operational evidence: `PARTIAL_ACCEPTED`
 - Production backup/restore evidence: `PRODUCTION_BACKUP_RESTORE_VERIFIED`
+- Production checkout/current pointer evidence: `PARTIAL_ACCEPTED`
 
 `Production Aktif` yalniz `main-service` backend application icindir. Bagimsiz Agent application, bagimsiz Tenant applications, frontend/admin panel veya `rss-panel.habersoft.com` icin readiness iddiasi degildir.
 
@@ -84,6 +85,34 @@ MS-019C accepted the returned production backup-v2 bundle, created a safe return
 - Combined receipt SHA-256: `868b13b9cfe44962daa4abbec71310473e1df1d0a49e4bf156a4c3f77ed01735`
 - Backup restore baseline: `PASSED`
 - Handoff-v2 manifest SHA-256: `066fd8354fa8bb1ccc43db4fb177f7f2d54b5e56e4f5665bc591d183aa8e39d8`
+
+## MS-019D-R1 Checkout Pointer Receipt
+
+MS-019D-R1 accepted the returned checkout/pointer bundle as a partial checkout pointer receipt. Codex did not contact production, did not mutate production Git/Docker/Compose state, did not read production env values and did not edit returned evidence files.
+
+- Returned authority filename: `production-checkout-pointer-returned-v1-authority.json`
+- Returned authority SHA-256: `44be2ff5d3d666ba359ac0af9c206c593ab0a6e2cc0a5bc630f5079c9c4ad8a9`
+- Returned tree digest: `39589acae16aeeee649caa44df82dff5483e59537a2a2b05e7adcaf3f60f4bc0`
+- Receipt filename: `production-checkout-pointer-receipt.json`
+- Receipt SHA-256: `e823ec819d471c8bb3c5052e6def3a6830731058952971675bdd4ae4d1f6c63a`
+- Collection UTC: `2026-06-25T13:52:49Z`
+- Outcome: `PARTIAL_ACCEPTED`
+- Rollback baseline state filename: `production-release-pointer-state.json`
+- Rollback baseline state SHA-256: `ce6908a1196451c5737086943c4b9a9ad116ccc7d45c953fab6b2eb17936681c`
+
+Verified safe projections:
+
+| Check | Result | Boundary |
+|---|---|---|
+| Checkout hygiene | `PASSED` | Classification `ALLOWLISTED_EXTERNAL_STATE_IGNORED`; tracked, unknown untracked and operation-in-progress counts were zero. |
+| Production checkout commit | `PASSED` | `1745fcb250208ffa22aac5aac745cda49dcfd865` on branch `main`, normalized canonical remote `https://github.com/hktnv/habersoft-rss`. |
+| Current runtime image identity | `PASSED` | Runtime env image, API image, worker image and inspected image matched `sha256:441daac4dc406059fc640df645366f491d34f4cd5fa868852dc24a32ad78865b`. |
+| Current runtime revision | `PASSED` | OCI revision `186a30d4c8c09c97bcd37c1f4c787e5c5e49f397` is known in canonical history and ancestor of verified `origin/main`. |
+| OCI source | `PASSED` | Source normalized to `https://github.com/hktnv/habersoft-rss`. |
+| Checkout/runtime equality | `false` | Accepted by MS-019D-R1 because checkout is clean at current `origin/main` and runtime revision is a verified ancestor. |
+| Historical previous pointer | `NOT_RECORDED` | No strict previous pointer file was supplied; no staging/image-recency/Git-parent inference was used. |
+| Rollback baseline for next deployment | `ESTABLISHED_FROM_CURRENT_POINTER` | Forward-looking external state records the current verified pointer as the value to rotate before the next runtime mutation. |
+| Production mutation flags | `false` | No deployment, restart, migration, backup, restore, tag, release or artifact publication was performed by this intake. |
 
 ## Not Recorded
 

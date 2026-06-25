@@ -57,6 +57,7 @@ Extended operational evidence MS-019B collector-v2 receipt ile partial accepted:
 - TLS, redirect and auth boundary smokes: `PASSED`
 - point-in-time restart/OOM snapshot: `PASSED`
 - production backup/restore baseline: `PASSED` by MS-019C
+- checkout hygiene and current release pointer: `PASSED` by MS-019D-R1
 - previous production pointer: `NOT_RECORDED`
 - long-term stability/error-burst analysis: `NOT_RECORDED`
 - edge body-limit verification: `NOT_RECORDED`
@@ -73,7 +74,7 @@ Production and staging must use different environment marker, Compose project na
 
 Operator production mutation oncesi target state'i read-only siniflandirir. Unknown or conflicting state mutation'u bloke eder.
 
-Preflight evidence current MS-019B receipt icinde identity, migration, worker/scheduler, TLS, route smoke ve point-in-time stability alanlari icin kaydedildi. Backup/restore MS-019C combined receipt ile verified oldu. Previous pointer, edge body-limit, long-term stability ve error-burst alanlari `NOT_RECORDED` kalir.
+Preflight evidence current MS-019B receipt icinde identity, migration, worker/scheduler, TLS, route smoke ve point-in-time stability alanlari icin kaydedildi. Backup/restore MS-019C combined receipt ile verified oldu. Checkout hygiene ve current release pointer evidence MS-019D-R1 receipt ile accepted oldu. Previous pointer, edge body-limit, long-term stability ve error-burst alanlari `NOT_RECORDED` kalir.
 
 ## Backup gate
 
@@ -112,9 +113,11 @@ DB restore is not default rollback behavior for this release because there is no
 
 ## Current/previous pointers
 
-MS-019B receipt current image identity kaydeder. Previous production pointer commit/image hala `NOT_RECORDED`; future receipts should record actual previous production identity when operator evidence exists.
+MS-019B receipt current image identity kaydeder. MS-019D-R1 checkout hygiene ve current release pointer evidence'i accepted hale getirdi: current checkout `main` uzerinde clean, runtime image chain tutarli ve OCI revision canonical history ancestor'i olarak dogrulandi. Checkout/runtime equality false olarak kaydedildi ve bu durum current pointer failure sayilmadi.
 
-Checkout hygiene ve release-pointer evidence contract [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md) dosyasindadir. Future production release rotation, external `operator-state/ms-019d/production-release-pointer-state.json` modelini operator-authorized release procedure icinde guncellemelidir; repository handoff generation veya Codex local tests bu file'i olusturmaz ve production pointer pass iddiasi yazmaz.
+Previous production pointer commit/image hala `NOT_RECORDED`; no staging package, Docker image age/order or Git-parent inference is allowed. MS-019D-R1 external `operator-state/ms-019d/production-release-pointer-state.json` file'ini forward-looking rollback baseline olarak current pointer'dan kurdu. Bu historical previous pointer degildir. Next deployment, runtime mutation oncesi bu pointer state'i rotate etmeli ve yeni current/previous identity'yi operator-authorized procedure ile dogrulamalidir.
+
+Checkout hygiene ve release-pointer evidence contract [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md) dosyasindadir. Repository handoff generation veya Codex local tests production pointer state'i guncellemez.
 
 ## Post-deployment verification
 
