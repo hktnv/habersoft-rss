@@ -10,7 +10,9 @@ import { RELEASE_IDENTITY } from './release-identity.mjs';
 const CONTRACT_VERSION = 'production-operational-smoke-evidence-v2';
 const FREEZE_SCHEMA_VERSION = 'production-operational-smoke-handoff-freeze-v2';
 const RECEIPT_SCHEMA_VERSION = 'production-operational-smoke-receipt-v2';
+const AUTHORITY_SCHEMA_VERSION = 'production-operational-smoke-returned-authority-v1';
 const MILESTONE = 'MS-019F';
+const INTAKE_MILESTONE = 'MS-019F-R2';
 const SERVICE_NAME = 'main-service';
 const CANONICAL_REMOTE = 'https://github.com/hktnv/habersoft-rss';
 const CLASSIFIER_MODE = 'STABLE_SEVERITY_PREFIX';
@@ -255,9 +257,48 @@ const RECEIPT_CLAIM_BOUNDARY_KEYS = Object.freeze([
   'not_zero_historical_errors',
   'historical_previous_pointer_still_not_recorded',
 ]);
+const AUTHORITY_KEYS = Object.freeze([
+  'schema_version',
+  'record_type',
+  'milestone',
+  'service',
+  'environment',
+  'generated_at_utc',
+  'submission_kind',
+  'authority_source',
+  'selected_input_alias',
+  'authoritative_tree_digest',
+  'authoritative_safe_file_count',
+  'safe_inventory',
+  'expected_handoff',
+  'safety_flags',
+]);
+const AUTHORITY_FILE_KEYS = Object.freeze([
+  'relative_path',
+  'file_type',
+  'byte_size',
+  'sha256',
+]);
+const AUTHORITY_HANDOFF_KEYS = Object.freeze([
+  'source_commit',
+  'manifest_sha256',
+  'observer_sha256',
+  'contract_version',
+  'contract_sha256',
+  'freeze_sha256',
+]);
+const AUTHORITY_SAFETY_KEYS = Object.freeze([
+  'raw_contents_printed',
+  'raw_logs_retained',
+  'raw_health_retained',
+  'auth_credentials_used',
+  'production_contact_performed_by_codex',
+  'production_mutation_performed_by_codex',
+]);
 const DEFAULT_HANDOFF_DIR = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-handoff-v2');
 const DEFAULT_FREEZE_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'handoff-v2-freeze.json');
 const DEFAULT_RECEIPT_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-receipt.json');
+const DEFAULT_AUTHORITY_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'production-operational-smoke-returned-v2-authority.json');
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main().catch((error) => {
@@ -317,6 +358,12 @@ async function main() {
     case 'handoff:freeze:verify':
       printJson(verifyFreeze(options.handoffDir, options.freezeFile));
       break;
+    case 'authority:create':
+      printJson(createAuthority(options));
+      break;
+    case 'authority:verify':
+      printJson(verifyAuthorityFile(options.authorityFile, options));
+      break;
     case 'receipt:create':
       printJson(createReceipt(options));
       break;
@@ -327,7 +374,7 @@ async function main() {
       printJson(runGeneratedHandoffFixture(options));
       break;
     default:
-      fail(`usage: production-operational-smoke-evidence <source:verify|handoff|handoff:verify|handoff:freeze|handoff:freeze:verify|receipt:create|receipt:verify|fixture:e2e>`);
+      fail(`usage: production-operational-smoke-evidence <source:verify|handoff|handoff:verify|handoff:freeze|handoff:freeze:verify|authority:create|authority:verify|receipt:create|receipt:verify|fixture:e2e>`);
   }
 }
 
@@ -336,6 +383,7 @@ function parseArgs(rawArgs) {
     handoffDir: DEFAULT_HANDOFF_DIR,
     freezeFile: DEFAULT_FREEZE_FILE,
     receiptFile: DEFAULT_RECEIPT_FILE,
+    authorityFile: DEFAULT_AUTHORITY_FILE,
     evidenceDir: '',
     fixtureResult: 'NOT_RUN',
     requireBoundedOperationalSmoke: false,
@@ -359,6 +407,9 @@ function parseArgs(rawArgs) {
         break;
       case '--freeze-file':
         options.freezeFile = path.resolve(next());
+        break;
+      case '--authority-file':
+        options.authorityFile = path.resolve(next());
         break;
       case '--evidence-dir':
         options.evidenceDir = path.resolve(next());
@@ -519,6 +570,7 @@ function verifyHandoff(handoffDir) {
   return {
     status: 'production-operational-smoke-handoff-verified',
     handoff_dir: handoffDir,
+    source_commit: manifest.final_landed_source_commit,
     manifest_sha256: sha256File(path.join(handoffDir, 'manifest.json')),
     observer_sha256: checksumMap[HANDOFF_OBSERVER],
     contract_sha256: checksumMap[HANDOFF_CONTRACT],
@@ -615,6 +667,110 @@ function verifyFreeze(handoffDir, freezeFile) {
     freeze_sha256: sha256File(freezeFile),
     manifest_sha256: freeze.manifest_sha256,
   };
+}
+
+function createAuthority(options) {
+  assert(options.evidenceDir !== '', '--evidence-dir is required');
+  assertNoOverwrite(options.authorityFile);
+  const handoff = verifyHandoff(options.handoffDir);
+  const freeze = verifyFreeze(options.handoffDir, options.freezeFile);
+  const authority = createAuthorityFromEvidence(options.evidenceDir, {
+    source_commit: handoff.source_commit,
+    manifest_sha256: handoff.manifest_sha256,
+    observer_sha256: handoff.observer_sha256,
+    contract_version: CONTRACT_VERSION,
+    contract_sha256: handoff.contract_sha256,
+    freeze_sha256: freeze.freeze_sha256,
+  });
+  ensureDir(path.dirname(options.authorityFile));
+  writeJson(options.authorityFile, authority);
+  return {
+    status: 'production-operational-smoke-returned-authority-created',
+    authority_file: options.authorityFile,
+    sha256: sha256File(options.authorityFile),
+    authoritative_tree_digest: authority.authoritative_tree_digest,
+    authoritative_safe_file_count: authority.authoritative_safe_file_count,
+  };
+}
+
+function verifyAuthorityFile(authorityFile, options) {
+  const authority = JSON.parse(readAndValidateTextFile(path.dirname(authorityFile), path.basename(authorityFile)));
+  verifyAuthorityObject(authority, options);
+  return {
+    status: 'production-operational-smoke-returned-authority-verified',
+    authority_file: authorityFile,
+    sha256: sha256File(authorityFile),
+    authoritative_tree_digest: authority.authoritative_tree_digest,
+    authoritative_safe_file_count: authority.authoritative_safe_file_count,
+  };
+}
+
+function createAuthorityFromEvidence(evidenceDir, handoffIdentity) {
+  assertExactInventory(evidenceDir, EVIDENCE_FILES);
+  const inventory = safeFileInventory(evidenceDir, EVIDENCE_FILES);
+  return {
+    schema_version: AUTHORITY_SCHEMA_VERSION,
+    record_type: 'PRODUCTION_OPERATIONAL_SMOKE_RETURNED_AUTHORITY',
+    milestone: INTAKE_MILESTONE,
+    service: SERVICE_NAME,
+    environment: 'production',
+    generated_at_utc: new Date().toISOString(),
+    submission_kind: 'LANDED_HANDOFF_V2_BOUNDED_20M_OBSERVATION',
+    authority_source: 'HUMAN_OPERATOR_EXPLICIT_SUBMISSION',
+    selected_input_alias: 'production-operational-smoke-returned-v2',
+    authoritative_tree_digest: treeDigest(inventory),
+    authoritative_safe_file_count: inventory.length,
+    safe_inventory: inventory,
+    expected_handoff: handoffIdentity,
+    safety_flags: {
+      raw_contents_printed: false,
+      raw_logs_retained: false,
+      raw_health_retained: false,
+      auth_credentials_used: false,
+      production_contact_performed_by_codex: false,
+      production_mutation_performed_by_codex: false,
+    },
+  };
+}
+
+function verifyAuthorityObject(authority, options) {
+  assertExactObjectKeys(authority, AUTHORITY_KEYS, 'authority keys');
+  assert(authority.schema_version === AUTHORITY_SCHEMA_VERSION, 'authority schema mismatch');
+  assert(authority.record_type === 'PRODUCTION_OPERATIONAL_SMOKE_RETURNED_AUTHORITY', 'authority record type mismatch');
+  assert(authority.milestone === INTAKE_MILESTONE, 'authority milestone mismatch');
+  assert(authority.service === SERVICE_NAME, 'authority service mismatch');
+  assert(authority.environment === 'production', 'authority environment mismatch');
+  assert(authority.submission_kind === 'LANDED_HANDOFF_V2_BOUNDED_20M_OBSERVATION', 'authority submission kind mismatch');
+  assert(authority.authority_source === 'HUMAN_OPERATOR_EXPLICIT_SUBMISSION', 'authority source mismatch');
+  assert(authority.selected_input_alias === 'production-operational-smoke-returned-v2', 'authority selected input alias mismatch');
+  assert(new Date(authority.generated_at_utc).toISOString() === authority.generated_at_utc, 'authority generated timestamp malformed');
+  assert(Array.isArray(authority.safe_inventory), 'authority safe inventory must be an array');
+  assert(authority.authoritative_safe_file_count === EVIDENCE_FILES.length, 'authority safe file count mismatch');
+  assert(authority.safe_inventory.length === EVIDENCE_FILES.length, 'authority safe inventory length mismatch');
+  for (const item of authority.safe_inventory) {
+    assertExactObjectKeys(item, AUTHORITY_FILE_KEYS, 'authority inventory file keys');
+    assert(EVIDENCE_FILES.includes(item.relative_path), `authority inventory unknown file: ${item.relative_path}`);
+    assert(item.file_type === 'regular', 'authority inventory file type mismatch');
+    assert(Number.isInteger(item.byte_size) && item.byte_size >= 0, 'authority inventory byte size malformed');
+    assert(/^[a-f0-9]{64}$/u.test(item.sha256), 'authority inventory checksum malformed');
+  }
+  assertExactInventory(options.evidenceDir, EVIDENCE_FILES);
+  const currentInventory = safeFileInventory(options.evidenceDir, EVIDENCE_FILES);
+  assertSameObject(authority.safe_inventory, currentInventory, 'authority inventory does not match returned evidence');
+  assert(authority.authoritative_tree_digest === treeDigest(currentInventory), 'authority tree digest mismatch');
+  assertExactObjectKeys(authority.expected_handoff, AUTHORITY_HANDOFF_KEYS, 'authority handoff keys');
+  const handoff = verifyHandoff(options.handoffDir);
+  const freeze = verifyFreeze(options.handoffDir, options.freezeFile);
+  assert(authority.expected_handoff.source_commit === handoff.source_commit, 'authority source commit mismatch');
+  assert(authority.expected_handoff.manifest_sha256 === handoff.manifest_sha256, 'authority manifest checksum mismatch');
+  assert(authority.expected_handoff.observer_sha256 === handoff.observer_sha256, 'authority observer checksum mismatch');
+  assert(authority.expected_handoff.contract_version === CONTRACT_VERSION, 'authority contract version mismatch');
+  assert(authority.expected_handoff.contract_sha256 === handoff.contract_sha256, 'authority contract checksum mismatch');
+  assert(authority.expected_handoff.freeze_sha256 === freeze.freeze_sha256, 'authority freeze checksum mismatch');
+  assertExactObjectKeys(authority.safety_flags, AUTHORITY_SAFETY_KEYS, 'authority safety flag keys');
+  for (const [key, value] of Object.entries(authority.safety_flags)) {
+    assert(value === false, `authority safety flag must be false: ${key}`);
+  }
 }
 
 function createReceipt(options) {
@@ -841,6 +997,8 @@ function summarizeEvidence(metadata, samples, buckets) {
     safety.backup_performed === false &&
     safety.restore_performed === false;
   const elapsedSeconds = numberField(metadata.elapsed_seconds, 'elapsed_seconds');
+  const wallClockElapsedSeconds = utcElapsedSeconds(metadata.started_at_utc, metadata.ended_at_utc, 'metadata observation window');
+  const wallClockPass = wallClockElapsedSeconds === elapsedSeconds && wallClockElapsedSeconds >= WINDOW_SECONDS;
   const healthPass =
     internalLivePassed === PRIMARY_SAMPLE_COUNT &&
     internalReadyPassed === PRIMARY_SAMPLE_COUNT &&
@@ -850,7 +1008,12 @@ function summarizeEvidence(metadata, samples, buckets) {
     tlsPassed === PRIMARY_SAMPLE_COUNT;
   const containerPass = apiContainerFailures === 0 && workerContainerFailures === 0;
   const workerPass = workerDueCount === WORKER_SAMPLE_COUNT && workerPassed === WORKER_SAMPLE_COUNT;
-  const samplePass = samples.length === PRIMARY_SAMPLE_COUNT && sampleFailures === 0 && maxLag <= MAX_SAMPLE_LAG_SECONDS && elapsedSeconds >= WINDOW_SECONDS;
+  const samplePass =
+    samples.length === PRIMARY_SAMPLE_COUNT &&
+    sampleFailures === 0 &&
+    maxLag <= MAX_SAMPLE_LAG_SECONDS &&
+    elapsedSeconds >= WINDOW_SECONDS &&
+    wallClockPass;
   const logCoveragePass = coverageFailures === 0;
   const errorSignalPass = logCoveragePass && errorTotal === 0 && fatalTotal === 0;
   const operationalSmokePass = samplePass && healthPass && containerPass && workerPass && safetyPass;
@@ -905,12 +1068,15 @@ function summarizeEvidence(metadata, samples, buckets) {
     logCoveragePass,
     safetyPass,
     elapsedSeconds,
+    wallClockElapsedSeconds,
+    wallClockPass,
   };
 }
 
 function computeOutcome(summary) {
   if (!summary.safetyPass) return 'BLOCKED_EVIDENCE_INTEGRITY';
   if (summary.elapsedSeconds < WINDOW_SECONDS) return 'BLOCKED_SAMPLE_COVERAGE';
+  if (!summary.wallClockPass) return 'BLOCKED_SAMPLE_COVERAGE';
   if (summary.maxSchedulingLagSeconds > MAX_SAMPLE_LAG_SECONDS) return 'BLOCKED_SCHEDULING_LAG';
   if (!summary.healthPass) return 'BLOCKED_HEALTH_SAMPLE_FAILURE';
   if (!summary.containerPass) return 'BLOCKED_CONTAINER_RESTART';
@@ -951,6 +1117,15 @@ function verifyReceiptObject(receipt, options = {}) {
   assert(receipt.observation.error_bucket_seconds === ERROR_BUCKET_SECONDS, 'receipt error bucket seconds mismatch');
   assert(receipt.observation.error_bucket_count === ERROR_BUCKET_COUNT, 'receipt bucket count mismatch');
   assert(receipt.observation.classifier_mode === CLASSIFIER_MODE, 'receipt classifier mismatch');
+  const receiptWallClockElapsedSeconds = utcElapsedSeconds(
+    receipt.observation.started_at_utc,
+    receipt.observation.ended_at_utc,
+    'receipt observation window',
+  );
+  if (receipt.outcome === 'SUCCESS') {
+    assert(receiptWallClockElapsedSeconds === receipt.observation.elapsed_seconds, 'successful receipt UTC elapsed mismatch');
+    assert(receiptWallClockElapsedSeconds >= WINDOW_SECONDS, 'successful receipt UTC window too short');
+  }
   assert(receipt.safety_flags.raw_logs_retained === false, 'raw logs must not be retained');
   assert(receipt.safety_flags.raw_health_retained === false, 'raw health must not be retained');
   assert(receipt.safety_flags.auth_credentials_used === false, 'auth must be false');
@@ -961,6 +1136,8 @@ function verifyReceiptObject(receipt, options = {}) {
     assert(receipt.outcome === 'SUCCESS', 'strict operational smoke requires SUCCESS');
     assert(receipt.bounded_operational_smoke_result === 'BOUNDED_OPERATIONAL_SMOKE_WINDOW_VERIFIED', 'bounded operational smoke result mismatch');
     assert(receipt.observation.elapsed_seconds >= WINDOW_SECONDS, 'elapsed window too short');
+    assert(receiptWallClockElapsedSeconds === receipt.observation.elapsed_seconds, 'UTC elapsed mismatch');
+    assert(receiptWallClockElapsedSeconds >= WINDOW_SECONDS, 'UTC window too short');
     assert(receipt.observation.max_sample_lag_seconds <= MAX_SAMPLE_LAG_SECONDS, 'scheduling lag exceeded');
     assert(receipt.health_summary.internal_live_passed === PRIMARY_SAMPLE_COUNT, 'internal live coverage mismatch');
     assert(receipt.health_summary.public_ready_passed === PRIMARY_SAMPLE_COUNT, 'public ready coverage mismatch');
@@ -1619,6 +1796,21 @@ function boolField(value, label) {
   if (value === 'true' || value === true) return true;
   if (value === 'false' || value === false) return false;
   fail(`${label} must be boolean`);
+}
+
+function utcElapsedSeconds(startedAtUtc, endedAtUtc, label) {
+  const started = parseUtcSecond(startedAtUtc, `${label} start`);
+  const ended = parseUtcSecond(endedAtUtc, `${label} end`);
+  assert(ended >= started, `${label} end precedes start`);
+  return ended - started;
+}
+
+function parseUtcSecond(value, label) {
+  assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(String(value)), `${label} must be UTC second timestamp`);
+  const milliseconds = Date.parse(value);
+  assert(Number.isFinite(milliseconds), `${label} timestamp malformed`);
+  assert(milliseconds % 1000 === 0, `${label} must not include sub-second precision`);
+  return milliseconds / 1000;
 }
 
 function isGitSha(value) {

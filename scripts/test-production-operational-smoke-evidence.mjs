@@ -45,6 +45,7 @@ try {
   assert.equal(success.receipt.claim_boundary.long_term_stability_claim, false);
   nodeCli(['receipt:verify', '--receipt-file', success.receiptFile, '--require-ms019f-v2-baseline']);
   assertReturnedInventorySafe(success.returnedDir);
+  assertReturnedAuthorityPasses(base, success.returnedDir);
 
   assertBlockedVariants(base);
   assertInterruptedRunHasNoFinalBundle(base);
@@ -52,6 +53,7 @@ try {
   assertUnknownMetadataFieldFails(base);
   assertMissingSampleFails(base);
   assertShortElapsedStrictFails(base);
+  assertWallClockElapsedMismatchFails(base);
   assertUnsafeFlagStrictFails(base);
   assertHandoffRejectsChecksumMismatch(base.handoffDir);
   assertHandoffRejectsComposeRun(base.handoffDir);
@@ -253,6 +255,31 @@ function assertShortElapsedStrictFails(base) {
   nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-v2-baseline']);
 }
 
+function assertWallClockElapsedMismatchFails(base) {
+  const result = runObserverVariant(base, 'success', 'wall-clock-mismatch');
+  const metadata = readFileSync(path.join(result.returnedDir, 'collector-metadata.txt'), 'utf8');
+  const startedLine = metadata.split('\n').find((line) => line.startsWith('started_at_utc='));
+  assert.ok(startedLine);
+  const startedAt = startedLine.slice('started_at_utc='.length);
+  const shortEnd = new Date(Date.parse(startedAt) + 63_000).toISOString().replace('.000Z', 'Z');
+  replaceMetadataValue(result.returnedDir, 'ended_at_utc', shortEnd);
+  const receiptFile = path.join(temp, 'wall-clock-mismatch-receipt.json');
+  nodeCli([
+    'receipt:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    result.returnedDir,
+    '--receipt-file',
+    receiptFile,
+  ]);
+  assert.equal(readJson(receiptFile).outcome, 'BLOCKED_SAMPLE_COVERAGE');
+  nodeCli(['receipt:verify', '--receipt-file', receiptFile]);
+  nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-v2-baseline']);
+}
+
 function assertUnsafeFlagStrictFails(base) {
   const result = runObserverVariant(base, 'success', 'unsafe-flag');
   replaceMetadataValue(result.returnedDir, 'raw_logs_retained', 'true');
@@ -366,6 +393,48 @@ function assertReturnedInventorySafe(returnedDir) {
     const text = readFileSync(path.join(returnedDir, name), 'utf8');
     assert.equal(/DATABASE_URL|POSTGRES_PASSWORD|AGENT_KEY|TENANT_RATE_LIMIT_KEY_SECRET|raw log|docker inspect json/iu.test(text), false, name);
   }
+}
+
+function assertReturnedAuthorityPasses(base, returnedDir) {
+  const authorityFile = path.join(temp, 'returned-authority.json');
+  const created = JSON.parse(nodeCli([
+    'authority:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    returnedDir,
+    '--authority-file',
+    authorityFile,
+  ]).stdout);
+  assert.equal(created.status, 'production-operational-smoke-returned-authority-created');
+  assert.equal(created.authoritative_safe_file_count, EVIDENCE_FILES.length);
+
+  const verified = JSON.parse(nodeCli([
+    'authority:verify',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    returnedDir,
+    '--authority-file',
+    authorityFile,
+  ]).stdout);
+  assert.equal(verified.status, 'production-operational-smoke-returned-authority-verified');
+  assert.equal(verified.authoritative_tree_digest, created.authoritative_tree_digest);
+
+  const authority = readJson(authorityFile);
+  assert.equal(authority.record_type, 'PRODUCTION_OPERATIONAL_SMOKE_RETURNED_AUTHORITY');
+  assert.equal(authority.milestone, 'MS-019F-R2');
+  assert.equal(authority.authority_source, 'HUMAN_OPERATOR_EXPLICIT_SUBMISSION');
+  assert.deepEqual(
+    authority.safe_inventory.map((item) => item.relative_path).sort(),
+    [...EVIDENCE_FILES].sort(),
+  );
+  assert.equal(authority.expected_handoff.contract_version, 'production-operational-smoke-evidence-v2');
+  assert.equal(authority.safety_flags.raw_contents_printed, false);
 }
 
 function replaceMetadataValue(evidenceDir, key, value) {

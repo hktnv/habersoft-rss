@@ -49,6 +49,8 @@
     "production:operational-smoke:handoff:verify": "node scripts/production-operational-smoke-evidence.mjs handoff:verify",
     "production:operational-smoke:handoff:freeze": "node scripts/production-operational-smoke-evidence.mjs handoff:freeze",
     "production:operational-smoke:handoff:freeze:verify": "node scripts/production-operational-smoke-evidence.mjs handoff:freeze:verify",
+    "production:operational-smoke:authority:create": "node scripts/production-operational-smoke-evidence.mjs authority:create",
+    "production:operational-smoke:authority:verify": "node scripts/production-operational-smoke-evidence.mjs authority:verify",
     "production:operational-smoke:receipt:create": "node scripts/production-operational-smoke-evidence.mjs receipt:create",
     "production:operational-smoke:receipt:verify": "node scripts/production-operational-smoke-evidence.mjs receipt:verify",
     "production:smoke": "node scripts/production-smoke.mjs",
