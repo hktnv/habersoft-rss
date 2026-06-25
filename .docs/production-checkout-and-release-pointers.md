@@ -274,9 +274,9 @@ checkout hygiene current evidence: PASSED
 current pointer fresh evidence: PASSED
 previous pointer: NOT_RECORDED until returned strict pointer evidence exists
 rollback baseline for next deployment: ESTABLISHED_FROM_CURRENT_POINTER
-edge body-limit: NOT_RECORDED
+edge body-limit: PASSED by MS-019E-R2 receipt
 long-term stability: NOT_RECORDED
 error-burst: NOT_RECORDED
 ```
 
-This partial acceptance updates `.docs/production-acceptance.md` with only the safe checkout/current pointer projections. Full operational acceptance remains partial because historical previous pointer, edge body-limit, long-term stability and error-burst evidence are still absent.
+This partial acceptance updates `.docs/production-acceptance.md` with only the safe checkout/current pointer projections. Full operational acceptance remains partial because historical previous pointer, long-term stability and error-burst evidence are still absent.

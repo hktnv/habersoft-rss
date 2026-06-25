@@ -931,6 +931,22 @@ historical previous pointer: NOT_RECORDED
 outcome: PARTIAL_ACCEPTED
 ```
 
+MS-019E-R2 current edge body-limit evidence snapshot:
+
+```text
+application body limit: 5242880 bytes
+small internal/public: PASSED 401/401
+exact-limit internal/public: PASSED 401/401 with full upload
+limit+1 internal/public: PASSED 413/413
+internal upper control: EARLY_REJECTION_413 uploaded 1900544 of 5242881 bytes
+public upper control: FULL_UPLOAD_REJECTED_413 uploaded 5242881 bytes
+receipt SHA-256: fabad4a60f1f284379e1cd903b582b53bfd1fcbf93af32e79a94a1efa6377244
+returned authority SHA-256: 43fa65c0e9aadf860fc40179b4e64bccf4b3f18eeffedb1e324e0fcef3847622
+historical blocked receipt SHA-256: 9bd74b14d50525d1f408deebbb19d8912e71b4d21fe7f23b41a602ba0f966965
+vendor configured exact limit: NOT_RECORDED
+outcome: PASSED
+```
+
 ### 19.1 Read-only operational evidence handoff
 
 MS-019B-R7 ile read-only operational evidence handoff-v2 tooling hazirlandi. Canonical contract [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md) dosyasindadir. MS-019A handoff-v1 historical verification icin korunur; fresh operator rerun handoff-v2 ile yapilir.
@@ -996,14 +1012,14 @@ Previous pointer evidence varsa operator strict data file'i ayrica verir:
 
 Returned bundle local verifier tarafindan `production-checkout-pointer-receipt.json` uretmek icin kullanilir. MS-019D-R1 receipt current checkout/current pointer alanlarini accepted hale getirdi; previous pointer absent oldugu icin full operational baseline hala partial kalir.
 
-### 19.3 Read-only edge body-limit handoff
+### 19.3 Read-only edge body-limit evidence
 
-MS-019E ile public HTTPS edge request-body compatibility icin read-only, unauthenticated handoff-v1 tooling hazirlanir. Canonical contract ve future receipt boundary [.docs/production-edge-body-limit.md](.docs/production-edge-body-limit.md) dosyasindadir.
+MS-019E-R2 ile public HTTPS edge request-body compatibility accepted durumdadir. Canonical contract, upper-control early-rejection semantics ve receipt boundary [.docs/production-edge-body-limit.md](.docs/production-edge-body-limit.md) dosyasindadir.
 
 Bu akisin siniri:
 
 - Codex production SSH kullanmaz.
-- Handoff bundle tek basina production evidence degildir; accepted receipt gerekir.
+- Handoff bundle tek basina production evidence degildir; accepted receipt gerekir. Current accepted receipt `production-edge-body-limit-receipt-v2.json` SHA-256 `fabad4a60f1f284379e1cd903b582b53bfd1fcbf93af32e79a94a1efa6377244` olarak kayitlidir.
 - Operator collector'i production host veya approved production network context uzerinde manuel calistirir.
 - Collector yalniz `POST /agent/entries` rotasina exact byte-sized invalid JSON body gonderir.
 - Collector Agent key, tenant JWT, cookie, retry, concurrency, TLS bypass veya arbitrary target/size kullanmaz.
@@ -1034,7 +1050,7 @@ collector-metadata.txt
 evidence-records.tsv
 ```
 
-Returned bundle sonraki local verification milestone'unda `production-edge-body-limit-receipt.json` uretmek icin kullanilir. MS-019E handoff hazirligi edge body-limit verification'i accepted yapmaz; returned evidence gelene kadar edge body-limit `NOT_RECORDED` kalir.
+Returned bundle local verifier tarafindan `production-edge-body-limit-receipt-v2.json` uretmek icin kullanilir. MS-019E-R2 receipt edge body-limit compatibility'i accepted hale getirdi. Exact vendor configured limit yine `NOT_RECORDED` kalir. Application body contract veya edge request-body config degisirse bu collector yeniden calistirilmalidir.
 
 ## 20. Gelecek backend/frontend monorepo gecisi
 

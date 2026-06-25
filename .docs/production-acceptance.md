@@ -16,6 +16,7 @@ Bu belge production redeploy, server command log'u, exact production Git/image i
 - Extended operational evidence: `PARTIAL_ACCEPTED`
 - Production backup/restore evidence: `PRODUCTION_BACKUP_RESTORE_VERIFIED`
 - Production checkout/current pointer evidence: `PARTIAL_ACCEPTED`
+- Production edge body-limit evidence: `PASSED`
 
 `Production Aktif` yalniz `main-service` backend application icindir. Bagimsiz Agent application, bagimsiz Tenant applications, frontend/admin panel veya `rss-panel.habersoft.com` icin readiness iddiasi degildir.
 
@@ -114,12 +115,40 @@ Verified safe projections:
 | Rollback baseline for next deployment | `ESTABLISHED_FROM_CURRENT_POINTER` | Forward-looking external state records the current verified pointer as the value to rotate before the next runtime mutation. |
 | Production mutation flags | `false` | No deployment, restart, migration, backup, restore, tag, release or artifact publication was performed by this intake. |
 
+## MS-019E-R2 Edge Body-Limit Receipt
+
+MS-019E-R2 accepted the immutable returned edge body-limit bundle after correcting the verifier to distinguish exact-limit full-upload requirements from valid over-limit early rejection. Codex did not contact production, did not rerun the probe and did not edit returned evidence files.
+
+- Returned authority filename: `production-edge-body-limit-returned-v1-authority.json`
+- Returned authority SHA-256: `43fa65c0e9aadf860fc40179b4e64bccf4b3f18eeffedb1e324e0fcef3847622`
+- Returned tree digest: `2c35c4861e13e53bac2ab704d30217cd0c982ca41b4196d19a98fb9967f8cc0e`
+- Historical blocked receipt filename: `production-edge-body-limit-receipt.json`
+- Historical blocked receipt SHA-256: `9bd74b14d50525d1f408deebbb19d8912e71b4d21fe7f23b41a602ba0f966965`
+- Accepted receipt filename: `production-edge-body-limit-receipt-v2.json`
+- Accepted receipt SHA-256: `fabad4a60f1f284379e1cd903b582b53bfd1fcbf93af32e79a94a1efa6377244`
+- Collection UTC: `2026-06-25T16:33:42Z`
+- Semantic correction class: `VERIFIER_BUG_EARLY_REJECTION_SEMANTICS`
+
+Verified safe projections:
+
+| Check | Result | Boundary |
+|---|---|---|
+| Application body limit | `PASSED`, `5242880` bytes | Source-tested `POST /agent/entries` contract. |
+| Small internal/public | `PASSED`, HTTP `401 / 401` | Unauthenticated probes reached the auth boundary. |
+| Exact-limit internal/public | `PASSED`, HTTP `401 / 401`, uploaded `5242880 / 5242880` | Full upload remains mandatory for the edge compatibility gate. |
+| Limit+1 internal/public | `PASSED`, HTTP `413 / 413` | Over-limit upper control only; not a vendor config-value proof. |
+| Internal upper control | `EARLY_REJECTION_413`, uploaded `1900544` of generated/requested `5242881` bytes | Valid because HTTP `413` was received and exact-limit full upload already passed. |
+| Public upper control | `FULL_UPLOAD_REJECTED_413`, uploaded `5242881` bytes | Public HTTPS upper control returned expected `413`. |
+| Public TLS | `PASSED` | TLS verification passed for public exact and upper-control probes. |
+| Safety flags | `PASSED` | No Agent key, JWT, cookie, retry, mutation, payload retention, response retention or database write. |
+
+Exact configured edge/vendor body-limit bytes remain `NOT_RECORDED`. MS-019E does not prove authenticated Agent ingestion, unlimited body acceptance, performance, capacity, stability or error-burst absence.
+
 ## Not Recorded
 
 The following fields remain not proven by current accepted evidence and must not be treated as passed:
 
 - previous production pointer commit/image: `NOT_RECORDED`
-- edge body-limit verification: `NOT_RECORDED`
 - long-term stability observation: `NOT_RECORDED`
 - error-burst analysis: `NOT_RECORDED`
 

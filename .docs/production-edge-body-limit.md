@@ -2,9 +2,9 @@
 
 ## Sorumluluk
 
-Bu belge `main-service` icin MS-019E production edge request-body compatibility handoff sozlesmesinin canonical repository-local sahibidir. Tek sorumlulugu `rss.habersoft.com` public HTTPS edge katmaninin application request-body sinirini kesmeden upstream auth boundary'ye iletip iletmedigini kanitlayacak read-only operator handoff ve future receipt modelini aciklamaktir.
+Bu belge `main-service` icin MS-019E production edge request-body compatibility sozlesmesinin canonical repository-local sahibidir. Tek sorumlulugu `rss.habersoft.com` public HTTPS edge katmaninin application request-body sinirini kesmeden upstream auth boundary'ye iletip iletmedigini kanitlayan read-only operator handoff, accepted receipt ve verifier semantics'i aciklamaktir.
 
-Bu belge edge evidence accepted sonucu degildir. MS-019E yalniz hazirlik ve handoff milestone'udur. Gercek returned evidence sonraki bounded intake milestone'unda local verifier ile kabul edilmeden edge body-limit `PASSED` sayilmaz.
+Bu belge edge evidence accepted sonucunun ve reusable verifier semantics'in repository-local sahibidir. MS-019E-R2 immutable returned bundle'i `production-edge-body-limit-receipt-v2.json` ile kabul etti.
 
 ## Application Body Contract
 
@@ -137,22 +137,33 @@ npm run production:edge-body-limit:receipt:verify -- --receipt-file <external-re
 
 Strict verification accepts only `SUCCESS`. It rejects edge-too-low, internal application baseline mismatch, public edge unavailable, TLS failure, invalid upper-control response, checksum mismatch, unsafe flags, missing probes, exact-limit byte mismatch or retained payload/response evidence.
 
+Accepted MS-019E-R2 receipt:
+
+```text
+receipt: production-edge-body-limit-receipt-v2.json
+sha256: fabad4a60f1f284379e1cd903b582b53bfd1fcbf93af32e79a94a1efa6377244
+returned authority sha256: 43fa65c0e9aadf860fc40179b4e64bccf4b3f18eeffedb1e324e0fcef3847622
+returned tree digest: 2c35c4861e13e53bac2ab704d30217cd0c982ca41b4196d19a98fb9967f8cc0e
+historical blocked receipt sha256: 9bd74b14d50525d1f408deebbb19d8912e71b4d21fe7f23b41a602ba0f966965
+semantic correction: VERIFIER_BUG_EARLY_REJECTION_SEMANTICS
+```
+
 ## Current State
 
-MS-019E preparation state:
+MS-019E accepted state:
 
 ```text
 handoff tooling: prepared
-operator action: required
+returned evidence: accepted
 production contact by Codex: false
-edge body-limit evidence accepted: false
-status before returned evidence: OPERATOR_ACTION_REQUIRED
+edge body-limit evidence accepted: true
+public edge compatibility: PUBLIC_EDGE_ACCEPTS_CANONICAL_APPLICATION_BODY_LIMIT
+exact vendor configured limit: NOT_RECORDED
 ```
 
 Open extended operational residuals remain:
 
 - historical previous pointer: `NOT_RECORDED`
-- edge body-limit verification: `NOT_RECORDED`
 - long-term stability: `NOT_RECORDED`
 - error-burst analysis: `NOT_RECORDED`
 

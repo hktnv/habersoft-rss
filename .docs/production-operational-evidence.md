@@ -204,7 +204,6 @@ Canonical public values allowed in this evidence contract are the canonical repo
 
 The following remain outside the accepted MS-019B-R8 receipt:
 
-- edge body-limit verification,
 - long-running stability observation,
 - raw log/error-burst analysis,
 - dashboard, metrics backend or alerting,
@@ -218,7 +217,7 @@ MS-019C owns the production PostgreSQL backup and off-host disposable restore ev
 
 MS-019D-R1 owns the returned checkout hygiene and release-pointer evidence intake in [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md). Current checkout hygiene and current pointer evidence are accepted as `PARTIAL_ACCEPTED`; historical previous pointer remains `NOT_RECORDED`. This does not change the MS-019B receipt result, and it does not convert full operational baseline completion into `PASSED`.
 
-MS-019E owns the edge body-limit handoff preparation in [production-edge-body-limit.md](production-edge-body-limit.md). Its generated collector and receipt model are read-only and unauthenticated, but handoff generation alone is not returned production evidence. Edge body-limit remains `NOT_RECORDED` until the future MS-019E returned evidence intake verifies an external bundle.
+MS-019E-R2 owns the accepted edge body-limit evidence in [production-edge-body-limit.md](production-edge-body-limit.md). The accepted receipt `production-edge-body-limit-receipt-v2.json` has SHA-256 `fabad4a60f1f284379e1cd903b582b53bfd1fcbf93af32e79a94a1efa6377244` and proves that public HTTPS accepts the canonical `5242880` byte application body limit. The exact vendor configured body-limit value remains `NOT_RECORDED`; this does not change the MS-019B receipt result or convert full operational baseline completion into `PASSED`.
 
 ## Historical Handoff Boundary
 

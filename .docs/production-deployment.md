@@ -50,7 +50,7 @@ API yalniz host loopback uzerinden edge'e acilir: `127.0.0.1:${API_HOST_PORT}:30
 
 Same-host default port matrix, mevcut auth binding'leriyle carpismaz: auth API `127.0.0.1:3100`, auth panel `127.0.0.1:8080`, RSS API default `127.0.0.1:3200`, future RSS panel reservation `127.0.0.1:8081`. MS-018C operator evidence RSS backend API upstream default'unun `127.0.0.1:3200` oldugunu kaydeder.
 
-Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Request body limit'i `POST /agent/entries` 5 MiB sozlesmesini kesmeyecek sekilde edge tarafinda ayarlanmalidir. MS-019E bu sinir icin read-only operator handoff ve future receipt modelini [production-edge-body-limit.md](production-edge-body-limit.md) dosyasinda hazirlar. Returned evidence kabul edilene kadar edge body-limit verification `NOT_RECORDED` kalir.
+Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Request body limit'i `POST /agent/entries` 5 MiB sozlesmesini kesmeyecek sekilde edge tarafinda ayarlanmalidir. MS-019E-R2 receipt'i public HTTPS edge'in canonical `5242880` byte application limit'ini upstream auth boundary'ye ilettigini behaviorally verified yapti. Exact vendor configured limit `NOT_RECORDED` kalir.
 
 ## Startup ve Readiness
 
@@ -60,13 +60,13 @@ Edge, `/health/live` ve `/health/ready` upstream checks icin kullanabilir. Reque
 4. API `/health/live` ve `/health/ready` ile izlenir.
 5. Worker `npm run worker:health` ile izlenir.
 
-MS-019B collector-v2 receipt API live/ready, dependency readiness, migration status, worker health ve scheduler evidence'i partial operational receipt kapsaminda kaydetti. MS-019C production backup/restore receipt backup restore baseline'i `PASSED` olarak kaydetti. MS-019E edge body-limit collector handoff hazirligini ekler fakat production evidence kabul etmez. Previous pointer, long-term stability, error-burst ve edge body-limit evidence'i hala kayitli degildir.
+MS-019B collector-v2 receipt API live/ready, dependency readiness, migration status, worker health ve scheduler evidence'i partial operational receipt kapsaminda kaydetti. MS-019C production backup/restore receipt backup restore baseline'i `PASSED` olarak kaydetti. MS-019E-R2 edge body-limit compatibility receipt'i `PASSED` durumundadir. Previous pointer, long-term stability ve error-burst evidence'i hala kayitli degildir.
 
 ## Durum
 
 `main-service` backend application status'u `MVP — Production Aktif`tir.
 
-Operator 2026-06-22 tarihinde internal loopback ve public HTTPS `/health/live` ile `/health/ready` checks icin HTTP `200`, `status=live/ready`, `postgres=up`, `redis=up` ve `tenantAuth=up` evidence sagladi. MS-019B collector-v2 receipt ile extended operational evidence `PARTIAL_ACCEPTED` oldu; MS-019C ile production backup/restore `PRODUCTION_BACKUP_RESTORE_VERIFIED` durumuna gecti. Full operational baseline previous pointer evidence eksikligi nedeniyle passed degildir.
+Operator 2026-06-22 tarihinde internal loopback ve public HTTPS `/health/live` ile `/health/ready` checks icin HTTP `200`, `status=live/ready`, `postgres=up`, `redis=up` ve `tenantAuth=up` evidence sagladi. MS-019B collector-v2 receipt ile extended operational evidence `PARTIAL_ACCEPTED` oldu; MS-019C ile production backup/restore `PRODUCTION_BACKUP_RESTORE_VERIFIED` durumuna gecti. Full operational baseline previous pointer, long-term stability ve error-burst evidence eksikligi nedeniyle passed degildir.
 
 Registry publish, Git tag ve GitHub Release yapilmamistir. Frontend implementasyonu yoktur ve `rss-panel.habersoft.com` active degildir. Bagimsiz Agent application ve bagimsiz Tenant applications ayri delivery siniridir.
 

@@ -60,7 +60,7 @@ Extended operational evidence MS-019B collector-v2 receipt ile partial accepted:
 - checkout hygiene and current release pointer: `PASSED` by MS-019D-R1
 - previous production pointer: `NOT_RECORDED`
 - long-term stability/error-burst analysis: `NOT_RECORDED`
-- edge body-limit verification: `NOT_RECORDED`; MS-019E handoff tooling is prepared in [production-edge-body-limit.md](production-edge-body-limit.md), but returned evidence is still required
+- edge body-limit compatibility: `PASSED`; rerun the MS-019E collector if the application body contract or edge request-body config changes
 
 Bu eksik extended evidence, basic production-active status'unu geriye donuk olarak inactive/pending duruma cevirmez. Fresh contradictory health evidence ortaya cikarsa false success uretmek yerine blocker politikasi uygulanir.
 
@@ -74,7 +74,7 @@ Production and staging must use different environment marker, Compose project na
 
 Operator production mutation oncesi target state'i read-only siniflandirir. Unknown or conflicting state mutation'u bloke eder.
 
-Preflight evidence current MS-019B receipt icinde identity, migration, worker/scheduler, TLS, route smoke ve point-in-time stability alanlari icin kaydedildi. Backup/restore MS-019C combined receipt ile verified oldu. Checkout hygiene ve current release pointer evidence MS-019D-R1 receipt ile accepted oldu. Edge body-limit icin MS-019E read-only collector handoff hazirligi vardir, fakat returned bundle kabul edilene kadar previous pointer, edge body-limit, long-term stability ve error-burst alanlari `NOT_RECORDED` kalir.
+Preflight evidence current MS-019B receipt icinde identity, migration, worker/scheduler, TLS, route smoke ve point-in-time stability alanlari icin kaydedildi. Backup/restore MS-019C combined receipt ile verified oldu. Checkout hygiene ve current release pointer evidence MS-019D-R1 receipt ile accepted oldu. Edge body-limit compatibility MS-019E-R2 receipt ile `PASSED` durumundadir. Previous pointer, long-term stability ve error-burst alanlari `NOT_RECORDED` kalir.
 
 ## Backup gate
 
@@ -99,7 +99,7 @@ No `prisma db push`, volume prune, Redis flush, source upload, package transfer-
 
 ## Internal and Public Acceptance
 
-Current accepted evidence live/ready, readiness dependency status, worker health, scheduler inventory, migration status, route smoke, TLS detail, point-in-time restart/OOM snapshot ve MS-019C backup/restore baseline alanlarini kapsar. Full operational baseline, previous pointer evidence eksikligi nedeniyle henuz passed degildir.
+Current accepted evidence live/ready, readiness dependency status, worker health, scheduler inventory, migration status, route smoke, TLS detail, point-in-time restart/OOM snapshot, MS-019C backup/restore baseline ve MS-019E-R2 edge body-limit compatibility alanlarini kapsar. Full operational baseline, previous pointer evidence eksikligi nedeniyle henuz passed degildir.
 
 Future full operational acceptance should record these as explicit passed evidence or keep them `NOT_RECORDED`; it must not infer them from package, staging or Git base SHA.
 
