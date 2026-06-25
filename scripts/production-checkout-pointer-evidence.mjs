@@ -9,9 +9,11 @@ import { fileURLToPath } from 'node:url';
 const CONTRACT_VERSION = 'production-checkout-pointer-evidence-v1';
 const RECEIPT_SCHEMA_VERSION = 'production-checkout-pointer-receipt-v1';
 const MILESTONE = 'MS-019D';
+const RECEIPT_MILESTONE = 'MS-019D-R1';
 const SERVICE_NAME = 'main-service';
 const CANONICAL_REMOTE = 'https://github.com/hktnv/habersoft-rss';
 const DEFAULT_PREVIOUS_STATE_SCHEMA = 'production-release-pointer-state-v1';
+const AUTHORITY_SCHEMA_VERSION = 'production-checkout-pointer-returned-authority-v1';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +37,19 @@ const DEFAULT_RECEIPT_FILE = path.join(
   'operator-state',
   'ms-019d',
   'production-checkout-pointer-receipt.json',
+);
+const DEFAULT_AUTHORITY_FILE = path.join(
+  WORKSPACE_ROOT,
+  'operator-state',
+  'ms-019d',
+  'verification',
+  'production-checkout-pointer-returned-v1-authority.json',
+);
+const DEFAULT_POINTER_STATE_FILE = path.join(
+  WORKSPACE_ROOT,
+  'operator-state',
+  'ms-019d',
+  'production-release-pointer-state.json',
 );
 
 const SOURCE_COLLECTOR = path.join(REPO_ROOT, 'scripts', 'production-checkout-pointer-collector.sh');
@@ -63,9 +78,82 @@ const CHECKOUT_CLASSIFICATIONS = new Set([
 ]);
 const PREVIOUS_POINTER_RESULTS = new Set(['VERIFIED', 'PREVIOUS_POINTER_NOT_RECORDED', 'BLOCKED']);
 const BLOCKED_OUTCOMES = new Set(['SUCCESS', 'PARTIAL_ACCEPTED', 'BLOCKED']);
+const EXPECTED_METADATA_KEYS = new Set([
+  'collector',
+  'milestone',
+  'service',
+  'contract_version',
+  'canonical_remote',
+  'source_commit',
+  'generated_utc',
+  'read_only',
+  'production_mutation',
+]);
+const EXPECTED_RECORD_KEYS = new Set([
+  'bundle.milestone',
+  'bundle.service',
+  'bundle.contract_version',
+  'bundle.collector_source_commit',
+  'git.remote_url',
+  'git.canonical_remote_expected',
+  'git.head_commit',
+  'git.origin_main_commit',
+  'git.branch_name',
+  'git.head_is_origin_main',
+  'git.head_reachable_from_origin_main',
+  'git.is_shallow_repository',
+  'git.merge_in_progress',
+  'git.cherry_pick_in_progress',
+  'git.revert_in_progress',
+  'git.rebase_apply_in_progress',
+  'git.rebase_merge_in_progress',
+  'checkout.tracked_index_change_count',
+  'checkout.tracked_worktree_change_count',
+  'checkout.tracked_deletion_count',
+  'checkout.unmerged_count',
+  'checkout.unknown_untracked_count',
+  'checkout.unknown_untracked_path_hashes',
+  'checkout.allowlisted_external_state_untracked_count',
+  'checkout.operator_state_ignore_policy_present',
+  'checkout.deploy_runtime_image_ignore_policy_present',
+  'checkout.env_production_ignore_policy_present',
+  'checkout.overbroad_source_ignore_detected',
+  'checkout.classification',
+  'runtime.image_env_parse_status',
+  'runtime.main_service_image',
+  'runtime.api_container_present',
+  'runtime.worker_container_present',
+  'compose.config_services_status',
+  'current_pointer.api_image_id',
+  'current_pointer.worker_image_id',
+  'current_pointer.runtime_image_id',
+  'current_pointer.image_revision',
+  'current_pointer.image_source',
+  'current_pointer.api_worker_image_match',
+  'current_pointer.runtime_image_matches_api',
+  'current_pointer.revision_exists_in_checkout',
+  'current_pointer.revision_reachable_from_origin_main',
+  'current_pointer.revision_matches_checkout_head',
+  'previous_pointer.source_status',
+  'previous_pointer.commit',
+  'previous_pointer.image_id',
+  'previous_pointer.image_revision',
+  'previous_pointer.image_source',
+  'previous_pointer.commit_exists_in_checkout',
+  'previous_pointer.commit_reachable_from_origin_main',
+  'previous_pointer.image_revision_matches_commit',
+  'previous_pointer.image_differs_from_current',
+  'previous_pointer.verification_result',
+]);
 
 const SECRET_PATTERNS = [
   /\b[A-Z0-9_]*(?:PASSWORD|PASSWD|SECRET|TOKEN|PRIVATE_KEY|ACCESS_KEY|API_KEY)[A-Z0-9_]*\s*=\s*[^ \n\r\t]+/i,
+  /\bDATABASE_URL\b/i,
+  /\b(?:Authorization|Bearer)\b/i,
+  /\b(?:AGENT_KEY|TENANT_RATE_LIMIT_KEY_SECRET)\b/i,
+  /"Env"\s*:/i,
+  /\bdiff --git\b/i,
+  /\b(?:BEGIN|END) OPENSSH PRIVATE KEY\b/i,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
 ];
 
@@ -117,6 +205,30 @@ function writeJson(file, value) {
   writeText(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+function stableJson(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value).sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function writeJsonNoOverwriteOrIdentical(file, value) {
+  const next = `${JSON.stringify(value, null, 2)}\n`;
+  if (fs.existsSync(file)) {
+    const current = fs.readFileSync(file, 'utf8');
+    if (current !== next) {
+      fail(`Refusing to overwrite existing non-identical file: ${file}`);
+    }
+    return false;
+  }
+  writeText(file, next);
+  return true;
+}
+
 function sha256Buffer(buffer) {
   return createHash('sha256').update(buffer).digest('hex');
 }
@@ -129,11 +241,48 @@ function sha256Text(value) {
   return sha256Buffer(Buffer.from(value, 'utf8'));
 }
 
+function safeFileInventory(dir, expectedNames) {
+  assertExactInventory(dir, expectedNames);
+  return expectedNames
+    .map((name) => {
+      const file = path.join(dir, name);
+      const stat = fs.lstatSync(file);
+      if (stat.isSymbolicLink()) {
+        fail(`Symlink is not allowed in external inventory: ${name}`);
+      }
+      if (!stat.isFile()) {
+        fail(`Expected regular file in external inventory: ${name}`);
+      }
+      return {
+        relative_path: name,
+        file_type: 'regular',
+        byte_size: stat.size,
+        sha256: sha256File(file),
+      };
+    })
+    .sort((left, right) => left.relative_path.localeCompare(right.relative_path));
+}
+
+function treeDigest(inventory) {
+  return sha256Text(stableJson(inventory.map(({ relative_path, byte_size, sha256 }) => ({
+    relative_path,
+    byte_size,
+    sha256,
+  }))));
+}
+
+function fileShaIfExists(file) {
+  return fs.existsSync(file) ? sha256File(file) : '';
+}
+
 function parseArgs(argv) {
   const options = {
     handoffDir: DEFAULT_HANDOFF_DIR,
     freezeFile: DEFAULT_FREEZE_FILE,
     receiptFile: DEFAULT_RECEIPT_FILE,
+    authorityFile: DEFAULT_AUTHORITY_FILE,
+    pointerStateFile: DEFAULT_POINTER_STATE_FILE,
+    pointerStateRequested: false,
     evidenceDir: '',
     requireCheckoutHygiene: false,
     requireCompletePreviousPointer: false,
@@ -162,6 +311,18 @@ function parseArgs(argv) {
       case '--receipt-file':
       case '--output-file':
         options.receiptFile = path.resolve(next());
+        break;
+      case '--authority-file':
+      case '--authority':
+        options.authorityFile = path.resolve(next());
+        break;
+      case '--pointer-state-file':
+      case '--state-file':
+        options.pointerStateFile = path.resolve(next());
+        options.pointerStateRequested = true;
+        break;
+      case '--create-pointer-state':
+        options.pointerStateRequested = true;
         break;
       case '--require-checkout-hygiene':
         options.requireCheckoutHygiene = true;
@@ -548,6 +709,108 @@ function freezeHandoff(options) {
   console.log(`Froze ${MILESTONE} handoff-v1 at ${options.freezeFile}`);
 }
 
+function readVerifiedHandoffIdentity(options) {
+  verifyHandoff(options);
+  const manifestFile = path.join(options.handoffDir, 'manifest.json');
+  const contractFile = path.join(options.handoffDir, 'checkout-pointer-contract.json');
+  const collectorFile = path.join(options.handoffDir, HANDOFF_COLLECTOR);
+  const manifest = JSON.parse(readText(manifestFile));
+  const contract = JSON.parse(readText(contractFile));
+  if (!fs.existsSync(options.freezeFile)) {
+    fail(`Handoff freeze file does not exist: ${options.freezeFile}`);
+  }
+  const freeze = JSON.parse(readAndValidateTextFile(path.dirname(options.freezeFile), path.basename(options.freezeFile)));
+  if (freeze.source_commit !== manifest.source_commit) {
+    fail('Freeze source commit does not match handoff manifest');
+  }
+  if (freeze.handoff_checksums_sha256?.[HANDOFF_COLLECTOR] !== sha256File(collectorFile)) {
+    fail('Freeze collector checksum does not match handoff collector');
+  }
+  if (freeze.handoff_checksums_sha256?.['checkout-pointer-contract.json'] !== sha256File(contractFile)) {
+    fail('Freeze contract checksum does not match handoff contract');
+  }
+  return {
+    manifest,
+    contract,
+    freeze,
+    manifest_sha256: sha256File(manifestFile),
+    contract_sha256: sha256File(contractFile),
+    collector_sha256: sha256File(collectorFile),
+    freeze_sha256: sha256File(options.freezeFile),
+  };
+}
+
+function buildAuthority(options) {
+  const handoff = readVerifiedHandoffIdentity(options);
+  const inventory = safeFileInventory(options.evidenceDir, EVIDENCE_FILES);
+  const digest = treeDigest(inventory);
+  const parsed = parseEvidenceDir(options.evidenceDir);
+  if (parsed.metadata.source_commit !== handoff.manifest.source_commit) {
+    fail('Returned collector source commit does not match frozen handoff source commit');
+  }
+  if (parsed.metadata.contract_version !== CONTRACT_VERSION) {
+    fail('Returned collector contract version mismatch');
+  }
+  return {
+    schema_version: AUTHORITY_SCHEMA_VERSION,
+    record_type: 'PRODUCTION_CHECKOUT_POINTER_RETURNED_AUTHORITY',
+    milestone: RECEIPT_MILESTONE,
+    service: SERVICE_NAME,
+    environment: 'production',
+    submission_kind: 'LANDED_HANDOFF_V1_CHECKOUT_POINTER_COLLECTION',
+    authority_source: 'HUMAN_OPERATOR_EXPLICIT_SUBMISSION',
+    selected_input_alias: 'production-checkout-pointer-returned-v1',
+    authoritative_tree_digest: digest,
+    authoritative_safe_file_count: inventory.length,
+    safe_inventory: inventory,
+    expected_handoff_source_commit: handoff.manifest.source_commit,
+    expected_contract_version: CONTRACT_VERSION,
+    handoff_manifest_sha256: handoff.manifest_sha256,
+    handoff_collector_sha256: handoff.collector_sha256,
+    handoff_contract_sha256: handoff.contract_sha256,
+    handoff_freeze_sha256: handoff.freeze_sha256,
+    parent_evidence_sha256: {
+      ms_018c_basic_acceptance_receipt: '62b0e21bf76f21a5db04698f3d593bf1592d370eef06f50169ab63b2cc3b8163',
+      ms_019b_operational_receipt: '3a5624a5cab3044a1797d9c8ee78e92828a28233a67f759b8bf6845a7ecc4620',
+      ms_019c_combined_backup_restore_receipt: '868b13b9cfe44962daa4abbec71310473e1df1d0a49e4bf156a4c3f77ed01735',
+      ms_019c_production_backup: '1bc52dfbf43a4bdeed64c072ab6dbaaadcb09207bc6bd4958a4821ed67e871f8',
+    },
+    operator_transcript_used_as_evidence: false,
+    validation_bypass_granted: false,
+    returned_files_modified_by_codex: false,
+    production_contact_performed_by_codex: false,
+    production_mutation_performed: false,
+    authorization_effective_at_utc: new Date().toISOString(),
+  };
+}
+
+function createAuthority(options) {
+  if (!options.evidenceDir) {
+    fail('--evidence-dir is required');
+  }
+  const authority = buildAuthority(options);
+  ensureDir(path.dirname(options.authorityFile));
+  writeJsonNoOverwriteOrIdentical(options.authorityFile, authority);
+  verifyAuthority(options);
+  console.log(`Verified ${RECEIPT_MILESTONE} returned authority at ${options.authorityFile}`);
+}
+
+function verifyAuthority(options) {
+  if (!options.evidenceDir) {
+    fail('--evidence-dir is required');
+  }
+  if (!fs.existsSync(options.authorityFile)) {
+    fail(`Authority file does not exist: ${options.authorityFile}`);
+  }
+  const expected = buildAuthority(options);
+  const actual = JSON.parse(readAndValidateTextFile(path.dirname(options.authorityFile), path.basename(options.authorityFile)));
+  const volatileExpected = { ...expected, authorization_effective_at_utc: actual.authorization_effective_at_utc };
+  if (stableJson(actual) !== stableJson(volatileExpected)) {
+    fail('Authority record does not match current returned evidence identity');
+  }
+  console.log(`Verified ${RECEIPT_MILESTONE} returned authority at ${options.authorityFile}`);
+}
+
 function parseEvidenceDir(evidenceDir) {
   if (!evidenceDir) {
     fail('--evidence-dir is required');
@@ -562,6 +825,16 @@ function parseEvidenceDir(evidenceDir) {
   const checksums = verifyChecksums(evidenceDir, EVIDENCE_FILES);
   const metadata = parseKeyValueLines(contents['collector-metadata.txt'], 'collector metadata');
   const records = parseRecords(contents['evidence-records.tsv']);
+  for (const key of Object.keys(metadata)) {
+    if (!EXPECTED_METADATA_KEYS.has(key)) {
+      fail(`Unexpected collector metadata key: ${key}`);
+    }
+  }
+  for (const key of Object.keys(records)) {
+    if (!EXPECTED_RECORD_KEYS.has(key)) {
+      fail(`Unexpected evidence record key: ${key}`);
+    }
+  }
   return { contents, checksums, metadata, records };
 }
 
@@ -765,6 +1038,13 @@ function makeCurrentPointer(records, blockers) {
     revision_reachable_from_origin_main: asBoolean(requiredRecord(records, 'current_pointer.revision_reachable_from_origin_main')),
     revision_matches_checkout_head: asBoolean(requiredRecord(records, 'current_pointer.revision_matches_checkout_head')),
   };
+  if (facts.revision_matches_checkout_head === null) {
+    fail('Current pointer checkout/runtime match boolean is malformed');
+  }
+  const skipLocalHistoryCheck = process.env.MS019D_SKIP_LOCAL_GIT_HISTORY_CHECK === '1';
+  const localRevisionExists = skipLocalHistoryCheck || (isCommit(revision) && tryRun('git', ['cat-file', '-e', `${revision}^{commit}`]).ok);
+  const localRevisionReachableFromOriginMain =
+    skipLocalHistoryCheck || (isCommit(revision) && tryRun('git', ['merge-base', '--is-ancestor', revision, 'refs/remotes/origin/main']).ok);
   const currentPointerPassed =
     Boolean(runtimeImage) &&
     isShaImage(runtimeImageId) &&
@@ -778,7 +1058,8 @@ function makeCurrentPointer(records, blockers) {
     facts.runtime_image_matches_api === true &&
     facts.revision_exists_in_checkout === true &&
     facts.revision_reachable_from_origin_main === true &&
-    facts.revision_matches_checkout_head === true;
+    localRevisionExists &&
+    localRevisionReachableFromOriginMain;
   if (!currentPointerPassed) {
     blockers.push('current_pointer_not_verified');
   }
@@ -791,6 +1072,8 @@ function makeCurrentPointer(records, blockers) {
     image_revision: revision,
     image_source: source,
     image_source_canonical_match: sourceCanonical,
+    local_revision_exists: localRevisionExists,
+    local_revision_reachable_from_origin_main: localRevisionReachableFromOriginMain,
     facts,
   };
 }
@@ -840,7 +1123,7 @@ function makePreviousPointer(records, blockers) {
   return previous;
 }
 
-function createReceipt(options) {
+function makeReceiptCore(options) {
   const evidenceDir = options.evidenceDir;
   const parsed = parseEvidenceDir(evidenceDir);
   const blockers = [];
@@ -858,6 +1141,15 @@ function createReceipt(options) {
   const checkout = makeCheckout(parsed.records, blockers);
   const currentPointer = makeCurrentPointer(parsed.records, blockers);
   const previousPointer = makePreviousPointer(parsed.records, blockers);
+  let authority = null;
+  if (fs.existsSync(options.authorityFile)) {
+    verifyAuthority(options);
+    authority = {
+      file: options.authorityFile,
+      sha256: sha256File(options.authorityFile),
+      authoritative_tree_digest: JSON.parse(readText(options.authorityFile)).authoritative_tree_digest,
+    };
+  }
 
   const residualGaps = [];
   if (previousPointer.status === 'PREVIOUS_POINTER_NOT_RECORDED') {
@@ -887,8 +1179,9 @@ function createReceipt(options) {
 
   const receipt = {
     schema_version: RECEIPT_SCHEMA_VERSION,
-    milestone: MILESTONE,
+    milestone: RECEIPT_MILESTONE,
     service: SERVICE_NAME,
+    environment: 'production',
     contract_version: CONTRACT_VERSION,
     generated_at_utc: new Date().toISOString(),
     evidence_bundle: {
@@ -904,13 +1197,33 @@ function createReceipt(options) {
       read_only: metadata.read_only === 'true',
       production_mutation: metadata.production_mutation === 'true',
     },
+    authority,
     repository,
     checkout,
     current_pointer: currentPointer,
     previous_pointer: previousPointer,
+    rollback_baseline_state: null,
+    parent_evidence_sha256: {
+      ms_018c_basic_acceptance_receipt: '62b0e21bf76f21a5db04698f3d593bf1592d370eef06f50169ab63b2cc3b8163',
+      ms_019b_operational_receipt: '3a5624a5cab3044a1797d9c8ee78e92828a28233a67f759b8bf6845a7ecc4620',
+      ms_019c_combined_backup_restore_receipt: '868b13b9cfe44962daa4abbec71310473e1df1d0a49e4bf156a4c3f77ed01735',
+      ms_019c_production_backup: '1bc52dfbf43a4bdeed64c072ab6dbaaadcb09207bc6bd4958a4821ed67e871f8',
+    },
     outcome,
     blockers: [...new Set(blockers)],
     residual_gaps: residualGaps,
+    no_mutation_flags: {
+      production_contact_performed_by_codex: false,
+      production_mutation_performed: false,
+      deployment: false,
+      restart: false,
+      migration: false,
+      backup: false,
+      restore: false,
+      artifact_publication: false,
+      git_tag: false,
+      github_release: false,
+    },
     explicitly_not_evidence_for: [
       'edge_body_limit',
       'long_term_stability',
@@ -918,11 +1231,127 @@ function createReceipt(options) {
       'application_acceptance_regression',
     ],
   };
+  return receipt;
+}
+
+function buildPointerState(receipt) {
+  if (receipt.checkout.strict_hygiene_passed !== true || receipt.current_pointer.status !== 'VERIFIED') {
+    fail('Pointer state requires strict checkout hygiene and verified current pointer');
+  }
+  const previousVerified = receipt.previous_pointer.status === 'VERIFIED';
+  return {
+    schema_version: DEFAULT_PREVIOUS_STATE_SCHEMA,
+    record_type: 'PRODUCTION_RELEASE_POINTER_STATE',
+    milestone: RECEIPT_MILESTONE,
+    service: SERVICE_NAME,
+    environment: 'production',
+    collected_at_utc: receipt.generated_at_utc,
+    canonical_remote: CANONICAL_REMOTE,
+    checkout_hygiene_result: 'PASSED',
+    current_pointer_verification_result: receipt.current_pointer.status,
+    current_pointer: {
+      commit: receipt.current_pointer.image_revision,
+      image_id: receipt.current_pointer.runtime_image_id,
+      image_source: receipt.current_pointer.image_source,
+      checkout_runtime_match: receipt.current_pointer.facts.revision_matches_checkout_head,
+    },
+    historical_previous_pointer: previousVerified
+      ? {
+          status: 'VERIFIED',
+          commit: receipt.previous_pointer.commit,
+          image_id: receipt.previous_pointer.image_id,
+        }
+      : 'NOT_RECORDED',
+    rollback_baseline_for_next_deployment: previousVerified
+      ? 'ESTABLISHED_WITH_VERIFIED_PREVIOUS_POINTER'
+      : 'ESTABLISHED_FROM_CURRENT_POINTER',
+    next_deployment_rotation_contract:
+      'Before the next runtime mutation, the then-current verified commit/image must be rotated into previous pointer state.',
+    source_authority_sha256: receipt.authority?.sha256 ?? null,
+    source_evidence_tree_digest: receipt.authority?.authoritative_tree_digest ?? null,
+    production_mutation: false,
+    deployment: false,
+    secret_included: false,
+  };
+}
+
+function ensurePointerStateForReceipt(options, receipt) {
+  if (receipt.checkout.strict_hygiene_passed !== true || receipt.current_pointer.status !== 'VERIFIED') {
+    return null;
+  }
+  const state = buildPointerState(receipt);
+  ensureDir(path.dirname(options.pointerStateFile));
+  writeJsonNoOverwriteOrIdentical(options.pointerStateFile, state);
+  verifyPointerState({ ...options, receiptObject: receipt });
+  return {
+    file: options.pointerStateFile,
+    sha256: sha256File(options.pointerStateFile),
+    result: state.rollback_baseline_for_next_deployment,
+  };
+}
+
+function createReceipt(options) {
+  const receipt = makeReceiptCore(options);
+  const pointerState = options.pointerStateRequested ? ensurePointerStateForReceipt(options, receipt) : null;
+  receipt.rollback_baseline_state = pointerState;
 
   scanForSecrets('receipt', JSON.stringify(receipt));
   ensureDir(path.dirname(options.receiptFile));
-  writeJson(options.receiptFile, receipt);
-  console.log(`Wrote ${MILESTONE} checkout pointer receipt to ${options.receiptFile}`);
+  writeJsonNoOverwriteOrIdentical(options.receiptFile, receipt);
+  console.log(`Wrote ${RECEIPT_MILESTONE} checkout pointer receipt to ${options.receiptFile}`);
+}
+
+function createPointerState(options) {
+  if (!fs.existsSync(options.receiptFile)) {
+    fail(`Receipt file does not exist: ${options.receiptFile}`);
+  }
+  const receipt = JSON.parse(readAndValidateTextFile(path.dirname(options.receiptFile), path.basename(options.receiptFile)));
+  const state = buildPointerState(receipt);
+  ensureDir(path.dirname(options.pointerStateFile));
+  writeJsonNoOverwriteOrIdentical(options.pointerStateFile, state);
+  verifyPointerState(options);
+  console.log(`Verified ${RECEIPT_MILESTONE} rollback baseline state at ${options.pointerStateFile}`);
+}
+
+function verifyPointerState(options) {
+  if (!fs.existsSync(options.pointerStateFile)) {
+    fail(`Pointer state file does not exist: ${options.pointerStateFile}`);
+  }
+  const state = JSON.parse(readAndValidateTextFile(path.dirname(options.pointerStateFile), path.basename(options.pointerStateFile)));
+  const receipt =
+    options.receiptObject ??
+    (fs.existsSync(options.receiptFile)
+      ? JSON.parse(readAndValidateTextFile(path.dirname(options.receiptFile), path.basename(options.receiptFile)))
+      : null);
+  if (state.schema_version !== DEFAULT_PREVIOUS_STATE_SCHEMA || state.record_type !== 'PRODUCTION_RELEASE_POINTER_STATE') {
+    fail('Pointer state identity mismatch');
+  }
+  if (state.milestone !== RECEIPT_MILESTONE || state.service !== SERVICE_NAME || state.environment !== 'production') {
+    fail('Pointer state service or milestone mismatch');
+  }
+  if (state.production_mutation !== false || state.deployment !== false || state.secret_included !== false) {
+    fail('Pointer state safety flags mismatch');
+  }
+  if (receipt) {
+    if (receipt.checkout?.strict_hygiene_passed !== true || receipt.current_pointer?.status !== 'VERIFIED') {
+      fail('Pointer state cannot bind an unaccepted receipt');
+    }
+    if (state.current_pointer?.commit !== receipt.current_pointer.image_revision) {
+      fail('Pointer state current commit does not match receipt current pointer');
+    }
+    if (state.current_pointer?.image_id !== receipt.current_pointer.runtime_image_id) {
+      fail('Pointer state current image does not match receipt current pointer');
+    }
+    const expectedHistorical = receipt.previous_pointer.status === 'VERIFIED' ? 'VERIFIED' : 'NOT_RECORDED';
+    const actualHistorical =
+      typeof state.historical_previous_pointer === 'string'
+        ? state.historical_previous_pointer
+        : state.historical_previous_pointer?.status;
+    if (actualHistorical !== expectedHistorical) {
+      fail('Pointer state previous pointer status does not match receipt');
+    }
+  }
+  console.log(`Verified ${RECEIPT_MILESTONE} rollback baseline state at ${options.pointerStateFile}`);
 }
 
 function verifyReceipt(options) {
@@ -934,7 +1363,7 @@ function verifyReceipt(options) {
   if (receipt.schema_version !== RECEIPT_SCHEMA_VERSION) {
     fail('Receipt schema version mismatch');
   }
-  if (receipt.milestone !== MILESTONE || receipt.service !== SERVICE_NAME || receipt.contract_version !== CONTRACT_VERSION) {
+  if (receipt.milestone !== RECEIPT_MILESTONE || receipt.service !== SERVICE_NAME || receipt.contract_version !== CONTRACT_VERSION) {
     fail('Receipt identity mismatch');
   }
   if (!BLOCKED_OUTCOMES.has(receipt.outcome)) {
@@ -967,7 +1396,13 @@ function verifyReceipt(options) {
   if (receipt.outcome === 'PARTIAL_ACCEPTED' && receipt.previous_pointer.status !== 'PREVIOUS_POINTER_NOT_RECORDED') {
     fail('PARTIAL_ACCEPTED outcome requires previous pointer not recorded');
   }
-  console.log(`Verified ${MILESTONE} checkout pointer receipt at ${options.receiptFile}`);
+  if (receipt.rollback_baseline_state?.sha256) {
+    if (receipt.rollback_baseline_state.sha256 !== sha256File(receipt.rollback_baseline_state.file)) {
+      fail('Receipt rollback baseline state checksum mismatch');
+    }
+    verifyPointerState({ ...options, pointerStateFile: receipt.rollback_baseline_state.file, receiptObject: receipt });
+  }
+  console.log(`Verified ${RECEIPT_MILESTONE} checkout pointer receipt at ${options.receiptFile}`);
 }
 
 function usage() {
@@ -975,8 +1410,12 @@ function usage() {
   node scripts/production-checkout-pointer-evidence.mjs handoff [--output-dir <dir>]
   node scripts/production-checkout-pointer-evidence.mjs handoff:verify [--handoff-dir <dir>]
   node scripts/production-checkout-pointer-evidence.mjs handoff:freeze [--handoff-dir <dir>] [--freeze-file <file>]
-  node scripts/production-checkout-pointer-evidence.mjs receipt:create --evidence-dir <dir> [--output-file <file>]
+  node scripts/production-checkout-pointer-evidence.mjs authority:create --evidence-dir <dir> [--authority-file <file>]
+  node scripts/production-checkout-pointer-evidence.mjs authority:verify --evidence-dir <dir> [--authority-file <file>]
+  node scripts/production-checkout-pointer-evidence.mjs receipt:create --evidence-dir <dir> [--authority-file <file>] [--pointer-state-file <file>] [--output-file <file>]
   node scripts/production-checkout-pointer-evidence.mjs receipt:verify --receipt-file <file> [--require-checkout-hygiene] [--require-complete-previous-pointer]
+  node scripts/production-checkout-pointer-evidence.mjs pointer-state:create --receipt-file <file> [--pointer-state-file <file>]
+  node scripts/production-checkout-pointer-evidence.mjs pointer-state:verify --receipt-file <file> [--pointer-state-file <file>]
 `;
 }
 
@@ -994,11 +1433,23 @@ async function main() {
     case 'handoff:freeze':
       freezeHandoff(options);
       break;
+    case 'authority:create':
+      createAuthority(options);
+      break;
+    case 'authority:verify':
+      verifyAuthority(options);
+      break;
     case 'receipt:create':
       createReceipt(options);
       break;
     case 'receipt:verify':
       verifyReceipt(options);
+      break;
+    case 'pointer-state:create':
+      createPointerState(options);
+      break;
+    case 'pointer-state:verify':
+      verifyPointerState(options);
       break;
     case '--help':
     case '-h':

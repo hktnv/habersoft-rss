@@ -738,7 +738,7 @@ PostgreSQL/Redis recreate edilmez. Volume silinmez. Redis flush yapilmaz. Git hi
 
 Emergency rebuild fallback icin known-good commit ayri temporary server worktree'de checkout edilir, distinct immutable image olarak build edilir ve `runtime-image.env` o image ID'ye cevrilir. Sunucuda source dosyasi elle editlenmez.
 
-Checkout hygiene ve release-pointer evidence contract [.docs/production-checkout-and-release-pointers.md](.docs/production-checkout-and-release-pointers.md) dosyasindadir. Future production release rotation, external `operator-state/ms-019d/production-release-pointer-state.json` modelini operator-authorized release procedure icinde guncellemelidir; Codex handoff generation veya repository tests bu state file'i olusturmaz.
+Checkout hygiene ve release-pointer evidence contract [.docs/production-checkout-and-release-pointers.md](.docs/production-checkout-and-release-pointers.md) dosyasindadir. MS-019D-R1 external `operator-state/ms-019d/production-release-pointer-state.json` state'ini current verified pointer'dan forward-looking rollback baseline olarak kurdu; bu historical previous pointer degildir. Next production release rotation bu external state'i runtime mutation oncesi operator-authorized procedure icinde guncellemelidir; Codex handoff generation veya repository tests bu state file'i guncellemez.
 
 ## 17. Sorun giderme
 
@@ -919,6 +919,18 @@ backup restore baseline: PASSED
 status: PRODUCTION_BACKUP_RESTORE_VERIFIED
 ```
 
+MS-019D-R1 current checkout/pointer evidence snapshot:
+
+```text
+checkout hygiene: PASSED
+current pointer: PASSED
+receipt SHA-256: e823ec819d471c8bb3c5052e6def3a6830731058952971675bdd4ae4d1f6c63a
+returned authority SHA-256: 44be2ff5d3d666ba359ac0af9c206c593ab0a6e2cc0a5bc630f5079c9c4ad8a9
+rollback baseline state SHA-256: ce6908a1196451c5737086943c4b9a9ad116ccc7d45c953fab6b2eb17936681c
+historical previous pointer: NOT_RECORDED
+outcome: PARTIAL_ACCEPTED
+```
+
 ### 19.1 Read-only operational evidence handoff
 
 MS-019B-R7 ile read-only operational evidence handoff-v2 tooling hazirlandi. Canonical contract [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md) dosyasindadir. MS-019A handoff-v1 historical verification icin korunur; fresh operator rerun handoff-v2 ile yapilir.
@@ -952,12 +964,12 @@ Returned bundle sonraki local verification milestone'unda `production-operationa
 
 ### 19.2 Read-only checkout and release-pointer handoff
 
-MS-019D ile checkout hygiene ve current/previous release-pointer evidence icin read-only handoff-v1 tooling hazirlandi. Canonical contract [.docs/production-checkout-and-release-pointers.md](.docs/production-checkout-and-release-pointers.md) dosyasindadir.
+MS-019D ile checkout hygiene ve current/previous release-pointer evidence icin read-only handoff-v1 tooling hazirlandi. MS-019D-R1 returned bundle intake current checkout hygiene ve current pointer evidence'i `PARTIAL_ACCEPTED` olarak kabul etti. Canonical contract ve receipt boundary [.docs/production-checkout-and-release-pointers.md](.docs/production-checkout-and-release-pointers.md) dosyasindadir.
 
 Bu akisin siniri:
 
 - Codex production SSH kullanmaz.
-- Handoff bundle production evidence degildir.
+- Handoff bundle tek basina production evidence degildir; accepted receipt gerekir.
 - Operator collector'i production host uzerinde manuel calistirir.
 - Collector production Compose context'i explicit `--env-file "${SHARED_ENV}" --env-file "${IMAGE_ENV}" -f "${COMPOSE_FILE}"` sekliyle baglar.
 - Collector Git checkout'u, runtime image pointer'i ve optional previous pointer file'i read-only sinifta inceler.
@@ -982,7 +994,7 @@ Previous pointer evidence varsa operator strict data file'i ayrica verir:
   --previous-pointer-file /opt/habersoft-rss/operator-state/ms-019d/previous-main-service-release.env
 ```
 
-Returned bundle local verifier tarafindan `production-checkout-pointer-receipt.json` uretmek icin kullanilir. Valid handoff veya partial receipt `.docs/production-acceptance.md` icin yeni production acceptance pass degildir.
+Returned bundle local verifier tarafindan `production-checkout-pointer-receipt.json` uretmek icin kullanilir. MS-019D-R1 receipt current checkout/current pointer alanlarini accepted hale getirdi; previous pointer absent oldugu icin full operational baseline hala partial kalir.
 
 ## 20. Gelecek backend/frontend monorepo gecisi
 
