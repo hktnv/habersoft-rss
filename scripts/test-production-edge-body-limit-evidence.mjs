@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,6 +58,28 @@ function runExpectFail(command, args, options = {}) {
   return `${result.stdout ?? ''}${result.stderr ?? ''}`;
 }
 
+function runAsync(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd ?? REPO_ROOT,
+      shell: false,
+      env: options.env ?? process.env,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString('utf8');
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString('utf8');
+    });
+    child.on('error', reject);
+    child.on('close', (status) => {
+      resolve({ status, stdout, stderr });
+    });
+  });
+}
+
 function nodeCli(args, options = {}) {
   return run(process.execPath, [CLI, ...args], options);
 }
@@ -67,6 +90,32 @@ function nodeCliExpectFail(args, options = {}) {
 
 function sha256File(file) {
   return createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+function writeEvidenceChecksums(evidenceDir) {
+  writeText(
+    path.join(evidenceDir, 'checksums.sha256'),
+    ['collector-metadata.txt', 'evidence-records.tsv']
+      .map((file) => `${sha256File(path.join(evidenceDir, file))}  ${file}`)
+      .join('\n') + '\n',
+  );
+}
+
+function replaceRecordValue(evidenceDir, section, key, value) {
+  const file = path.join(evidenceDir, 'evidence-records.tsv');
+  const lines = fs.readFileSync(file, 'utf8').trimEnd().split(/\n/u);
+  let replaced = false;
+  const next = lines.map((line) => {
+    const parts = line.split('\t');
+    if (parts[0] === section && parts[1] === key) {
+      replaced = true;
+      return `${section}\t${key}\t${value}`;
+    }
+    return line;
+  });
+  assert(replaced, `test fixture record was not found: ${section}.${key}`);
+  fs.writeFileSync(file, `${next.join('\n')}\n`, 'utf8');
+  writeEvidenceChecksums(evidenceDir);
 }
 
 function writeText(file, value, mode = 0o644) {
@@ -229,6 +278,18 @@ case "$mode:$target:$bytes" in
   upper_short_upload:INTERNAL_LOOPBACK:5242881)
     uploaded="1900544"
     ;;
+  upper_no_status:INTERNAL_LOOPBACK:5242881)
+    status="000"
+    uploaded="1900544"
+    ;;
+  upper_connection_reset:INTERNAL_LOOPBACK:5242881)
+    status="000"
+    uploaded="1900544"
+    exit_code="52"
+    ;;
+  upper_overupload:INTERNAL_LOOPBACK:5242881)
+    uploaded="5242882"
+    ;;
   tls_fail:PUBLIC_HTTPS:5242880)
     status="000"
     ssl="60"
@@ -239,6 +300,9 @@ case "$mode:$target:$bytes" in
     ;;
   public_control_fail:PUBLIC_HTTPS:1024)
     status="503"
+    ;;
+  exact_internal_short_upload:INTERNAL_LOOPBACK:5242880)
+    uploaded="5242879"
     ;;
   status_mismatch:PUBLIC_HTTPS:5242881)
     status="200"
@@ -351,6 +415,109 @@ function testPayloads() {
   }
 }
 
+async function runCurlAgainstFixture(root, mode, requestedBytes) {
+  const payload = path.join(root, `fixture-${mode}.json`);
+  writeText(payload, expectedPayload(requestedBytes));
+  let readBytes = 0;
+  let responseSent = false;
+  const server = http.createServer((request, response) => {
+    if (mode === 'UPPER_IMMEDIATE_413') {
+      response.writeHead(413, { Connection: 'close' });
+      response.end('');
+      return;
+    }
+    request.on('data', (chunk) => {
+      readBytes += chunk.length;
+      if (mode === 'UPPER_EARLY_413_AFTER_PREFIX' && !responseSent && readBytes >= 64 * 1024) {
+        responseSent = true;
+        response.writeHead(413, { Connection: 'close' });
+        response.end('');
+        request.destroy();
+      }
+    });
+    request.on('end', () => {
+      if (responseSent) {
+        return;
+      }
+      if (mode === 'EXACT_FULL_UPLOAD') {
+        response.writeHead(401);
+      } else {
+        response.writeHead(413);
+      }
+      response.end('');
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const env = {
+    ...process.env,
+    http_proxy: '',
+    https_proxy: '',
+    HTTP_PROXY: '',
+    HTTPS_PROXY: '',
+    ALL_PROXY: '',
+    all_proxy: '',
+    NO_PROXY: '127.0.0.1,localhost',
+    no_proxy: '127.0.0.1,localhost',
+  };
+  const result = await runAsync('curl', [
+    '-q',
+    '--silent',
+    '--show-error',
+    '--output',
+    path.join(root, `fixture-${mode}.out`),
+    '--write-out',
+    '%{http_code}\t%{size_upload}\t%{ssl_verify_result}\t%{http_version}',
+    '--request',
+    'POST',
+    '--connect-timeout',
+    '10',
+    '--max-time',
+    '30',
+    '--header',
+    'Content-Type: application/json',
+    '--header',
+    'Expect:',
+    '--data-binary',
+    `@${payload}`,
+    `http://127.0.0.1:${port}/agent/entries`,
+  ], { env });
+  server.closeAllConnections?.();
+  await new Promise((resolve) => server.close(resolve));
+  const [httpStatus, uploadedBytes, sslVerify, httpVersion] = result.stdout.split('\t');
+  return {
+    curl_exit_code: result.status,
+    http_status: Number(httpStatus),
+    uploaded_bytes: Number(uploadedBytes),
+    ssl_verify_result: sslVerify,
+    http_version: httpVersion,
+    server_read_bytes: readBytes,
+    stderr: result.stderr,
+  };
+}
+
+async function testCurlEarlyRejectionProof(root) {
+  const exact = await runCurlAgainstFixture(root, 'EXACT_FULL_UPLOAD', LIMIT_BYTES);
+  assert(exact.curl_exit_code === 0, 'exact full-upload curl should exit 0');
+  assert(exact.http_status === 401, 'exact full-upload fixture should return 401');
+  assert(exact.uploaded_bytes === LIMIT_BYTES, 'exact full-upload fixture must upload full body');
+
+  const upperFull = await runCurlAgainstFixture(root, 'UPPER_FULL_UPLOAD_413', LIMIT_BYTES + 1);
+  assert(upperFull.curl_exit_code === 0, 'upper full-upload curl should exit 0');
+  assert(upperFull.http_status === 413, 'upper full-upload fixture should return 413');
+  assert(upperFull.uploaded_bytes === LIMIT_BYTES + 1, 'upper full-upload fixture must upload full body');
+
+  const upperEarly = await runCurlAgainstFixture(root, 'UPPER_EARLY_413_AFTER_PREFIX', LIMIT_BYTES + 1);
+  assert(upperEarly.curl_exit_code === 0, 'upper early-rejection curl should exit 0');
+  assert(upperEarly.http_status === 413, 'upper early-rejection fixture should return 413');
+  assert(upperEarly.uploaded_bytes > 0 && upperEarly.uploaded_bytes < LIMIT_BYTES + 1, 'upper early rejection should upload only a prefix');
+
+  const upperImmediate = await runCurlAgainstFixture(root, 'UPPER_IMMEDIATE_413', LIMIT_BYTES + 1);
+  assert(upperImmediate.curl_exit_code === 0, 'upper immediate-rejection curl should exit 0');
+  assert(upperImmediate.http_status === 413, 'upper immediate-rejection fixture should return 413');
+  assert(upperImmediate.uploaded_bytes >= 0 && upperImmediate.uploaded_bytes < LIMIT_BYTES + 1, 'upper immediate rejection should not require full upload');
+}
+
 function testHandoffAndSuccess(root) {
   verifyApplicationContract();
   nodeCli(['contract:verify']);
@@ -369,6 +536,14 @@ function testHandoffAndSuccess(root) {
   assertEvidenceInventory(evidence);
   const receipt = createAndVerifyReceipt(root, evidence, 'receipt-success', handoff, freeze, true);
   assert(receipt.outcome === 'SUCCESS', `success fixture receipt outcome mismatch: ${receipt.outcome}`);
+  assert(receipt.probes['LIMIT_PLUS_ONE.INTERNAL_LOOPBACK'].upper_control_result === 'FULL_UPLOAD_REJECTED_413');
+
+  const earlyEvidence = path.join(root, 'returned-upper-early-success');
+  runCollector(handoff, earlyEvidence, fakeCurl, 'upper_short_upload');
+  assertEvidenceInventory(earlyEvidence);
+  const earlyReceipt = createAndVerifyReceipt(root, earlyEvidence, 'receipt-upper-early-success', handoff, freeze, true);
+  assert(earlyReceipt.outcome === 'SUCCESS', `early upper-control fixture should be SUCCESS, got ${earlyReceipt.outcome}`);
+  assert(earlyReceipt.probes['LIMIT_PLUS_ONE.INTERNAL_LOOPBACK'].upper_control_result === 'EARLY_REJECTION_413');
   return { handoff, freeze, fakeCurl };
 }
 
@@ -377,7 +552,10 @@ function testNegativeOutcomes(root, handoff, freeze, fakeCurl) {
     ['edge_low', 'BLOCKED_EDGE_BODY_LIMIT_TOO_LOW'],
     ['connection_close', 'BLOCKED_EDGE_BODY_LIMIT_TOO_LOW'],
     ['short_upload', 'BLOCKED_EDGE_BODY_LIMIT_TOO_LOW'],
-    ['upper_short_upload', 'BLOCKED_UNEXPECTED_UPPER_CONTROL'],
+    ['exact_internal_short_upload', 'BLOCKED_APPLICATION_BODY_LIMIT_BASELINE'],
+    ['upper_no_status', 'BLOCKED_UNEXPECTED_UPPER_CONTROL'],
+    ['upper_connection_reset', 'BLOCKED_UNEXPECTED_UPPER_CONTROL'],
+    ['upper_overupload', 'BLOCKED_UNEXPECTED_UPPER_CONTROL'],
     ['tls_fail', 'BLOCKED_TLS'],
     ['internal_control_fail', 'BLOCKED_APPLICATION_BODY_LIMIT_BASELINE'],
     ['public_control_fail', 'BLOCKED_PUBLIC_EDGE_UNAVAILABLE'],
@@ -392,6 +570,54 @@ function testNegativeOutcomes(root, handoff, freeze, fakeCurl) {
       'receipt:verify',
       '--receipt-file',
       path.join(root, `receipt-${mode}.json`),
+      '--require-edge-body-limit-compatibility',
+    ]);
+  }
+
+  const generatedMismatch = path.join(root, 'returned-generated-mismatch');
+  runCollector(handoff, generatedMismatch, fakeCurl, 'success');
+  replaceRecordValue(generatedMismatch, 'probe.LIMIT_PLUS_ONE.INTERNAL_LOOPBACK', 'generated_bytes', String(LIMIT_BYTES));
+  const generatedMismatchAuthority = path.join(root, 'receipt-generated-mismatch-authority.json');
+  nodeCli([
+    'authority:create',
+    '--evidence-dir',
+    generatedMismatch,
+    '--authority-file',
+    generatedMismatchAuthority,
+    '--handoff-dir',
+    handoff,
+    '--freeze-file',
+    freeze,
+  ]);
+  nodeCliExpectFail([
+    'receipt:create',
+    '--evidence-dir',
+    generatedMismatch,
+    '--authority-file',
+    generatedMismatchAuthority,
+    '--handoff-dir',
+    handoff,
+    '--freeze-file',
+    freeze,
+    '--output-file',
+    path.join(root, 'receipt-generated-mismatch.json'),
+  ]);
+
+  for (const [flag, value] of [
+    ['auth_credential_used', 'true'],
+    ['cookies_used', 'true'],
+    ['retry_used', 'true'],
+    ['mutation', 'true'],
+  ]) {
+    const unsafe = path.join(root, `returned-unsafe-${flag}`);
+    runCollector(handoff, unsafe, fakeCurl, 'success');
+    replaceRecordValue(unsafe, 'probe.LIMIT_PLUS_ONE.INTERNAL_LOOPBACK', flag, value);
+    const receipt = createAndVerifyReceipt(root, unsafe, `receipt-unsafe-${flag}`, handoff, freeze);
+    assert(receipt.outcome === 'BLOCKED_EVIDENCE_INTEGRITY', `${flag} should block evidence integrity`);
+    nodeCliExpectFail([
+      'receipt:verify',
+      '--receipt-file',
+      path.join(root, `receipt-unsafe-${flag}.json`),
       '--require-edge-body-limit-compatibility',
     ]);
   }
@@ -413,11 +639,12 @@ function testStaticSafety(root, handoff) {
   nodeCliExpectFail(['handoff:verify', '--handoff-dir', crlfHandoff]);
 }
 
-function main() {
+async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ms019e-edge-body-limit-'));
   let passed = false;
   try {
     testPayloads();
+    await testCurlEarlyRejectionProof(root);
     const { handoff, freeze, fakeCurl } = testHandoffAndSuccess(root);
     testNegativeOutcomes(root, handoff, freeze, fakeCurl);
     testStaticSafety(root, handoff);

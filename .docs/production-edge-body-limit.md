@@ -82,6 +82,14 @@ and public uploaded bytes == 5242880
 
 Vendor configured exact edge limit remains `NOT_RECORDED` unless separately proven.
 
+## Upper-Control Semantics
+
+Small and exact-limit probes require full generated and uploaded bytes. Exact-limit full upload is the edge compatibility gate; a public exact-limit short upload or `413` remains a blocker.
+
+Limit-plus-one probes are bounded upper controls. The generated body must still equal `5242881` bytes and the HTTP status must be `413`, but the server may reject the over-limit body before reading all bytes. In that case curl `size_upload` can be lower than requested and the verifier classifies the record as `EARLY_REJECTION_413`. A full upload followed by `413` is classified as `FULL_UPLOAD_REJECTED_413`.
+
+Upper-control early rejection is accepted only when curl reports a valid HTTP response, the uploaded byte count is between `0` and requested bytes, TLS is not failed for public HTTPS, and no auth/cookie/retry/mutation flag is present. Missing status, transport failure, uploaded bytes greater than requested, wrong status, generated-byte mismatch or TLS failure remain blockers.
+
 ## HTTP Safety
 
 Collector uses `curl -q` with normal TLS verification, fixed route/targets, `Content-Type: application/json`, empty `Expect:` header and `--data-binary @payload`. It does not use retries, concurrency, TLS bypass, DNS override, arbitrary URL/route/size flags, auth headers or cookies.
@@ -127,7 +135,7 @@ npm run production:edge-body-limit:receipt:verify -- --receipt-file <external-re
 npm run production:edge-body-limit:receipt:verify -- --receipt-file <external-receipt> --require-edge-body-limit-compatibility
 ```
 
-Strict verification accepts only `SUCCESS`. It rejects edge-too-low, internal application baseline mismatch, public edge unavailable, TLS failure, unexpected upper-control mismatch, checksum mismatch, unsafe flags, missing probes, byte mismatch or retained payload/response evidence.
+Strict verification accepts only `SUCCESS`. It rejects edge-too-low, internal application baseline mismatch, public edge unavailable, TLS failure, invalid upper-control response, checksum mismatch, unsafe flags, missing probes, exact-limit byte mismatch or retained payload/response evidence.
 
 ## Current State
 
@@ -158,4 +166,4 @@ Focused gate:
 npm run test:production-edge-body-limit-evidence
 ```
 
-The test covers source contract alignment, exact payload sizes, generated handoff verification/freeze, fake-curl fixture collector execution, strict positive receipt, edge-too-low negative receipt, TLS failure, connection close, short upload, public/internal control failures, status mismatch, output inventory and static collector safety.
+The test covers source contract alignment, exact payload sizes, generated handoff verification/freeze, local curl early-rejection fixture servers, fake-curl fixture collector execution, strict positive receipt, edge-too-low negative receipt, TLS failure, connection close, exact short upload, upper-control no-status/transport/bad-status/over-upload failures, unsafe flags, public/internal control failures, status mismatch, output inventory and static collector safety.
