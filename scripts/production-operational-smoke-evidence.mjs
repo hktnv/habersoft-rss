@@ -11,8 +11,10 @@ const CONTRACT_VERSION = 'production-operational-smoke-evidence-v2';
 const FREEZE_SCHEMA_VERSION = 'production-operational-smoke-handoff-freeze-v2';
 const RECEIPT_SCHEMA_VERSION = 'production-operational-smoke-receipt-v2';
 const AUTHORITY_SCHEMA_VERSION = 'production-operational-smoke-returned-authority-v1';
+const AUTHORITY_V2_SCHEMA_VERSION = 'production-operational-smoke-returned-authority-v2';
 const MILESTONE = 'MS-019F';
 const INTAKE_MILESTONE = 'MS-019F-R2';
+const REBASELINE_MILESTONE = 'MS-019F-R3';
 const SERVICE_NAME = 'main-service';
 const CANONICAL_REMOTE = 'https://github.com/hktnv/habersoft-rss';
 const CLASSIFIER_MODE = 'STABLE_SEVERITY_PREFIX';
@@ -295,10 +297,40 @@ const AUTHORITY_SAFETY_KEYS = Object.freeze([
   'production_contact_performed_by_codex',
   'production_mutation_performed_by_codex',
 ]);
+const AUTHORITY_V2_KEYS = Object.freeze([
+  'schema_version',
+  'record_type',
+  'record_revision',
+  'milestone',
+  'service',
+  'environment',
+  'generated_at_utc',
+  'authority_source',
+  'operator_reported_time_sync_corrected',
+  'operator_reported_checksum_updated',
+  'checksum_alone_is_duration_evidence',
+  'validation_bypass_granted',
+  'selected_input_alias',
+  'current_tree_digest',
+  'current_safe_file_count',
+  'current_safe_inventory',
+  'old_tree_digest',
+  'old_authority_sha256',
+  'old_blocked_receipt_sha256',
+  'bundle_change_classification',
+  'changed_files_from_r2',
+  'expected_handoff',
+  'parent_receipt_hashes',
+  'returned_files_modified_by_codex',
+  'codex_production_contact',
+  'production_mutation',
+]);
 const DEFAULT_HANDOFF_DIR = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-handoff-v2');
 const DEFAULT_FREEZE_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'handoff-v2-freeze.json');
 const DEFAULT_RECEIPT_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-receipt.json');
 const DEFAULT_AUTHORITY_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'production-operational-smoke-returned-v2-authority.json');
+const DEFAULT_AUTHORITY_V2_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'production-operational-smoke-returned-v2-authority-v2.json');
+const DEFAULT_OLD_RECEIPT_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-receipt.json');
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main().catch((error) => {
@@ -364,6 +396,12 @@ async function main() {
     case 'authority:verify':
       printJson(verifyAuthorityFile(options.authorityFile, options));
       break;
+    case 'authority:v2:create':
+      printJson(createAuthorityV2(options));
+      break;
+    case 'authority:v2:verify':
+      printJson(verifyAuthorityV2File(authorityV2File(options), options));
+      break;
     case 'receipt:create':
       printJson(createReceipt(options));
       break;
@@ -374,7 +412,7 @@ async function main() {
       printJson(runGeneratedHandoffFixture(options));
       break;
     default:
-      fail(`usage: production-operational-smoke-evidence <source:verify|handoff|handoff:verify|handoff:freeze|handoff:freeze:verify|authority:create|authority:verify|receipt:create|receipt:verify|fixture:e2e>`);
+      fail(`usage: production-operational-smoke-evidence <source:verify|handoff|handoff:verify|handoff:freeze|handoff:freeze:verify|authority:create|authority:verify|authority:v2:create|authority:v2:verify|receipt:create|receipt:verify|fixture:e2e>`);
   }
 }
 
@@ -384,6 +422,8 @@ function parseArgs(rawArgs) {
     freezeFile: DEFAULT_FREEZE_FILE,
     receiptFile: DEFAULT_RECEIPT_FILE,
     authorityFile: DEFAULT_AUTHORITY_FILE,
+    oldAuthorityFile: DEFAULT_AUTHORITY_FILE,
+    oldReceiptFile: DEFAULT_OLD_RECEIPT_FILE,
     evidenceDir: '',
     fixtureResult: 'NOT_RUN',
     requireBoundedOperationalSmoke: false,
@@ -410,6 +450,12 @@ function parseArgs(rawArgs) {
         break;
       case '--authority-file':
         options.authorityFile = path.resolve(next());
+        break;
+      case '--old-authority-file':
+        options.oldAuthorityFile = path.resolve(next());
+        break;
+      case '--old-receipt-file':
+        options.oldReceiptFile = path.resolve(next());
         break;
       case '--evidence-dir':
         options.evidenceDir = path.resolve(next());
@@ -754,10 +800,12 @@ function verifyAuthorityObject(authority, options) {
     assert(Number.isInteger(item.byte_size) && item.byte_size >= 0, 'authority inventory byte size malformed');
     assert(/^[a-f0-9]{64}$/u.test(item.sha256), 'authority inventory checksum malformed');
   }
-  assertExactInventory(options.evidenceDir, EVIDENCE_FILES);
-  const currentInventory = safeFileInventory(options.evidenceDir, EVIDENCE_FILES);
-  assertSameObject(authority.safe_inventory, currentInventory, 'authority inventory does not match returned evidence');
-  assert(authority.authoritative_tree_digest === treeDigest(currentInventory), 'authority tree digest mismatch');
+  if (options.skipEvidenceMatch !== true) {
+    assertExactInventory(options.evidenceDir, EVIDENCE_FILES);
+    const currentInventory = safeFileInventory(options.evidenceDir, EVIDENCE_FILES);
+    assertSameObject(authority.safe_inventory, currentInventory, 'authority inventory does not match returned evidence');
+    assert(authority.authoritative_tree_digest === treeDigest(currentInventory), 'authority tree digest mismatch');
+  }
   assertExactObjectKeys(authority.expected_handoff, AUTHORITY_HANDOFF_KEYS, 'authority handoff keys');
   const handoff = verifyHandoff(options.handoffDir);
   const freeze = verifyFreeze(options.handoffDir, options.freezeFile);
@@ -771,6 +819,146 @@ function verifyAuthorityObject(authority, options) {
   for (const [key, value] of Object.entries(authority.safety_flags)) {
     assert(value === false, `authority safety flag must be false: ${key}`);
   }
+}
+
+function createAuthorityV2(options) {
+  assert(options.evidenceDir !== '', '--evidence-dir is required');
+  const outputFile = authorityV2File(options);
+  assertNoOverwrite(outputFile);
+  const authority = createAuthorityV2FromEvidence(options);
+  ensureDir(path.dirname(outputFile));
+  writeJson(outputFile, authority);
+  return {
+    status: 'production-operational-smoke-returned-authority-v2-created',
+    authority_file: outputFile,
+    sha256: sha256File(outputFile),
+    current_tree_digest: authority.current_tree_digest,
+    bundle_change_classification: authority.bundle_change_classification,
+    changed_files_from_r2: authority.changed_files_from_r2,
+  };
+}
+
+function verifyAuthorityV2File(authorityFile, options) {
+  const authority = JSON.parse(readAndValidateTextFile(path.dirname(authorityFile), path.basename(authorityFile)));
+  verifyAuthorityV2Object(authority, options);
+  return {
+    status: 'production-operational-smoke-returned-authority-v2-verified',
+    authority_file: authorityFile,
+    sha256: sha256File(authorityFile),
+    current_tree_digest: authority.current_tree_digest,
+    bundle_change_classification: authority.bundle_change_classification,
+    changed_files_from_r2: authority.changed_files_from_r2,
+  };
+}
+
+function createAuthorityV2FromEvidence(options) {
+  assertExactInventory(options.evidenceDir, EVIDENCE_FILES);
+  const handoff = verifyHandoff(options.handoffDir);
+  const freeze = verifyFreeze(options.handoffDir, options.freezeFile);
+  const oldAuthority = JSON.parse(readAndValidateTextFile(path.dirname(options.oldAuthorityFile), path.basename(options.oldAuthorityFile)));
+  verifyAuthorityObject(oldAuthority, { ...options, authorityFile: options.oldAuthorityFile, skipEvidenceMatch: true });
+  const currentInventory = safeFileInventory(options.evidenceDir, EVIDENCE_FILES);
+  const changedFiles = changedFilesFromOldAuthority(currentInventory, oldAuthority.safe_inventory);
+  return {
+    schema_version: AUTHORITY_V2_SCHEMA_VERSION,
+    record_type: 'PRODUCTION_OPERATIONAL_SMOKE_RETURNED_AUTHORITY',
+    record_revision: 2,
+    milestone: REBASELINE_MILESTONE,
+    service: SERVICE_NAME,
+    environment: 'production',
+    generated_at_utc: new Date().toISOString(),
+    authority_source: 'HUMAN_OPERATOR_EXPLICIT_TIME_SYNC_CORRECTION_SUBMISSION',
+    operator_reported_time_sync_corrected: true,
+    operator_reported_checksum_updated: true,
+    checksum_alone_is_duration_evidence: false,
+    validation_bypass_granted: false,
+    selected_input_alias: 'production-operational-smoke-returned-v2',
+    current_tree_digest: treeDigest(currentInventory),
+    current_safe_file_count: currentInventory.length,
+    current_safe_inventory: currentInventory,
+    old_tree_digest: oldAuthority.authoritative_tree_digest,
+    old_authority_sha256: sha256File(options.oldAuthorityFile),
+    old_blocked_receipt_sha256: sha256File(options.oldReceiptFile),
+    bundle_change_classification: classifyBundleChange(changedFiles),
+    changed_files_from_r2: changedFiles,
+    expected_handoff: {
+      source_commit: handoff.source_commit,
+      manifest_sha256: handoff.manifest_sha256,
+      observer_sha256: handoff.observer_sha256,
+      contract_version: CONTRACT_VERSION,
+      contract_sha256: handoff.contract_sha256,
+      freeze_sha256: freeze.freeze_sha256,
+    },
+    parent_receipt_hashes: { ...PARENT_RECEIPT_HASHES },
+    returned_files_modified_by_codex: false,
+    codex_production_contact: false,
+    production_mutation: false,
+  };
+}
+
+function verifyAuthorityV2Object(authority, options) {
+  assertExactObjectKeys(authority, AUTHORITY_V2_KEYS, 'authority-v2 keys');
+  assert(authority.schema_version === AUTHORITY_V2_SCHEMA_VERSION, 'authority-v2 schema mismatch');
+  assert(authority.record_type === 'PRODUCTION_OPERATIONAL_SMOKE_RETURNED_AUTHORITY', 'authority-v2 record type mismatch');
+  assert(authority.record_revision === 2, 'authority-v2 revision mismatch');
+  assert(authority.milestone === REBASELINE_MILESTONE, 'authority-v2 milestone mismatch');
+  assert(authority.service === SERVICE_NAME, 'authority-v2 service mismatch');
+  assert(authority.environment === 'production', 'authority-v2 environment mismatch');
+  assert(new Date(authority.generated_at_utc).toISOString() === authority.generated_at_utc, 'authority-v2 generated timestamp malformed');
+  assert(authority.authority_source === 'HUMAN_OPERATOR_EXPLICIT_TIME_SYNC_CORRECTION_SUBMISSION', 'authority-v2 source mismatch');
+  assert(authority.operator_reported_time_sync_corrected === true, 'authority-v2 time sync flag mismatch');
+  assert(authority.operator_reported_checksum_updated === true, 'authority-v2 checksum flag mismatch');
+  assert(authority.checksum_alone_is_duration_evidence === false, 'authority-v2 checksum evidence flag mismatch');
+  assert(authority.validation_bypass_granted === false, 'authority-v2 bypass flag mismatch');
+  assert(authority.selected_input_alias === 'production-operational-smoke-returned-v2', 'authority-v2 selected input mismatch');
+  assert(authority.current_safe_file_count === EVIDENCE_FILES.length, 'authority-v2 file count mismatch');
+  assert(Array.isArray(authority.current_safe_inventory), 'authority-v2 inventory must be an array');
+  const currentInventory = safeFileInventory(options.evidenceDir, EVIDENCE_FILES);
+  assertSameObject(authority.current_safe_inventory, currentInventory, 'authority-v2 current inventory mismatch');
+  assert(authority.current_tree_digest === treeDigest(currentInventory), 'authority-v2 current tree digest mismatch');
+  const oldAuthority = JSON.parse(readAndValidateTextFile(path.dirname(options.oldAuthorityFile), path.basename(options.oldAuthorityFile)));
+  verifyAuthorityObject(oldAuthority, { ...options, skipEvidenceMatch: true });
+  const changedFiles = changedFilesFromOldAuthority(currentInventory, oldAuthority.safe_inventory);
+  assertSameArray(authority.changed_files_from_r2, changedFiles, 'authority-v2 changed files mismatch');
+  assert(authority.bundle_change_classification === classifyBundleChange(changedFiles), 'authority-v2 classification mismatch');
+  assert(authority.old_tree_digest === oldAuthority.authoritative_tree_digest, 'authority-v2 old tree digest mismatch');
+  assert(authority.old_authority_sha256 === sha256File(options.oldAuthorityFile), 'authority-v2 old authority checksum mismatch');
+  assert(authority.old_blocked_receipt_sha256 === sha256File(options.oldReceiptFile), 'authority-v2 old receipt checksum mismatch');
+  assertExactObjectKeys(authority.expected_handoff, AUTHORITY_HANDOFF_KEYS, 'authority-v2 handoff keys');
+  const handoff = verifyHandoff(options.handoffDir);
+  const freeze = verifyFreeze(options.handoffDir, options.freezeFile);
+  assert(authority.expected_handoff.source_commit === handoff.source_commit, 'authority-v2 source commit mismatch');
+  assert(authority.expected_handoff.manifest_sha256 === handoff.manifest_sha256, 'authority-v2 manifest checksum mismatch');
+  assert(authority.expected_handoff.observer_sha256 === handoff.observer_sha256, 'authority-v2 observer checksum mismatch');
+  assert(authority.expected_handoff.contract_version === CONTRACT_VERSION, 'authority-v2 contract version mismatch');
+  assert(authority.expected_handoff.contract_sha256 === handoff.contract_sha256, 'authority-v2 contract checksum mismatch');
+  assert(authority.expected_handoff.freeze_sha256 === freeze.freeze_sha256, 'authority-v2 freeze checksum mismatch');
+  assertSameObject(authority.parent_receipt_hashes, PARENT_RECEIPT_HASHES, 'authority-v2 parent receipt hash mismatch');
+  assert(authority.returned_files_modified_by_codex === false, 'authority-v2 returned modification flag mismatch');
+  assert(authority.codex_production_contact === false, 'authority-v2 production contact flag mismatch');
+  assert(authority.production_mutation === false, 'authority-v2 production mutation flag mismatch');
+}
+
+function changedFilesFromOldAuthority(currentInventory, oldInventory) {
+  const oldByName = Object.fromEntries(oldInventory.map((item) => [item.relative_path, item]));
+  return currentInventory
+    .filter((item) => oldByName[item.relative_path]?.sha256 !== item.sha256)
+    .map((item) => item.relative_path)
+    .sort();
+}
+
+function classifyBundleChange(changedFiles) {
+  if (changedFiles.length === 0) return 'UNCHANGED_BUNDLE';
+  if (sameStringArray(changedFiles, ['checksums.sha256'])) return 'CHECKSUM_ONLY_REWRITE';
+  if (sameStringArray(changedFiles, ['checksums.sha256', 'collector-metadata.txt'])) return 'METADATA_ONLY_TIME_REWRITE';
+  if (changedFiles.some((file) => file === 'operational-smoke-samples.tsv' || file === 'error-signal-buckets.tsv')) {
+    return 'SEMANTIC_EVIDENCE_CHANGED';
+  }
+  return 'SEMANTIC_EVIDENCE_CHANGED';
+}
+
+function authorityV2File(options) {
+  return options.authorityFile === DEFAULT_AUTHORITY_FILE ? DEFAULT_AUTHORITY_V2_FILE : options.authorityFile;
 }
 
 function createReceipt(options) {
@@ -918,6 +1106,7 @@ function summarizeEvidence(metadata, samples, buckets) {
   let workerPassed = 0;
   let sampleFailures = 0;
   let maxLag = 0;
+  const sampleUtcByIndex = Array(PRIMARY_SAMPLE_COUNT).fill(null);
   for (const sample of samples) {
     assertExactObjectKeys(sample, OPERATIONAL_SMOKE_SAMPLE_COLUMNS, 'operational smoke sample columns');
     const index = numberField(sample.sample_index, 'sample_index');
@@ -927,6 +1116,7 @@ function summarizeEvidence(metadata, samples, buckets) {
     }
     const expectedElapsed = index * PRIMARY_INTERVAL_SECONDS;
     assert(numberField(sample.target_elapsed_seconds, 'target_elapsed_seconds') === expectedElapsed, `sample ${index} target elapsed mismatch`);
+    sampleUtcByIndex[index] = parseUtcSecond(sample.collected_utc, `sample ${index} collected UTC`);
     const lag = numberField(sample.scheduling_lag_seconds, 'scheduling_lag_seconds');
     maxLag = Math.max(maxLag, lag);
     if (sample.internal_live_result === 'PASSED') internalLivePassed += 1;
@@ -950,12 +1140,24 @@ function summarizeEvidence(metadata, samples, buckets) {
   let errorTotal = 0;
   let fatalTotal = 0;
   let coverageFailures = 0;
+  const bucketStartUtcByIndex = Array(ERROR_BUCKET_COUNT).fill(null);
+  const bucketEndUtcByIndex = Array(ERROR_BUCKET_COUNT).fill(null);
   for (const bucket of buckets) {
     assertExactObjectKeys(bucket, ERROR_BUCKET_COLUMNS, 'error bucket columns');
     const index = numberField(bucket.bucket_index, 'bucket_index');
     assert(index >= 0 && index < ERROR_BUCKET_COUNT, `bucket index out of range: ${index}`);
     assert(bucket.service === 'api' || bucket.service === 'worker', 'bucket service mismatch');
     assert(bucket.classifier_mode === CLASSIFIER_MODE, 'bucket classifier mismatch');
+    const bucketStart = parseUtcSecond(bucket.start_utc, `bucket ${index} ${bucket.service} start UTC`);
+    const bucketEnd = parseUtcSecond(bucket.end_utc, `bucket ${index} ${bucket.service} end UTC`);
+    assert(bucketEnd - bucketStart === ERROR_BUCKET_SECONDS, `bucket ${index} ${bucket.service} UTC span mismatch`);
+    if (bucketStartUtcByIndex[index] === null) {
+      bucketStartUtcByIndex[index] = bucketStart;
+      bucketEndUtcByIndex[index] = bucketEnd;
+    } else {
+      assert(bucketStartUtcByIndex[index] === bucketStart, `bucket ${index} service start UTC mismatch`);
+      assert(bucketEndUtcByIndex[index] === bucketEnd, `bucket ${index} service end UTC mismatch`);
+    }
     const key = `${index}:${bucket.service}`;
     assert(!bucketKeys.has(key), `duplicate bucket key ${key}`);
     bucketKeys.add(key);
@@ -998,7 +1200,25 @@ function summarizeEvidence(metadata, samples, buckets) {
     safety.restore_performed === false;
   const elapsedSeconds = numberField(metadata.elapsed_seconds, 'elapsed_seconds');
   const wallClockElapsedSeconds = utcElapsedSeconds(metadata.started_at_utc, metadata.ended_at_utc, 'metadata observation window');
-  const wallClockPass = wallClockElapsedSeconds === elapsedSeconds && wallClockElapsedSeconds >= WINDOW_SECONDS;
+  const metadataStartedSecond = parseUtcSecond(metadata.started_at_utc, 'metadata start UTC');
+  const metadataEndedSecond = parseUtcSecond(metadata.ended_at_utc, 'metadata end UTC');
+  const firstSampleSecond = sampleUtcByIndex[0];
+  const lastSampleSecond = sampleUtcByIndex[PRIMARY_SAMPLE_COUNT - 1];
+  const firstBucketStartSecond = bucketStartUtcByIndex[0];
+  const lastBucketEndSecond = bucketEndUtcByIndex[ERROR_BUCKET_COUNT - 1];
+  const sampleUtcSpanSeconds = lastSampleSecond - firstSampleSecond;
+  const bucketUtcSpanSeconds = lastBucketEndSecond - firstBucketStartSecond;
+  const timingAlignmentPass =
+    wallClockElapsedSeconds === elapsedSeconds &&
+    wallClockElapsedSeconds >= WINDOW_SECONDS &&
+    sampleUtcSpanSeconds === WINDOW_SECONDS &&
+    bucketUtcSpanSeconds === WINDOW_SECONDS &&
+    Math.abs(firstSampleSecond - metadataStartedSecond) <= MAX_SAMPLE_LAG_SECONDS &&
+    metadataEndedSecond >= lastSampleSecond &&
+    metadataEndedSecond - lastSampleSecond <= ERROR_BUCKET_SECONDS &&
+    firstBucketStartSecond === firstSampleSecond &&
+    lastBucketEndSecond === lastSampleSecond;
+  const wallClockPass = timingAlignmentPass;
   const healthPass =
     internalLivePassed === PRIMARY_SAMPLE_COUNT &&
     internalReadyPassed === PRIMARY_SAMPLE_COUNT &&
@@ -1070,6 +1290,9 @@ function summarizeEvidence(metadata, samples, buckets) {
     elapsedSeconds,
     wallClockElapsedSeconds,
     wallClockPass,
+    sampleUtcSpanSeconds,
+    bucketUtcSpanSeconds,
+    timingAlignmentPass,
   };
 }
 
@@ -1593,11 +1816,11 @@ function parseTsv(text) {
 function parseChecksumFile(content) {
   const map = {};
   for (const line of content.split(/\n/u).filter(Boolean)) {
-    const match = line.match(/^([a-f0-9]{64})  ([A-Za-z0-9._/-]+)$/u);
+    const match = line.match(/^([A-Fa-f0-9]{64})  ([A-Za-z0-9._/-]+)$/u);
     if (!match) fail(`invalid checksum line: ${line}`);
     const [, hash, name] = match;
     if (Object.hasOwn(map, name)) fail(`duplicate checksum entry ${name}`);
-    map[name] = hash;
+    map[name] = hash.toLowerCase();
   }
   return map;
 }
@@ -1819,6 +2042,10 @@ function isGitSha(value) {
 
 function assertSameArray(actual, expected, label) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${label}: expected ${expected.join(', ')}, got ${actual.join(', ')}`);
+}
+
+function sameStringArray(actual, expected) {
+  return JSON.stringify([...actual].sort()) === JSON.stringify([...expected].sort());
 }
 
 function assertSameObject(actual, expected, label) {

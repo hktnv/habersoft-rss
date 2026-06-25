@@ -46,6 +46,8 @@ try {
   nodeCli(['receipt:verify', '--receipt-file', success.receiptFile, '--require-ms019f-v2-baseline']);
   assertReturnedInventorySafe(success.returnedDir);
   assertReturnedAuthorityPasses(base, success.returnedDir);
+  assertUppercaseChecksumManifestPasses(base, success.returnedDir);
+  assertMetadataOnlyRebaselineIsBlocked(base, success);
 
   assertBlockedVariants(base);
   assertInterruptedRunHasNoFinalBundle(base);
@@ -435,6 +437,107 @@ function assertReturnedAuthorityPasses(base, returnedDir) {
   );
   assert.equal(authority.expected_handoff.contract_version, 'production-operational-smoke-evidence-v2');
   assert.equal(authority.safety_flags.raw_contents_printed, false);
+}
+
+function assertUppercaseChecksumManifestPasses(base, returnedDir) {
+  const uppercaseDir = path.join(temp, 'uppercase-checksums');
+  cpSync(returnedDir, uppercaseDir, { recursive: true });
+  const checksumFile = path.join(uppercaseDir, 'checksums.sha256');
+  writeText(checksumFile, readFileSync(checksumFile, 'utf8').replace(/[a-f0-9]{64}/gu, (hash) => hash.toUpperCase()));
+  const receiptFile = path.join(temp, 'uppercase-checksums-receipt.json');
+  nodeCli([
+    'receipt:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    uppercaseDir,
+    '--receipt-file',
+    receiptFile,
+  ]);
+  assert.equal(readJson(receiptFile).outcome, 'SUCCESS');
+  nodeCli(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-v2-baseline']);
+}
+
+function assertMetadataOnlyRebaselineIsBlocked(base, success) {
+  const oldAuthorityFile = path.join(temp, 'old-returned-authority.json');
+  nodeCli([
+    'authority:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    success.returnedDir,
+    '--authority-file',
+    oldAuthorityFile,
+  ]);
+
+  const currentDir = path.join(temp, 'metadata-only-rebaseline');
+  cpSync(success.returnedDir, currentDir, { recursive: true });
+  const startedAt = readMetadataValue(currentDir, 'started_at_utc');
+  const shiftedStart = new Date(Date.parse(startedAt) + 1_140_000).toISOString().replace('.000Z', 'Z');
+  const shiftedEnd = new Date(Date.parse(shiftedStart) + 1_200_000).toISOString().replace('.000Z', 'Z');
+  replaceMetadataValue(currentDir, 'started_at_utc', shiftedStart);
+  replaceMetadataValue(currentDir, 'ended_at_utc', shiftedEnd);
+
+  const authorityV2File = path.join(temp, 'returned-authority-v2.json');
+  const authorityV2 = JSON.parse(nodeCli([
+    'authority:v2:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    currentDir,
+    '--authority-file',
+    authorityV2File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]).stdout);
+  assert.equal(authorityV2.bundle_change_classification, 'METADATA_ONLY_TIME_REWRITE');
+  assert.deepEqual(authorityV2.changed_files_from_r2, ['checksums.sha256', 'collector-metadata.txt']);
+  nodeCli([
+    'authority:v2:verify',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    currentDir,
+    '--authority-file',
+    authorityV2File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]);
+
+  const receiptFile = path.join(temp, 'metadata-only-rebaseline-receipt.json');
+  nodeCli([
+    'receipt:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    currentDir,
+    '--receipt-file',
+    receiptFile,
+  ]);
+  assert.equal(readJson(receiptFile).outcome, 'BLOCKED_SAMPLE_COVERAGE');
+  nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-v2-baseline']);
+}
+
+function readMetadataValue(evidenceDir, key) {
+  const line = readFileSync(path.join(evidenceDir, 'collector-metadata.txt'), 'utf8')
+    .split('\n')
+    .find((entry) => entry.startsWith(`${key}=`));
+  assert.ok(line, `metadata key not found: ${key}`);
+  return line.slice(key.length + 1);
 }
 
 function replaceMetadataValue(evidenceDir, key, value) {
