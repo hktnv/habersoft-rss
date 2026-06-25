@@ -20,6 +20,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [production-acceptance.md](production-acceptance.md) | Current production activation status, operator-confirmed evidence, external receipt identity ve claim boundary. |
 | [production-operational-evidence.md](production-operational-evidence.md) | MS-019B-R8 accepted collector-v2 operational evidence receipt, operator handoff bundle, collector safety ve receipt verifier semantics. |
 | [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md) | MS-019D production checkout hygiene, current/previous release-pointer evidence contract, read-only operator handoff-v1 ve receipt verifier semantics. |
+| [production-edge-body-limit.md](production-edge-body-limit.md) | MS-019E public HTTPS edge request-body compatibility handoff, exact Agent entries body contract, safe collector ve future receipt verifier semantics. |
 | [repository-conventions.md](repository-conventions.md) | Windows checkout, `.gitattributes`, POSIX shell LF, safe renormalize ve production guide mirror byte-equality sozlesmesi. |
 | [service-handbook/README.md](service-handbook/README.md) | Sade servis el kitabi girisi, aktorler ve okuma sirasi. |
 | [service-handbook/main-servis-kilavuzu.md](service-handbook/main-servis-kilavuzu.md) | Main-service runtime rolleri, veri iliskileri, port modeli ve operasyon sinirlari. |
@@ -58,12 +59,13 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 5. [production-acceptance.md](production-acceptance.md)
 6. [production-operational-evidence.md](production-operational-evidence.md)
 7. [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md)
-8. [repository-conventions.md](repository-conventions.md)
-9. [../PRODUCTION.md](../PRODUCTION.md)
-10. [production-deployment.md](production-deployment.md)
-11. [release-packaging.md](release-packaging.md)
-12. [backup-and-restore.md](backup-and-restore.md)
-13. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
+8. [production-edge-body-limit.md](production-edge-body-limit.md)
+9. [repository-conventions.md](repository-conventions.md)
+10. [../PRODUCTION.md](../PRODUCTION.md)
+11. [production-deployment.md](production-deployment.md)
+12. [release-packaging.md](release-packaging.md)
+13. [backup-and-restore.md](backup-and-restore.md)
+14. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
 
 ## Okuma Sirasi
 
@@ -72,31 +74,32 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 3. [production-acceptance.md](production-acceptance.md)
 4. [production-operational-evidence.md](production-operational-evidence.md)
 5. [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md)
-6. [repository-conventions.md](repository-conventions.md)
-7. [local-development.md](local-development.md)
-8. [tenant-authentication.md](tenant-authentication.md)
-9. [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md)
-10. [tenant-rate-limiting.md](tenant-rate-limiting.md)
-11. [tenant-entry-listing.md](tenant-entry-listing.md)
-12. [tenant-entry-detail.md](tenant-entry-detail.md)
-13. [agent-authentication.md](agent-authentication.md)
-14. [agent-heartbeat.md](agent-heartbeat.md)
-15. [agent-due-feeds.md](agent-due-feeds.md)
-16. [agent-new-guid-filtering.md](agent-new-guid-filtering.md)
-17. [agent-entry-ingestion.md](agent-entry-ingestion.md)
-18. [agent-feed-check-results.md](agent-feed-check-results.md)
-19. [background-job-runner.md](background-job-runner.md)
-20. [cleanup-retention.md](cleanup-retention.md)
-21. [mvp-release-readiness.md](mvp-release-readiness.md)
-22. [production-deployment.md](production-deployment.md)
-23. [release-packaging.md](release-packaging.md)
-24. [backup-and-restore.md](backup-and-restore.md)
-25. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
-26. [staging-host-provisioning.md](staging-host-provisioning.md)
-27. [local-staging-rehearsal.md](local-staging-rehearsal.md)
-28. [production-rollout-runbook.md](production-rollout-runbook.md)
-29. [database-schema.md](database-schema.md)
-30. Repository kok [README.md](../README.md)
+6. [production-edge-body-limit.md](production-edge-body-limit.md)
+7. [repository-conventions.md](repository-conventions.md)
+8. [local-development.md](local-development.md)
+9. [tenant-authentication.md](tenant-authentication.md)
+10. [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md)
+11. [tenant-rate-limiting.md](tenant-rate-limiting.md)
+12. [tenant-entry-listing.md](tenant-entry-listing.md)
+13. [tenant-entry-detail.md](tenant-entry-detail.md)
+14. [agent-authentication.md](agent-authentication.md)
+15. [agent-heartbeat.md](agent-heartbeat.md)
+16. [agent-due-feeds.md](agent-due-feeds.md)
+17. [agent-new-guid-filtering.md](agent-new-guid-filtering.md)
+18. [agent-entry-ingestion.md](agent-entry-ingestion.md)
+19. [agent-feed-check-results.md](agent-feed-check-results.md)
+20. [background-job-runner.md](background-job-runner.md)
+21. [cleanup-retention.md](cleanup-retention.md)
+22. [mvp-release-readiness.md](mvp-release-readiness.md)
+23. [production-deployment.md](production-deployment.md)
+24. [release-packaging.md](release-packaging.md)
+25. [backup-and-restore.md](backup-and-restore.md)
+26. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
+27. [staging-host-provisioning.md](staging-host-provisioning.md)
+28. [local-staging-rehearsal.md](local-staging-rehearsal.md)
+29. [production-rollout-runbook.md](production-rollout-runbook.md)
+30. [database-schema.md](database-schema.md)
+31. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 
@@ -126,6 +129,8 @@ MS-019B-R8 operational evidence receipt notu: [production-operational-evidence.m
 MS-019C backup/restore evidence notu: [backup-and-restore.md](backup-and-restore.md) production returned backup-v2 authority, off-host disposable restore receipt ve combined receipt identity'sinin sahibidir. Backup restore baseline `PASSED`; raw dump, metadata, restore receipt ve operator-state artifacts external kalir ve Git'e commit edilmez.
 
 MS-019D-R1 checkout/pointer receipt notu: [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md) production checkout hygiene ve current/previous release-pointer evidence contract'inin sahibidir. Returned handoff-v1 bundle local olarak intake edildi; checkout hygiene ve current pointer `PASSED`, outcome `PARTIAL_ACCEPTED`, rollback baseline `ESTABLISHED_FROM_CURRENT_POINTER` durumundadir. Historical previous pointer, edge body-limit, long-term stability ve error-burst evidence `NOT_RECORDED` kalir.
+
+MS-019E edge body-limit handoff notu: [production-edge-body-limit.md](production-edge-body-limit.md) public HTTPS edge request-body compatibility handoff ve future receipt modelinin sahibidir. Exact application body limit source/tests/docs uzerinden `5242880` byte olarak dogrulanir; generated collector read-only, unauthenticated ve six-request bounded kalir. Handoff hazirligi production evidence acceptance degildir; returned edge body-limit evidence gelene kadar edge body-limit `NOT_RECORDED` kalir.
 
 MS-019B hygiene prep notu: [repository-conventions.md](repository-conventions.md), Windows `core.autocrlf`, `.gitattributes`, POSIX shell LF ve production guide mirror byte-equality sozlesmesinin canonical repository-local sahibidir. Bu hazirlik notu R8 returned evidence intake tarafindan superseded edildi; current operational receipt status [production-acceptance.md](production-acceptance.md) ve [production-operational-evidence.md](production-operational-evidence.md) dosyalarindadir.
 

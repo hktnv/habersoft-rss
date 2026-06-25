@@ -996,6 +996,46 @@ Previous pointer evidence varsa operator strict data file'i ayrica verir:
 
 Returned bundle local verifier tarafindan `production-checkout-pointer-receipt.json` uretmek icin kullanilir. MS-019D-R1 receipt current checkout/current pointer alanlarini accepted hale getirdi; previous pointer absent oldugu icin full operational baseline hala partial kalir.
 
+### 19.3 Read-only edge body-limit handoff
+
+MS-019E ile public HTTPS edge request-body compatibility icin read-only, unauthenticated handoff-v1 tooling hazirlanir. Canonical contract ve future receipt boundary [.docs/production-edge-body-limit.md](.docs/production-edge-body-limit.md) dosyasindadir.
+
+Bu akisin siniri:
+
+- Codex production SSH kullanmaz.
+- Handoff bundle tek basina production evidence degildir; accepted receipt gerekir.
+- Operator collector'i production host veya approved production network context uzerinde manuel calistirir.
+- Collector yalniz `POST /agent/entries` rotasina exact byte-sized invalid JSON body gonderir.
+- Collector Agent key, tenant JWT, cookie, retry, concurrency, TLS bypass veya arbitrary target/size kullanmaz.
+- Collector response body, headers, payload, config, logs veya secret retaining yapmaz.
+- Output external operator-state alaninda tutulur ve Git'e commit edilmez.
+
+Generated handoff dogrulama:
+
+```bash
+cd "<operator-approved-ms-019e-handoff-v1-dir>"
+sha256sum -c checksums.sha256
+bash -n collect-production-edge-body-limit-evidence.sh
+```
+
+Collector command shape:
+
+```bash
+<operator-approved-ms-019e-handoff-v1-dir>/collect-production-edge-body-limit-evidence.sh \
+  --confirm-public-host rss.habersoft.com \
+  --output-dir <new-empty-output-dir>
+```
+
+Returned bundle exactly su dosyalari icermelidir:
+
+```text
+checksums.sha256
+collector-metadata.txt
+evidence-records.tsv
+```
+
+Returned bundle sonraki local verification milestone'unda `production-edge-body-limit-receipt.json` uretmek icin kullanilir. MS-019E handoff hazirligi edge body-limit verification'i accepted yapmaz; returned evidence gelene kadar edge body-limit `NOT_RECORDED` kalir.
+
 ## 20. Gelecek backend/frontend monorepo gecisi
 
 Current phase:
@@ -1054,6 +1094,7 @@ Bu kosullar tamamlanmadan `rss-panel.habersoft.com` production-ready sayilmaz.
 - [.docs/production-acceptance.md](.docs/production-acceptance.md)
 - [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md)
 - [.docs/production-checkout-and-release-pointers.md](.docs/production-checkout-and-release-pointers.md)
+- [.docs/production-edge-body-limit.md](.docs/production-edge-body-limit.md)
 - [.docs/production-deployment.md](.docs/production-deployment.md)
 - [.docs/production-rollout-runbook.md](.docs/production-rollout-runbook.md)
 - [.docs/release-packaging.md](.docs/release-packaging.md)

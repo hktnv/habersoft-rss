@@ -218,6 +218,8 @@ MS-019C owns the production PostgreSQL backup and off-host disposable restore ev
 
 MS-019D-R1 owns the returned checkout hygiene and release-pointer evidence intake in [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md). Current checkout hygiene and current pointer evidence are accepted as `PARTIAL_ACCEPTED`; historical previous pointer remains `NOT_RECORDED`. This does not change the MS-019B receipt result, and it does not convert full operational baseline completion into `PASSED`.
 
+MS-019E owns the edge body-limit handoff preparation in [production-edge-body-limit.md](production-edge-body-limit.md). Its generated collector and receipt model are read-only and unauthenticated, but handoff generation alone is not returned production evidence. Edge body-limit remains `NOT_RECORDED` until the future MS-019E returned evidence intake verifies an external bundle.
+
 ## Historical Handoff Boundary
 
 MS-019A handoff-v1 remains historically verifiable by the handoff verifier. New operator reruns must use the collector-v2 contract so the production Compose context, two env-file layers, context preflight and `NOT_RUN` dependent classification are present in the returned bundle.
