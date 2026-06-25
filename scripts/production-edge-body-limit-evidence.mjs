@@ -548,6 +548,7 @@ function createReceipt(options) {
     route: ROUTE,
     method: METHOD,
     content_type: CONTENT_TYPE,
+    collection_utc: parsed.metadata.collection_utc,
     body_limit_bytes: BODY_LIMIT_BYTES,
     probe_sizes: {
       small: SMALL_BODY_BYTES,
@@ -592,6 +593,7 @@ function createReceipt(options) {
       response_retained: parsed.metadata.response_retained === 'true',
       headers_retained: parsed.metadata.headers_retained === 'true',
       mutation: parsed.metadata.mutation === 'true',
+      database_write: false,
       production_contact_performed_by_codex: false,
     },
     probes: analysis.probes,
@@ -774,6 +776,7 @@ function validateReceiptObject(receipt, options = {}) {
   assert(receipt.milestone === RECEIPT_MILESTONE && receipt.handoff_milestone === MILESTONE && receipt.service === SERVICE_NAME, 'receipt identity mismatch');
   assert(receipt.contract_version === CONTRACT_VERSION, 'receipt contract mismatch');
   assert(receipt.route === ROUTE && receipt.method === METHOD && receipt.content_type === CONTENT_TYPE, 'receipt route contract mismatch');
+  assert(typeof receipt.collection_utc === 'string' && !Number.isNaN(Date.parse(receipt.collection_utc)), 'receipt collection UTC mismatch');
   assert(receipt.body_limit_bytes === BODY_LIMIT_BYTES, 'receipt body limit mismatch');
   assert(receipt.returned_authority?.schema_version === AUTHORITY_SCHEMA_VERSION, 'receipt authority schema mismatch');
   assert(typeof receipt.returned_authority?.sha256 === 'string' && /^[a-f0-9]{64}$/u.test(receipt.returned_authority.sha256), 'receipt authority hash mismatch');
@@ -788,6 +791,7 @@ function validateReceiptObject(receipt, options = {}) {
   assert(receipt.safety_flags.response_retained === false, 'receipt must not retain response');
   assert(receipt.safety_flags.headers_retained === false, 'receipt must not retain headers');
   assert(receipt.safety_flags.mutation === false, 'receipt must not mutate production');
+  assert(receipt.safety_flags.database_write === false, 'receipt must not write database');
   if (options.requireCompatibility && receipt.outcome !== 'SUCCESS') {
     fail(`edge body-limit compatibility was required but outcome is ${receipt.outcome}`);
   }
@@ -1312,7 +1316,7 @@ function usage() {
   node scripts/production-edge-body-limit-evidence.mjs handoff:freeze:verify [--handoff-dir <dir>] [--freeze-file <file>]
   node scripts/production-edge-body-limit-evidence.mjs authority:create --evidence-dir <dir> [--authority-file <file>] [--handoff-dir <dir>] [--freeze-file <file>]
   node scripts/production-edge-body-limit-evidence.mjs authority:verify --evidence-dir <dir> [--authority-file <file>] [--handoff-dir <dir>] [--freeze-file <file>]
-  node scripts/production-edge-body-limit-evidence.mjs receipt:create --evidence-dir <dir> [--authority-file <file>] [--output-file <file>]
+  node scripts/production-edge-body-limit-evidence.mjs receipt:create --evidence-dir <dir> [--authority-file <file>] [--handoff-dir <dir>] [--freeze-file <file>] [--output-file <file>]
   node scripts/production-edge-body-limit-evidence.mjs receipt:verify --receipt-file <file> [--require-edge-body-limit-compatibility]
 `;
 }

@@ -325,6 +325,8 @@ function createAndVerifyReceipt(root, evidenceDir, name, handoff, freeze, strict
   const parsed = JSON.parse(fs.readFileSync(receipt, 'utf8'));
   assert(parsed.returned_authority.sha256 === sha256File(authority), 'receipt must bind authority hash');
   assert(parsed.returned_authority.safe_file_count === EXPECTED_FILES.length, 'receipt must bind authority file count');
+  assert(typeof parsed.collection_utc === 'string' && !Number.isNaN(Date.parse(parsed.collection_utc)), 'receipt must bind collection UTC');
+  assert(parsed.safety_flags.database_write === false, 'receipt must record no database write');
   return parsed;
 }
 
