@@ -334,10 +334,10 @@ function collectorCommand({ collector, fixture, outputDir, previousPointerFile, 
   return `export PATH=${pathPrefix}:"$PATH"; bash ${args.join(' ')}`;
 }
 
-function runCollector({ collector, fixture, outputDir, previousPointerFile, fakeBin }) {
+function runCollector({ collector, fixture, outputDir, previousPointerFile, fakeBin, runtimeRevision }) {
   fs.mkdirSync(outputDir, { recursive: true });
   const setup = [
-    `export CURRENT_COMMIT=${shellQuote(fixture.currentCommit)}`,
+    `export CURRENT_COMMIT=${shellQuote(runtimeRevision ?? fixture.currentCommit)}`,
     `export PREVIOUS_COMMIT=${shellQuote(fixture.previousCommit)}`,
     `export CURRENT_IMAGE_ID=${shellQuote(CURRENT_IMAGE_ID)}`,
     `export PREVIOUS_IMAGE_ID=${shellQuote(PREVIOUS_IMAGE_ID)}`,
@@ -348,7 +348,15 @@ function runCollector({ collector, fixture, outputDir, previousPointerFile, fake
 }
 
 function createReceipt(evidenceDir, receiptFile) {
-  nodeCli(['receipt:create', '--evidence-dir', evidenceDir, '--output-file', receiptFile]);
+  nodeCli([
+    'receipt:create',
+    '--evidence-dir',
+    evidenceDir,
+    '--authority-file',
+    path.join(path.dirname(receiptFile), 'fixture-authority-not-present.json'),
+    '--output-file',
+    receiptFile,
+  ]);
   return JSON.parse(fs.readFileSync(receiptFile, 'utf8'));
 }
 
@@ -426,6 +434,64 @@ function testCompletePreviousPointer(root, handoff, fakeDocker) {
     '--require-checkout-hygiene',
     '--require-complete-previous-pointer',
   ]);
+}
+
+function testRuntimeRevisionCanBeAncestorOfCheckout(root, handoff, fakeDocker) {
+  const fixture = createFixture(root, { name: 'runtime-ancestor' });
+  const evidence = path.join(root, 'returned-runtime-ancestor');
+  runCollector({
+    collector: path.join(handoff, HANDOFF_COLLECTOR),
+    fixture,
+    outputDir: evidence,
+    fakeBin: fakeDocker.bin,
+    runtimeRevision: fixture.previousCommit,
+  });
+  const receiptFile = path.join(root, 'receipt-runtime-ancestor.json');
+  const receipt = createReceipt(evidence, receiptFile);
+  assert(receipt.outcome === 'PARTIAL_ACCEPTED', 'ancestor runtime revision should be accepted as partial without previous pointer');
+  assert(receipt.current_pointer.status === 'VERIFIED', 'ancestor runtime revision should verify');
+  assert(receipt.current_pointer.facts.revision_matches_checkout_head === false, 'checkout/runtime mismatch should be recorded truthfully');
+  nodeCli(['receipt:verify', '--receipt-file', receiptFile, '--require-checkout-hygiene']);
+}
+
+function testAuthorityAndPointerState(root, handoff, fakeDocker) {
+  const fixture = createFixture(root, { name: 'authority-state' });
+  const evidence = path.join(root, 'returned-authority-state');
+  runCollector({
+    collector: path.join(handoff, HANDOFF_COLLECTOR),
+    fixture,
+    outputDir: evidence,
+    fakeBin: fakeDocker.bin,
+    runtimeRevision: fixture.previousCommit,
+  });
+  const authorityFile = path.join(root, 'authority.json');
+  const receiptFile = path.join(root, 'receipt-authority-state.json');
+  const stateFile = path.join(root, 'production-release-pointer-state.json');
+  const freezeFile = path.join(root, 'handoff-freeze.json');
+  nodeCli(['handoff:freeze', '--handoff-dir', handoff, '--freeze-file', freezeFile]);
+  nodeCli(['authority:create', '--evidence-dir', evidence, '--authority-file', authorityFile, '--handoff-dir', handoff, '--freeze-file', freezeFile]);
+  nodeCli(['authority:verify', '--evidence-dir', evidence, '--authority-file', authorityFile, '--handoff-dir', handoff, '--freeze-file', freezeFile]);
+  nodeCli([
+    'receipt:create',
+    '--evidence-dir',
+    evidence,
+    '--authority-file',
+    authorityFile,
+    '--pointer-state-file',
+    stateFile,
+    '--output-file',
+    receiptFile,
+    '--handoff-dir',
+    handoff,
+    '--freeze-file',
+    freezeFile,
+  ]);
+  const receipt = JSON.parse(fs.readFileSync(receiptFile, 'utf8'));
+  assert(receipt.milestone === 'MS-019D-R1', 'receipt should use R1 milestone');
+  assert(receipt.rollback_baseline_state?.result === 'ESTABLISHED_FROM_CURRENT_POINTER', 'pointer state should establish forward baseline');
+  nodeCli(['receipt:verify', '--receipt-file', receiptFile, '--require-checkout-hygiene']);
+  nodeCli(['pointer-state:verify', '--receipt-file', receiptFile, '--pointer-state-file', stateFile]);
+  nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-complete-previous-pointer']);
 }
 
 function testDirtyCheckoutClassifications(root, handoff, fakeDocker) {
@@ -506,6 +572,7 @@ function testForbiddenCollectorScan(root) {
 }
 
 function main() {
+  process.env.MS019D_SKIP_LOCAL_GIT_HISTORY_CHECK = '1';
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ms019d-checkout-pointer-'));
   let passed = false;
   try {
@@ -513,6 +580,8 @@ function main() {
     const fakeDocker = createFakeDocker(root);
     testNoPreviousPointer(root, handoff, fakeDocker);
     testCompletePreviousPointer(root, handoff, fakeDocker);
+    testRuntimeRevisionCanBeAncestorOfCheckout(root, handoff, fakeDocker);
+    testAuthorityAndPointerState(root, handoff, fakeDocker);
     testDirtyCheckoutClassifications(root, handoff, fakeDocker);
     testInvalidPreviousPointer(root, handoff, fakeDocker);
     testForbiddenCollectorScan(root);
