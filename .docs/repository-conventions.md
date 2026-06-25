@@ -28,18 +28,20 @@ Butun Markdown dosyalarini topluca LF'ye zorlamak bu repository'nin current poli
 
 ## POSIX Shell Artifacts
 
-Tracked `.sh` dosyalari LF blob ve LF checkout gerektirir. CRLF ile checkout edilen shell script, Git Bash veya Linux production host uzerinde syntax error uretebilir. `scripts/production-operational-evidence-collector.sh` bu nedenle hem Git blob hem working tree seviyesinde CR byte tasimamalidir.
+Tracked `.sh` dosyalari LF blob ve LF checkout gerektirir. CRLF ile checkout edilen shell script, Git Bash veya Linux production host uzerinde syntax error uretebilir. `scripts/production-operational-evidence-collector.sh` ve `scripts/production-checkout-pointer-collector.sh` bu nedenle hem Git blob hem working tree seviyesinde CR byte tasimamalidir.
 
 Generated handoff collector da LF olmalidir. Handoff verifier ve repository hygiene gate, generated collector CRLF ise fail-closed davranir.
 
 Required checks:
 
 ```powershell
-git check-attr text eol -- scripts/production-operational-evidence-collector.sh PRODUCTION.md .gitattributes
-git ls-files --eol -- scripts/production-operational-evidence-collector.sh PRODUCTION.md .gitattributes
+git check-attr text eol -- scripts/production-operational-evidence-collector.sh scripts/production-checkout-pointer-collector.sh PRODUCTION.md .gitattributes
+git ls-files --eol -- scripts/production-operational-evidence-collector.sh scripts/production-checkout-pointer-collector.sh PRODUCTION.md .gitattributes
 node scripts/repository-hygiene-verify.mjs
 bash -n scripts/production-operational-evidence-collector.sh
+bash -n scripts/production-checkout-pointer-collector.sh
 bash -n <external-handoff-dir>/collect-production-operational-evidence.sh
+bash -n <external-ms-019d-handoff-dir>/collect-production-checkout-pointer-evidence.sh
 ```
 
 Blob-level scan, `git show HEAD:<path>` bytes icinde `\r` bulunmadigini dogrular. Worktree-level scan ise checkout bytes icinde `\r` bulunmadigini dogrular. Gorsel olarak ayni metin, byte-identical veya LF-clean anlamina gelmez.
@@ -82,7 +84,7 @@ Final proof, ayni branch'in fresh worktree checkout'unda tekrarlanir. Bu kanit, 
 Minimum fresh worktree proof:
 
 - `git ls-files --eol` collector, `PRODUCTION.md` ve `.gitattributes` icin `i/lf`, `w/lf`, `attr/text eol=lf` gosterir,
-- tracked collector `bash -n` gecirir,
+- tracked collectors `bash -n` gecirir,
 - generated handoff collector LF ve `bash -n` gecirir,
 - canonical `PRODUCTION.md` ve workspace mirror SHA-256 degerleri aynidir.
 

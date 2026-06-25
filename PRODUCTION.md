@@ -682,21 +682,36 @@ Host Node/npm kullanilmayacaksa operator native PostgreSQL araclariyla ayni `pg_
 Deployment oncesi nonsecret rollback kaydi operator-state altinda tutulur:
 
 ```bash
-mkdir -p /opt/habersoft-rss/operator-state
+mkdir -p /opt/habersoft-rss/operator-state/ms-019d
 
 PREVIOUS_COMMIT="$(git rev-parse HEAD)"
-PREVIOUS_IMAGE_ID="$(sed -n 's/^MAIN_SERVICE_IMAGE=//p' "${BACKEND_DIR}/deploy/runtime-image.env")"
+PREVIOUS_IMAGE_ID="$(awk -F= '$1=="MAIN_SERVICE_IMAGE" {print $2}' "${BACKEND_DIR}/deploy/runtime-image.env")"
 
-printf 'PREVIOUS_COMMIT=%s\nPREVIOUS_IMAGE_ID=%s\n' \
+printf 'POINTER_CONTRACT_VERSION=production-release-pointer-state-v1\nPREVIOUS_COMMIT=%s\nPREVIOUS_IMAGE_ID=%s\n' \
   "${PREVIOUS_COMMIT}" \
   "${PREVIOUS_IMAGE_ID}" \
-  > /opt/habersoft-rss/operator-state/previous-main-service-release.env
+  > /opt/habersoft-rss/operator-state/ms-019d/previous-main-service-release.env
+
+chmod 600 /opt/habersoft-rss/operator-state/ms-019d/previous-main-service-release.env
 ```
+
+Pointer file shell olarak source edilmez. Bu dosya yalniz `PREVIOUS_COMMIT=<40-hex>` ve `PREVIOUS_IMAGE_ID=sha256:<64-hex>` data alanlarini tasir; unknown key, duplicate key, shell expansion veya secret-looking alan varsa rollback procedure durur.
 
 Primary rollback:
 
 ```bash
-. /opt/habersoft-rss/operator-state/previous-main-service-release.env
+POINTER_FILE=/opt/habersoft-rss/operator-state/ms-019d/previous-main-service-release.env
+
+awk -F= 'NF!=2 || !($1=="POINTER_CONTRACT_VERSION" || $1=="PREVIOUS_COMMIT" || $1=="PREVIOUS_IMAGE_ID") {exit 1}' "${POINTER_FILE}"
+
+PREVIOUS_COMMIT="$(awk -F= '$1=="PREVIOUS_COMMIT" {print $2}' "${POINTER_FILE}")"
+PREVIOUS_IMAGE_ID="$(awk -F= '$1=="PREVIOUS_IMAGE_ID" {print $2}' "${POINTER_FILE}")"
+
+printf '%s' "${PREVIOUS_COMMIT}" | grep -Eq '^[0-9a-f]{40}$' || { echo "Invalid PREVIOUS_COMMIT" >&2; exit 1; }
+printf '%s' "${PREVIOUS_IMAGE_ID}" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "Invalid PREVIOUS_IMAGE_ID" >&2; exit 1; }
+
+docker image inspect "${PREVIOUS_IMAGE_ID}" \
+  --format '{{.Id}} {{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "org.opencontainers.image.source"}}'
 
 printf 'MAIN_SERVICE_IMAGE=%s\n' "${PREVIOUS_IMAGE_ID}" > "${BACKEND_DIR}/deploy/runtime-image.env"
 
@@ -722,6 +737,8 @@ docker compose \
 PostgreSQL/Redis recreate edilmez. Volume silinmez. Redis flush yapilmaz. Git history rewrite yapilmaz.
 
 Emergency rebuild fallback icin known-good commit ayri temporary server worktree'de checkout edilir, distinct immutable image olarak build edilir ve `runtime-image.env` o image ID'ye cevrilir. Sunucuda source dosyasi elle editlenmez.
+
+Checkout hygiene ve release-pointer evidence contract [.docs/production-checkout-and-release-pointers.md](.docs/production-checkout-and-release-pointers.md) dosyasindadir. Future production release rotation, external `operator-state/ms-019d/production-release-pointer-state.json` modelini operator-authorized release procedure icinde guncellemelidir; Codex handoff generation veya repository tests bu state file'i olusturmaz.
 
 ## 17. Sorun giderme
 
@@ -933,6 +950,40 @@ Collector once production Compose context preflight'ini calistirir. Bu preflight
 
 Returned bundle sonraki local verification milestone'unda `production-operational-evidence-receipt.json` uretmek icin kullanilir. Valid partial receipt full operational acceptance anlamina gelmez.
 
+### 19.2 Read-only checkout and release-pointer handoff
+
+MS-019D ile checkout hygiene ve current/previous release-pointer evidence icin read-only handoff-v1 tooling hazirlandi. Canonical contract [.docs/production-checkout-and-release-pointers.md](.docs/production-checkout-and-release-pointers.md) dosyasindadir.
+
+Bu akisin siniri:
+
+- Codex production SSH kullanmaz.
+- Handoff bundle production evidence degildir.
+- Operator collector'i production host uzerinde manuel calistirir.
+- Collector production Compose context'i explicit `--env-file "${SHARED_ENV}" --env-file "${IMAGE_ENV}" -f "${COMPOSE_FILE}"` sekliyle baglar.
+- Collector Git checkout'u, runtime image pointer'i ve optional previous pointer file'i read-only sinifta inceler.
+- Collector service mutation, migration, backup/restore, HTTP probe, raw env dump veya raw log dump yapmaz.
+- Missing previous pointer `PREVIOUS_POINTER_NOT_RECORDED` olarak kalir; success diye infer edilmez.
+
+Collector command shape:
+
+```bash
+cd /opt/habersoft-rss
+<operator-approved-ms-019d-handoff-v1-dir>/collect-production-checkout-pointer-evidence.sh \
+  --repository-dir /opt/habersoft-rss \
+  --compose-file deploy/production/compose.yaml \
+  --shared-env .env.production \
+  --runtime-image-env deploy/runtime-image.env \
+  --output-dir <new-empty-output-dir>
+```
+
+Previous pointer evidence varsa operator strict data file'i ayrica verir:
+
+```bash
+  --previous-pointer-file /opt/habersoft-rss/operator-state/ms-019d/previous-main-service-release.env
+```
+
+Returned bundle local verifier tarafindan `production-checkout-pointer-receipt.json` uretmek icin kullanilir. Valid handoff veya partial receipt `.docs/production-acceptance.md` icin yeni production acceptance pass degildir.
+
 ## 20. Gelecek backend/frontend monorepo gecisi
 
 Current phase:
@@ -990,6 +1041,7 @@ Bu kosullar tamamlanmadan `rss-panel.habersoft.com` production-ready sayilmaz.
 - [.docs/README.md](.docs/README.md)
 - [.docs/production-acceptance.md](.docs/production-acceptance.md)
 - [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md)
+- [.docs/production-checkout-and-release-pointers.md](.docs/production-checkout-and-release-pointers.md)
 - [.docs/production-deployment.md](.docs/production-deployment.md)
 - [.docs/production-rollout-runbook.md](.docs/production-rollout-runbook.md)
 - [.docs/release-packaging.md](.docs/release-packaging.md)

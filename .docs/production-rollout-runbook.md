@@ -114,6 +114,8 @@ DB restore is not default rollback behavior for this release because there is no
 
 MS-019B receipt current image identity kaydeder. Previous production pointer commit/image hala `NOT_RECORDED`; future receipts should record actual previous production identity when operator evidence exists.
 
+Checkout hygiene ve release-pointer evidence contract [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md) dosyasindadir. Future production release rotation, external `operator-state/ms-019d/production-release-pointer-state.json` modelini operator-authorized release procedure icinde guncellemelidir; repository handoff generation veya Codex local tests bu file'i olusturmaz ve production pointer pass iddiasi yazmaz.
+
 ## Post-deployment verification
 
 Future full receipt verifier should prove identity, authorization hash, preflight, capacity, Git commit/image identity, backup/restore, migration status, internal health, public HTTPS acceptance, worker/scheduler, stability, pointers and safety flags.

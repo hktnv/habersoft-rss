@@ -216,6 +216,8 @@ These fields stay `NOT_RECORDED` or `NOT_PERFORMED` until a later bounded milest
 
 MS-019C owns the production PostgreSQL backup and off-host disposable restore evidence contract. MS-019C returned backup-v2 intake is now accepted as `PRODUCTION_BACKUP_RESTORE_VERIFIED` with combined receipt SHA-256 `868b13b9cfe44962daa4abbec71310473e1df1d0a49e4bf156a4c3f77ed01735`. Raw dump files, capture metadata and restore receipts are external sensitive artifacts and are never part of the MS-019B operational evidence bundle. MS-019B receipt SHA-256 remains the parent identity for the combined MS-019C receipt.
 
+MS-019D owns the production checkout hygiene and release-pointer evidence handoff contract in [production-checkout-and-release-pointers.md](production-checkout-and-release-pointers.md). MS-019D tooling does not change the MS-019B receipt result and does not convert previous pointer `NOT_RECORDED` into passed evidence; it prepares the operator-run read-only collector and local verifier for a future returned bundle.
+
 ## Historical Handoff Boundary
 
 MS-019A handoff-v1 remains historically verifiable by the handoff verifier. New operator reruns must use the collector-v2 contract so the production Compose context, two env-file layers, context preflight and `NOT_RUN` dependent classification are present in the returned bundle.
