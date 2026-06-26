@@ -45,6 +45,11 @@ try {
   assert.equal(success.receipt.claim_boundary.long_term_stability_claim, false);
   nodeCli(['receipt:verify', '--receipt-file', success.receiptFile, '--require-ms019f-v2-baseline']);
   assertReturnedInventorySafe(success.returnedDir);
+  assertReturnedAuthorityPasses(base, success.returnedDir);
+  assertUppercaseChecksumManifestPasses(base, success.returnedDir);
+  assertMetadataOnlyRebaselineIsBlocked(base, success);
+  assertFreshReturnedAuthorityV3Passes(base, success);
+  assertGovernanceAcceptancePasses(base, success);
 
   assertBlockedVariants(base);
   assertInterruptedRunHasNoFinalBundle(base);
@@ -52,6 +57,7 @@ try {
   assertUnknownMetadataFieldFails(base);
   assertMissingSampleFails(base);
   assertShortElapsedStrictFails(base);
+  assertWallClockElapsedMismatchFails(base);
   assertUnsafeFlagStrictFails(base);
   assertHandoffRejectsChecksumMismatch(base.handoffDir);
   assertHandoffRejectsComposeRun(base.handoffDir);
@@ -253,6 +259,31 @@ function assertShortElapsedStrictFails(base) {
   nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-v2-baseline']);
 }
 
+function assertWallClockElapsedMismatchFails(base) {
+  const result = runObserverVariant(base, 'success', 'wall-clock-mismatch');
+  const metadata = readFileSync(path.join(result.returnedDir, 'collector-metadata.txt'), 'utf8');
+  const startedLine = metadata.split('\n').find((line) => line.startsWith('started_at_utc='));
+  assert.ok(startedLine);
+  const startedAt = startedLine.slice('started_at_utc='.length);
+  const shortEnd = new Date(Date.parse(startedAt) + 63_000).toISOString().replace('.000Z', 'Z');
+  replaceMetadataValue(result.returnedDir, 'ended_at_utc', shortEnd);
+  const receiptFile = path.join(temp, 'wall-clock-mismatch-receipt.json');
+  nodeCli([
+    'receipt:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    result.returnedDir,
+    '--receipt-file',
+    receiptFile,
+  ]);
+  assert.equal(readJson(receiptFile).outcome, 'BLOCKED_SAMPLE_COVERAGE');
+  nodeCli(['receipt:verify', '--receipt-file', receiptFile]);
+  nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-v2-baseline']);
+}
+
 function assertUnsafeFlagStrictFails(base) {
   const result = runObserverVariant(base, 'success', 'unsafe-flag');
   replaceMetadataValue(result.returnedDir, 'raw_logs_retained', 'true');
@@ -368,6 +399,610 @@ function assertReturnedInventorySafe(returnedDir) {
   }
 }
 
+function assertReturnedAuthorityPasses(base, returnedDir) {
+  const authorityFile = path.join(temp, 'returned-authority.json');
+  const created = JSON.parse(nodeCli([
+    'authority:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    returnedDir,
+    '--authority-file',
+    authorityFile,
+  ]).stdout);
+  assert.equal(created.status, 'production-operational-smoke-returned-authority-created');
+  assert.equal(created.authoritative_safe_file_count, EVIDENCE_FILES.length);
+
+  const verified = JSON.parse(nodeCli([
+    'authority:verify',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    returnedDir,
+    '--authority-file',
+    authorityFile,
+  ]).stdout);
+  assert.equal(verified.status, 'production-operational-smoke-returned-authority-verified');
+  assert.equal(verified.authoritative_tree_digest, created.authoritative_tree_digest);
+
+  const authority = readJson(authorityFile);
+  assert.equal(authority.record_type, 'PRODUCTION_OPERATIONAL_SMOKE_RETURNED_AUTHORITY');
+  assert.equal(authority.milestone, 'MS-019F-R2');
+  assert.equal(authority.authority_source, 'HUMAN_OPERATOR_EXPLICIT_SUBMISSION');
+  assert.deepEqual(
+    authority.safe_inventory.map((item) => item.relative_path).sort(),
+    [...EVIDENCE_FILES].sort(),
+  );
+  assert.equal(authority.expected_handoff.contract_version, 'production-operational-smoke-evidence-v2');
+  assert.equal(authority.safety_flags.raw_contents_printed, false);
+}
+
+function assertUppercaseChecksumManifestPasses(base, returnedDir) {
+  const uppercaseDir = path.join(temp, 'uppercase-checksums');
+  cpSync(returnedDir, uppercaseDir, { recursive: true });
+  const checksumFile = path.join(uppercaseDir, 'checksums.sha256');
+  writeText(checksumFile, readFileSync(checksumFile, 'utf8').replace(/[a-f0-9]{64}/gu, (hash) => hash.toUpperCase()));
+  const receiptFile = path.join(temp, 'uppercase-checksums-receipt.json');
+  nodeCli([
+    'receipt:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    uppercaseDir,
+    '--receipt-file',
+    receiptFile,
+  ]);
+  assert.equal(readJson(receiptFile).outcome, 'SUCCESS');
+  nodeCli(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-v2-baseline']);
+}
+
+function assertMetadataOnlyRebaselineIsBlocked(base, success) {
+  const oldAuthorityFile = path.join(temp, 'old-returned-authority.json');
+  nodeCli([
+    'authority:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    success.returnedDir,
+    '--authority-file',
+    oldAuthorityFile,
+  ]);
+
+  const currentDir = path.join(temp, 'metadata-only-rebaseline');
+  cpSync(success.returnedDir, currentDir, { recursive: true });
+  const startedAt = readMetadataValue(currentDir, 'started_at_utc');
+  const shiftedStart = new Date(Date.parse(startedAt) + 1_140_000).toISOString().replace('.000Z', 'Z');
+  const shiftedEnd = new Date(Date.parse(shiftedStart) + 1_200_000).toISOString().replace('.000Z', 'Z');
+  replaceMetadataValue(currentDir, 'started_at_utc', shiftedStart);
+  replaceMetadataValue(currentDir, 'ended_at_utc', shiftedEnd);
+
+  const authorityV2File = path.join(temp, 'returned-authority-v2.json');
+  const authorityV2 = JSON.parse(nodeCli([
+    'authority:v2:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    currentDir,
+    '--authority-file',
+    authorityV2File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]).stdout);
+  assert.equal(authorityV2.bundle_change_classification, 'METADATA_ONLY_TIME_REWRITE');
+  assert.deepEqual(authorityV2.changed_files_from_r2, ['checksums.sha256', 'collector-metadata.txt']);
+  nodeCli([
+    'authority:v2:verify',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    currentDir,
+    '--authority-file',
+    authorityV2File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]);
+
+  const receiptFile = path.join(temp, 'metadata-only-rebaseline-receipt.json');
+  nodeCli([
+    'receipt:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    currentDir,
+    '--receipt-file',
+    receiptFile,
+  ]);
+  assert.equal(readJson(receiptFile).outcome, 'BLOCKED_SAMPLE_COVERAGE');
+  nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-v2-baseline']);
+}
+
+function assertFreshReturnedAuthorityV3Passes(base, success) {
+  const oldAuthorityFile = path.join(temp, 'old-returned-authority-for-v3.json');
+  nodeCli([
+    'authority:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    success.returnedDir,
+    '--authority-file',
+    oldAuthorityFile,
+  ]);
+
+  const metadataOnlyDir = path.join(temp, 'metadata-only-r3-for-v3');
+  cpSync(success.returnedDir, metadataOnlyDir, { recursive: true });
+  const startedAt = readMetadataValue(metadataOnlyDir, 'started_at_utc');
+  const shiftedStart = new Date(Date.parse(startedAt) + 1_140_000).toISOString().replace('.000Z', 'Z');
+  const shiftedEnd = new Date(Date.parse(shiftedStart) + 1_200_000).toISOString().replace('.000Z', 'Z');
+  replaceMetadataValue(metadataOnlyDir, 'started_at_utc', shiftedStart);
+  replaceMetadataValue(metadataOnlyDir, 'ended_at_utc', shiftedEnd);
+
+  const oldAuthorityV2File = path.join(temp, 'old-returned-authority-v2-for-v3.json');
+  nodeCli([
+    'authority:v2:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    metadataOnlyDir,
+    '--authority-file',
+    oldAuthorityV2File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]);
+
+  const freshDir = path.join(temp, 'fresh-returned-v3');
+  cpSync(success.returnedDir, freshDir, { recursive: true });
+  const freshStart = readMetadataValue(freshDir, 'started_at_utc');
+  const freshEnd = new Date(Date.parse(freshStart) + 1_201_000).toISOString().replace('.000Z', 'Z');
+  replaceMetadataValue(freshDir, 'ended_at_utc', freshEnd);
+  replaceMetadataValue(freshDir, 'elapsed_seconds', '1201');
+
+  const authorityV3File = path.join(temp, 'returned-authority-v3.json');
+  const authorityV3 = JSON.parse(nodeCli([
+    'authority:v3:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    freshDir,
+    '--authority-file',
+    authorityV3File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-authority-v2-file',
+    oldAuthorityV2File,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]).stdout);
+  assert.equal(authorityV3.status, 'production-operational-smoke-returned-authority-v3-created');
+  assert.equal(authorityV3.authoritative_safe_file_count, EVIDENCE_FILES.length);
+
+  const verified = JSON.parse(nodeCli([
+    'authority:v3:verify',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    freshDir,
+    '--authority-file',
+    authorityV3File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-authority-v2-file',
+    oldAuthorityV2File,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]).stdout);
+  assert.equal(verified.status, 'production-operational-smoke-returned-authority-v3-verified');
+  assert.equal(verified.authoritative_tree_digest, authorityV3.authoritative_tree_digest);
+
+  const authority = readJson(authorityV3File);
+  assert.equal(authority.record_revision, 3);
+  assert.equal(authority.milestone, 'MS-019F-R4');
+  assert.equal(authority.submission_kind, 'FRESH_REAL_20M_OBSERVER_RUN');
+  assert.equal(authority.fresh_run_claim_requires_bundle_validation, true);
+  assert.equal(authority.operator_transcript_used_as_evidence, false);
+  assert.equal(authority.returned_files_modified_by_codex, false);
+  assert.notEqual(authority.authoritative_tree_digest, authority.superseded_historical_identities.r2_tree_digest);
+  assert.notEqual(authority.authoritative_tree_digest, authority.superseded_historical_identities.r3_tree_digest);
+
+  const reusedV2 = nodeCliExpectFail([
+    'authority:v3:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    success.returnedDir,
+    '--authority-file',
+    path.join(temp, 'reused-v2-authority-v3.json'),
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-authority-v2-file',
+    oldAuthorityV2File,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]);
+  assert.match(reusedV2, /fresh returned identity reused R2 tree digest/u);
+
+  const reusedR3 = nodeCliExpectFail([
+    'authority:v3:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    metadataOnlyDir,
+    '--authority-file',
+    path.join(temp, 'reused-r3-authority-v3.json'),
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-authority-v2-file',
+    oldAuthorityV2File,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]);
+  assert.match(reusedR3, /fresh returned identity reused R3 tree digest/u);
+}
+
+function assertGovernanceAcceptancePasses(base, success) {
+  const governance = createGovernanceFixture(base, success, 'governance-acceptance');
+  const strictFailure = nodeCliExpectFail([
+    'receipt:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    governance.returnedDir,
+    '--receipt-file',
+    path.join(temp, 'governance-strict-receipt.json'),
+  ]);
+  assert.match(strictFailure, /bucket 0 api UTC span mismatch/u);
+
+  const decisionFile = path.join(temp, 'governance-decision.json');
+  const expectedArgs = fixtureExpectedArgs(governance);
+  const decision = JSON.parse(nodeCli([
+    'governance:decision:create',
+    ...governance.commonArgs,
+    ...expectedArgs,
+    '--governance-decision',
+    decisionFile,
+  ]).stdout);
+  assert.equal(decision.status, 'production-operational-smoke-governance-decision-created');
+
+  const verifiedDecision = JSON.parse(nodeCli([
+    'governance:decision:verify',
+    ...governance.commonArgs,
+    ...expectedArgs,
+    '--governance-decision',
+    decisionFile,
+  ]).stdout);
+  assert.equal(verifiedDecision.status, 'production-operational-smoke-governance-decision-verified');
+  assert.equal(verifiedDecision.technical_strict_result_preserved, 'BLOCKED_ERROR_SIGNAL_BUCKET_SPAN_MISMATCH');
+
+  const baseline = JSON.parse(nodeCli([
+    'governance:verify',
+    ...governance.commonArgs,
+    ...expectedArgs,
+    '--governance-decision',
+    decisionFile,
+    '--require-governance-approved-smoke-baseline',
+  ]).stdout);
+  assert.equal(baseline.status, 'production-operational-smoke-governance-approved-baseline-verified');
+  assert.equal(baseline.governance_strict_result, 'PASSED');
+  assert.equal(baseline.technical_strict_result, 'BLOCKED_ERROR_SIGNAL_BUCKET_SPAN_MISMATCH');
+
+  const receiptFile = path.join(temp, 'governance-receipt-v4.json');
+  const receiptCreate = JSON.parse(nodeCli([
+    'receipt:v4:create',
+    ...governance.commonArgs,
+    ...expectedArgs,
+    '--governance-decision',
+    decisionFile,
+    '--receipt-v4-file',
+    receiptFile,
+    '--require-governance-approved-smoke-baseline',
+  ]).stdout);
+  assert.equal(receiptCreate.outcome, 'SUCCESS_GOVERNANCE_ACCEPTED');
+
+  const receiptVerify = JSON.parse(nodeCli([
+    'receipt:v4:verify',
+    ...governance.commonArgs,
+    ...expectedArgs,
+    '--governance-decision',
+    decisionFile,
+    '--receipt-v4-file',
+    receiptFile,
+    '--require-governance-approved-smoke-baseline',
+  ]).stdout);
+  assert.equal(receiptVerify.status, 'production-operational-smoke-receipt-v4-verified');
+  assert.equal(receiptVerify.governance_strict_result, 'PASSED');
+
+  const receipt = readJson(receiptFile);
+  assert.equal(receipt.outcome, 'SUCCESS_GOVERNANCE_ACCEPTED');
+  assert.equal(receipt.acceptance_basis, 'GOVERNANCE_APPROVED_SAMPLE_TIMELINE_BASELINE_V1');
+  assert.equal(receipt.technical_strict_result, 'BLOCKED_ERROR_SIGNAL_BUCKET_SPAN_MISMATCH');
+  assert.equal(receipt.sample_timeline.sample_count, 21);
+  assert.equal(receipt.sample_timeline.sample_utc_span_seconds, 1200);
+  assert.equal(receipt.worker_summary.due_count, 5);
+  assert.equal(receipt.error_signal_summary.api_bucket_count, 20);
+  assert.equal(receipt.error_signal_summary.worker_bucket_count, 20);
+  assert.equal(receipt.temporal_diagnostics.bucket_span_anomaly_count, 1);
+  assert.equal(receipt.claim_boundary.production_rerun_required, false);
+
+  const reusedDecision = nodeCliExpectFail([
+    'governance:verify',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    success.returnedDir,
+    '--authority-file',
+    governance.authorityV3File,
+    '--old-authority-file',
+    governance.oldAuthorityFile,
+    '--old-authority-v2-file',
+    governance.oldAuthorityV2File,
+    '--old-receipt-file',
+    success.receiptFile,
+    ...expectedArgs,
+    '--governance-decision',
+    decisionFile,
+  ]);
+  assert.match(reusedDecision, /selected v3 tree digest mismatch|authority-v3.*mismatch/u);
+
+  const missingFieldDecision = path.join(temp, 'governance-decision-missing-field.json');
+  const missing = readJson(decisionFile);
+  delete missing.decision;
+  writeJson(missingFieldDecision, missing);
+  assert.match(nodeCliExpectFail([
+    'governance:decision:verify',
+    ...governance.commonArgs,
+    ...expectedArgs,
+    '--governance-decision',
+    missingFieldDecision,
+  ]), /governance decision keys/u);
+
+  const bypassDecision = path.join(temp, 'governance-decision-bypass.json');
+  const bypass = readJson(decisionFile);
+  bypass.validation_bypass_for_safety_fields = true;
+  writeJson(bypassDecision, bypass);
+  assert.match(nodeCliExpectFail([
+    'governance:decision:verify',
+    ...governance.commonArgs,
+    ...expectedArgs,
+    '--governance-decision',
+    bypassDecision,
+  ]), /safety field bypass/u);
+
+  const wrongAuthorityDecision = path.join(temp, 'governance-decision-wrong-authority.json');
+  const wrongAuthority = readJson(decisionFile);
+  wrongAuthority.selected_authority_sha256 = '0'.repeat(64);
+  writeJson(wrongAuthorityDecision, wrongAuthority);
+  assert.match(nodeCliExpectFail([
+    'governance:decision:verify',
+    ...governance.commonArgs,
+    ...expectedArgs,
+    '--governance-decision',
+    wrongAuthorityDecision,
+  ]), /authority checksum mismatch/u);
+
+  assertBadGovernanceFixtureBlocks(base, success, 'short-sample-span', (dir) => {
+    shortenLastSampleByOneSecond(dir);
+  }, /sample .* UTC not strictly monotonic|sample timeline span mismatch/u);
+  assertBadGovernanceFixtureBlocks(base, success, 'bucket-gap', (dir) => {
+    removeLastBucketRow(dir);
+  }, /expected 40 error bucket records|bucket coverage/u);
+  assertBadGovernanceFixtureBlocks(base, success, 'health-failure', (dir) => {
+    replaceSampleCell(dir, 3, 'public_ready_result', 'FAILED');
+  }, /health\/dependency\/TLS gate failed/u);
+  assertBadGovernanceFixtureBlocks(base, success, 'error-signal', (dir) => {
+    replaceBucketCell(dir, 2, 'worker', 'error_count', '1');
+  }, /error signal gate failed/u);
+  assertBadGovernanceFixtureBlocks(base, success, 'raw-logs-retained', (dir) => {
+    replaceMetadataValue(dir, 'raw_logs_retained', 'true');
+  }, /safety flag gate failed/u);
+}
+
+function createGovernanceFixture(base, success, label, mutate = rewriteFirstApiBucketSpan) {
+  const oldAuthorityFile = path.join(temp, `${label}-old-authority.json`);
+  nodeCli([
+    'authority:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    success.returnedDir,
+    '--authority-file',
+    oldAuthorityFile,
+  ]);
+
+  const metadataOnlyDir = path.join(temp, `${label}-metadata-only-r3`);
+  cpSync(success.returnedDir, metadataOnlyDir, { recursive: true });
+  const startedAt = readMetadataValue(metadataOnlyDir, 'started_at_utc');
+  const shiftedStart = new Date(Date.parse(startedAt) + 1_140_000).toISOString().replace('.000Z', 'Z');
+  const shiftedEnd = new Date(Date.parse(shiftedStart) + 1_200_000).toISOString().replace('.000Z', 'Z');
+  replaceMetadataValue(metadataOnlyDir, 'started_at_utc', shiftedStart);
+  replaceMetadataValue(metadataOnlyDir, 'ended_at_utc', shiftedEnd);
+
+  const oldAuthorityV2File = path.join(temp, `${label}-old-authority-v2.json`);
+  nodeCli([
+    'authority:v2:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    metadataOnlyDir,
+    '--authority-file',
+    oldAuthorityV2File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]);
+
+  const returnedDir = path.join(temp, `${label}-returned-v3`);
+  cpSync(success.returnedDir, returnedDir, { recursive: true });
+  mutate(returnedDir);
+  writeEvidenceChecksums(returnedDir);
+
+  const authorityV3File = path.join(temp, `${label}-authority-v3.json`);
+  const authorityV3 = JSON.parse(nodeCli([
+    'authority:v3:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    returnedDir,
+    '--authority-file',
+    authorityV3File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-authority-v2-file',
+    oldAuthorityV2File,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]).stdout);
+  return {
+    returnedDir,
+    authorityV3File,
+    authoritySha256: authorityV3.sha256,
+    treeDigest: authorityV3.authoritative_tree_digest,
+    oldAuthorityFile,
+    oldAuthorityV2File,
+    commonArgs: [
+      '--handoff-dir',
+      base.handoffDir,
+      '--freeze-file',
+      base.freezeFile,
+      '--evidence-dir',
+      returnedDir,
+      '--authority-file',
+      authorityV3File,
+      '--old-authority-file',
+      oldAuthorityFile,
+      '--old-authority-v2-file',
+      oldAuthorityV2File,
+      '--old-receipt-file',
+      success.receiptFile,
+    ],
+  };
+}
+
+function assertBadGovernanceFixtureBlocks(base, success, label, mutate, pattern) {
+  const fixture = createGovernanceFixture(base, success, label, mutate);
+  const output = nodeCliExpectFail([
+    'governance:decision:create',
+    ...fixture.commonArgs,
+    ...fixtureExpectedArgs(fixture),
+    '--governance-decision',
+    path.join(temp, `${label}-decision.json`),
+  ]);
+  assert.match(output, pattern);
+}
+
+function fixtureExpectedArgs(fixture) {
+  return [
+    '--fixture-expected-selected-tree-digest',
+    fixture.treeDigest,
+    '--fixture-expected-authority-v3-sha256',
+    fixture.authoritySha256,
+  ];
+}
+
+function rewriteFirstApiBucketSpan(evidenceDir) {
+  const firstBucket = readTsvRows(path.join(evidenceDir, 'error-signal-buckets.tsv'))
+    .find((row) => row.bucket_index === '0' && row.service === 'api');
+  assert.ok(firstBucket);
+  const endUtc = new Date(Date.parse(firstBucket.start_utc) + 59_000).toISOString().replace('.000Z', 'Z');
+  replaceBucketCell(evidenceDir, 0, 'api', 'end_utc', endUtc);
+}
+
+function shortenLastSampleByOneSecond(evidenceDir) {
+  const firstSample = readTsvRows(path.join(evidenceDir, 'operational-smoke-samples.tsv'))
+    .find((row) => row.sample_index === '0');
+  assert.ok(firstSample);
+  const shortenedEnd = new Date(Date.parse(firstSample.collected_utc) + 1_199_000).toISOString().replace('.000Z', 'Z');
+  replaceSampleCell(evidenceDir, 20, 'collected_utc', shortenedEnd);
+}
+
+function replaceSampleCell(evidenceDir, sampleIndex, column, value) {
+  rewriteTsvRows(path.join(evidenceDir, 'operational-smoke-samples.tsv'), (headers, row) => {
+    if (row[headers.indexOf('sample_index')] === String(sampleIndex)) {
+      row[headers.indexOf(column)] = value;
+    }
+    return row;
+  });
+}
+
+function replaceBucketCell(evidenceDir, bucketIndex, service, column, value) {
+  rewriteTsvRows(path.join(evidenceDir, 'error-signal-buckets.tsv'), (headers, row) => {
+    if (row[headers.indexOf('bucket_index')] === String(bucketIndex) && row[headers.indexOf('service')] === service) {
+      row[headers.indexOf(column)] = value;
+    }
+    return row;
+  });
+}
+
+function removeLastBucketRow(evidenceDir) {
+  const file = path.join(evidenceDir, 'error-signal-buckets.tsv');
+  const lines = readFileSync(file, 'utf8').trimEnd().split('\n');
+  lines.pop();
+  writeText(file, `${lines.join('\n')}\n`);
+  writeEvidenceChecksums(evidenceDir);
+}
+
+function rewriteTsvRows(file, rewrite) {
+  const lines = readFileSync(file, 'utf8').trimEnd().split('\n');
+  const headers = lines[0].split('\t');
+  const rows = lines.slice(1).map((line) => rewrite(headers, line.split('\t')).join('\t'));
+  writeText(file, `${[lines[0], ...rows].join('\n')}\n`);
+}
+
+function readTsvRows(file) {
+  const lines = readFileSync(file, 'utf8').trimEnd().split('\n');
+  const headers = lines[0].split('\t');
+  return lines.slice(1).map((line) => Object.fromEntries(line.split('\t').map((value, index) => [headers[index], value])));
+}
+
+function readMetadataValue(evidenceDir, key) {
+  const line = readFileSync(path.join(evidenceDir, 'collector-metadata.txt'), 'utf8')
+    .split('\n')
+    .find((entry) => entry.startsWith(`${key}=`));
+  assert.ok(line, `metadata key not found: ${key}`);
+  return line.slice(key.length + 1);
+}
+
 function replaceMetadataValue(evidenceDir, key, value) {
   const file = path.join(evidenceDir, 'collector-metadata.txt');
   const lines = readFileSync(file, 'utf8').trimEnd().split('\n');
@@ -414,7 +1049,7 @@ function nodeCli(args) {
     cwd: REPO_ROOT,
     encoding: 'utf8',
     shell: false,
-    env: process.env,
+    env: { ...process.env, MS019F_TEST_MODE: '1' },
   });
   if (result.error) throw result.error;
   assert.equal(result.status, 0, `node ${CLI} ${args.join(' ')}\nstdout=${result.stdout}\nstderr=${result.stderr}`);
@@ -426,7 +1061,7 @@ function nodeCliExpectFail(args) {
     cwd: REPO_ROOT,
     encoding: 'utf8',
     shell: false,
-    env: process.env,
+    env: { ...process.env, MS019F_TEST_MODE: '1' },
   });
   if (result.error) throw result.error;
   assert.notEqual(result.status, 0, `Command unexpectedly passed: node ${CLI} ${args.join(' ')}`);

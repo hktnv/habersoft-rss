@@ -516,6 +516,12 @@ function assertCollectorReceiptPasses(outputDir, expected) {
   assert.equal(receipt.services.public_database_port_absent, expected.publicDatabasePortAbsent);
   assert.equal(receipt.services.public_redis_port_absent, expected.publicRedisPortAbsent);
   assertVerifyReceiptPasses(receiptFile);
+
+  const historicalLongTermReceipt = readJson(receiptFile);
+  historicalLongTermReceipt.outside_scope.long_term_stability = "NOT_RECORDED";
+  const historicalLongTermReceiptFile = path.join(path.dirname(outputDir), `${path.basename(outputDir)}-historical-long-term-receipt.json`);
+  writeJson(historicalLongTermReceiptFile, historicalLongTermReceipt);
+  assertVerifyReceiptPasses(historicalLongTermReceiptFile);
 }
 
 function assertReceiptMutationFails(label, mutate, pattern) {

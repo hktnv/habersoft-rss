@@ -211,7 +211,7 @@ The following remain outside the accepted MS-019B-R8 receipt:
 - Git tag,
 - GitHub Release.
 
-Bounded operational-smoke and error-signal fields stay `PENDING_OPERATOR_RUN` until returned evidence is collected and strictly verified. Long-term stability evidence is `NOT_APPLICABLE_BY_GOVERNANCE_DECISION` and is not a future residual.
+Bounded operational-smoke and error-signal evidence is closed by MS-019F-R5 governance acceptance in [production-operational-smoke-and-error-signals.md](production-operational-smoke-and-error-signals.md). The original strict technical result for the selected v3 bundle remains `BLOCKED_ERROR_SIGNAL_BUCKET_SPAN_MISMATCH`, while receipt-v4 records governance strict result `PASSED` for the pinned sample-timeline basis. Long-term stability evidence is `NOT_APPLICABLE_BY_GOVERNANCE_DECISION` and is not a future residual.
 
 MS-019C owns the production PostgreSQL backup and off-host disposable restore evidence contract. MS-019C returned backup-v2 intake is now accepted as `PRODUCTION_BACKUP_RESTORE_VERIFIED` with combined receipt SHA-256 `868b13b9cfe44962daa4abbec71310473e1df1d0a49e4bf156a4c3f77ed01735`. Raw dump files, capture metadata and restore receipts are external sensitive artifacts and are never part of the MS-019B operational evidence bundle. MS-019B receipt SHA-256 remains the parent identity for the combined MS-019C receipt.
 
@@ -219,7 +219,7 @@ MS-019D-R1 owns the returned checkout hygiene and release-pointer evidence intak
 
 MS-019E-R2 owns the accepted edge body-limit evidence in [production-edge-body-limit.md](production-edge-body-limit.md). The accepted receipt `production-edge-body-limit-receipt-v2.json` has SHA-256 `fabad4a60f1f284379e1cd903b582b53bfd1fcbf93af32e79a94a1efa6377244` and proves that public HTTPS accepts the canonical `5242880` byte application body limit. The exact vendor configured body-limit value remains `NOT_RECORDED`; this does not change the MS-019B receipt result or convert full operational baseline completion into `PASSED`.
 
-MS-019F-R1 owns the prepared bounded 20-minute operational-smoke and machine-safe error-signal handoff-v2 in [production-operational-smoke-and-error-signals.md](production-operational-smoke-and-error-signals.md). Handoff generation and local accelerated fixtures are not production evidence. Until an operator returned bundle is collected and strictly verified, bounded operational-smoke and error-signal evidence remain `PENDING_OPERATOR_RUN`; long-term stability evidence remains `NOT_APPLICABLE_BY_GOVERNANCE_DECISION`.
+MS-019F-R5 owns the governance-approved bounded 20-minute operational-smoke and machine-safe error-signal closeout in [production-operational-smoke-and-error-signals.md](production-operational-smoke-and-error-signals.md). Selected v3 tree `0ddc2021486d039718ca7d9350c0fca2f3bf6e467d8d01b1c9f087343c19c183`, governance decision SHA-256 `86d2f21ae78418cc00312ca4a18f6417cb2df4fb7314341d40b9c5ef344aed73` and receipt-v4 SHA-256 `4146d93b99776f2d11c603b57dc60e728942c4fc56fbd8b8f5a41c2077acaa27` close the bounded smoke/error field as `SUCCESS_GOVERNANCE_ACCEPTED`. Historical previous pointer remains `NOT_RECORDED` as a non-blocking historical evidence gap; long-term stability evidence remains `NOT_APPLICABLE_BY_GOVERNANCE_DECISION`.
 
 ## Historical Handoff Boundary
 

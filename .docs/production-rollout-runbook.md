@@ -58,11 +58,11 @@ Extended operational evidence MS-019B collector-v2 receipt ile partial accepted:
 - point-in-time restart/OOM snapshot: `PASSED`
 - production backup/restore baseline: `PASSED` by MS-019C
 - checkout hygiene and current release pointer: `PASSED` by MS-019D-R1
-- previous production pointer: `NOT_RECORDED`
-- bounded operational-smoke/error-signal analysis: `PENDING_OPERATOR_RUN`; MS-019F-R1 handoff-v2 prepared, operator returned evidence pending
+- previous production pointer: `NOT_RECORDED`, non-blocking historical evidence gap
+- bounded operational-smoke/error-signal analysis: `SUCCESS_GOVERNANCE_ACCEPTED` by MS-019F-R5 receipt-v4
 - edge body-limit compatibility: `PASSED`; rerun the MS-019E collector if the application body contract or edge request-body config changes
 
-Bu eksik extended evidence, basic production-active status'unu geriye donuk olarak inactive/pending duruma cevirmez. Fresh contradictory health evidence ortaya cikarsa false success uretmek yerine blocker politikasi uygulanir.
+Historical previous pointer absence, basic production-active status'unu geriye donuk olarak inactive/pending duruma cevirmez. Fresh contradictory health evidence ortaya cikarsa false success uretmek yerine blocker politikasi uygulanir.
 
 ## Target/env ownership
 
@@ -74,7 +74,7 @@ Production and staging must use different environment marker, Compose project na
 
 Operator production mutation oncesi target state'i read-only siniflandirir. Unknown or conflicting state mutation'u bloke eder.
 
-Preflight evidence current MS-019B receipt icinde identity, migration, worker/scheduler, TLS, route smoke ve point-in-time restart/OOM alanlari icin kaydedildi. Backup/restore MS-019C combined receipt ile verified oldu. Checkout hygiene ve current release pointer evidence MS-019D-R1 receipt ile accepted oldu. Edge body-limit compatibility MS-019E-R2 receipt ile `PASSED` durumundadir. MS-019F-R1 20-minute operational-smoke/error-signal handoff-v2 tooling hazirlandi fakat operator returned evidence henuz yoktur. Previous pointer `NOT_RECORDED`, bounded operational-smoke/error-signal `PENDING_OPERATOR_RUN`, long-term stability `NOT_APPLICABLE_BY_GOVERNANCE_DECISION` kalir.
+Preflight evidence current MS-019B receipt icinde identity, migration, worker/scheduler, TLS, route smoke ve point-in-time restart/OOM alanlari icin kaydedildi. Backup/restore MS-019C combined receipt ile verified oldu. Checkout hygiene ve current release pointer evidence MS-019D-R1 receipt ile accepted oldu. Edge body-limit compatibility MS-019E-R2 receipt ile `PASSED` durumundadir. MS-019F-R5 20-minute operational-smoke/error-signal evidence selected v3 sample timeline basis ile `SUCCESS_GOVERNANCE_ACCEPTED` durumundadir. Previous pointer `NOT_RECORDED` ve non-blocking, long-term stability `NOT_APPLICABLE_BY_GOVERNANCE_DECISION` kalir.
 
 ## Backup gate
 
@@ -99,9 +99,9 @@ No `prisma db push`, volume prune, Redis flush, source upload, package transfer-
 
 ## Internal and Public Acceptance
 
-Current accepted evidence live/ready, readiness dependency status, worker health, scheduler inventory, migration status, route smoke, TLS detail, point-in-time restart/OOM snapshot, MS-019C backup/restore baseline ve MS-019E-R2 edge body-limit compatibility alanlarini kapsar. Full operational baseline, previous pointer evidence eksikligi nedeniyle henuz passed degildir.
+Current accepted evidence live/ready, readiness dependency status, worker health, scheduler inventory, migration status, route smoke, TLS detail, point-in-time restart/OOM snapshot, MS-019C backup/restore baseline, MS-019E-R2 edge body-limit compatibility ve MS-019F-R5 governance accepted bounded smoke/error-signal alanlarini kapsar. Historical previous pointer evidence eksikligi `NON_BLOCKING_HISTORICAL_EVIDENCE_GAP` olarak kalir.
 
-Future full operational acceptance should record these as explicit passed evidence or keep them `NOT_RECORDED`; it must not infer them from package, staging or Git base SHA.
+Future runtime mutations must record current evidence explicitly or keep unknown fields `NOT_RECORDED`; they must not infer them from package, staging or Git base SHA. The MS-019F-R5 sample-timeline time-anomaly exception is pinned to one selected v3 tree and is not automatically reusable.
 
 ## Rollback paths
 
