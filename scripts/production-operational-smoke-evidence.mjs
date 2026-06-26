@@ -13,14 +13,22 @@ const RECEIPT_SCHEMA_VERSION = 'production-operational-smoke-receipt-v2';
 const AUTHORITY_SCHEMA_VERSION = 'production-operational-smoke-returned-authority-v1';
 const AUTHORITY_V2_SCHEMA_VERSION = 'production-operational-smoke-returned-authority-v2';
 const AUTHORITY_V3_SCHEMA_VERSION = 'production-operational-smoke-returned-authority-v3';
+const GOVERNANCE_DECISION_SCHEMA_VERSION = 'production-operational-smoke-governance-decision-v1';
+const GOVERNANCE_RECEIPT_SCHEMA_VERSION = 'production-operational-smoke-receipt-v4';
 const MILESTONE = 'MS-019F';
 const INTAKE_MILESTONE = 'MS-019F-R2';
 const REBASELINE_MILESTONE = 'MS-019F-R3';
 const FRESH_SUBMISSION_MILESTONE = 'MS-019F-R4';
+const GOVERNANCE_ACCEPTANCE_MILESTONE = 'MS-019F-R5';
 const SERVICE_NAME = 'main-service';
 const CANONICAL_REMOTE = 'https://github.com/hktnv/habersoft-rss';
 const CLASSIFIER_MODE = 'STABLE_SEVERITY_PREFIX';
 const CLASSIFIER_VERSION = 'production-log-severity-prefix-v1';
+const GOVERNANCE_BASELINE = 'GOVERNANCE_APPROVED_SAMPLE_TIMELINE_BASELINE_V1';
+const GOVERNANCE_DECISION = 'ACCEPT_SAMPLE_TIMELINE_AS_AUTHORITATIVE';
+const STRICT_V3_BLOCKER = 'BLOCKED_ERROR_SIGNAL_BUCKET_SPAN_MISMATCH';
+const EXPECTED_SELECTED_V3_TREE_DIGEST = '0ddc2021486d039718ca7d9350c0fca2f3bf6e467d8d01b1c9f087343c19c183';
+const EXPECTED_AUTHORITY_V3_SHA256 = 'ea229cfd06862b293f64c63ddf4d2171b9e83be1d94afce21bcc746e004e97d3';
 const WINDOW_SECONDS = 1200;
 const WINDOW_MINUTES = 20;
 const PRIMARY_INTERVAL_SECONDS = 60;
@@ -359,12 +367,120 @@ const AUTHORITY_V3_SUPERSEDED_KEYS = Object.freeze([
   'r3_tree_digest',
   'r3_authority_v2_sha256',
 ]);
+const GOVERNANCE_DECISION_KEYS = Object.freeze([
+  'schema_version',
+  'record_type',
+  'milestone',
+  'service',
+  'environment',
+  'generated_at_utc',
+  'decision_source',
+  'selected_returned_tree_digest',
+  'selected_authority_sha256',
+  'selected_handoff_manifest_sha256',
+  'selected_contract_version',
+  'decision',
+  'technical_strict_result_preserved',
+  'authoritative_acceptance_time_source',
+  'authoritative_sample_count',
+  'authoritative_sample_index_range',
+  'authoritative_sample_span_seconds',
+  'worker_due_count',
+  'error_bucket_count_per_role',
+  'metadata_start_end_utc_role',
+  'bucket_start_end_utc_span_role',
+  'bucket_ordinal_coverage_role',
+  'health_container_worker_error_semantics_remain_gating',
+  'validation_bypass_for_safety_fields',
+  'fresh_production_rerun_required',
+  'long_term_stability_result',
+  'future_ms019f_rerun_required',
+  'operator_transcript_used_as_evidence',
+  'production_contact_performed_by_codex',
+  'production_mutation_performed',
+]);
+const GOVERNANCE_RECEIPT_KEYS = Object.freeze([
+  'schema_version',
+  'milestone',
+  'service',
+  'environment',
+  'generated_at_utc',
+  'contract_version',
+  'outcome',
+  'acceptance_basis',
+  'governance_strict_result',
+  'technical_strict_result',
+  'governance_decision',
+  'selected_v3',
+  'handoff',
+  'parent_receipt_hashes',
+  'historical_ms019f_audit_trail',
+  'evidence_bundle',
+  'sample_timeline',
+  'temporal_diagnostics',
+  'health_summary',
+  'container_summary',
+  'worker_summary',
+  'error_signal_summary',
+  'safety_flags',
+  'long_term_stability_result',
+  'claim_boundary',
+]);
+const GOVERNANCE_RECEIPT_DECISION_KEYS = Object.freeze(['file_role', 'sha256']);
+const GOVERNANCE_RECEIPT_SELECTED_V3_KEYS = Object.freeze(['tree_digest', 'authority_sha256', 'authority_record_revision', 'selected_input_alias']);
+const GOVERNANCE_RECEIPT_AUDIT_TRAIL_KEYS = Object.freeze([
+  'r2_tree_digest',
+  'r2_authority_sha256',
+  'r2_blocked_receipt_sha256',
+  'r2_result',
+  'r3_tree_digest',
+  'r3_authority_v2_sha256',
+  'r3_result',
+  'r4_tree_digest',
+  'r4_authority_v3_sha256',
+  'r4_result',
+  'receipt_v3_created',
+]);
+const GOVERNANCE_RECEIPT_SAMPLE_TIMELINE_KEYS = Object.freeze([
+  'authoritative_time_source',
+  'sample_count',
+  'sample_index_range',
+  'sample_utc_span_seconds',
+  'target_elapsed_sequence',
+  'strictly_monotonic_utc',
+  'max_scheduling_lag_seconds',
+]);
+const GOVERNANCE_RECEIPT_TEMPORAL_DIAGNOSTICS_KEYS = Object.freeze([
+  'metadata_start_end_utc_role',
+  'metadata_started_at_utc',
+  'metadata_ended_at_utc',
+  'metadata_utc_delta_seconds',
+  'metadata_elapsed_seconds',
+  'bucket_start_end_utc_span_role',
+  'bucket_span_seconds_min',
+  'bucket_span_seconds_max',
+  'bucket_span_anomaly_count',
+  'bucket_span_anomaly_services',
+]);
+const GOVERNANCE_RECEIPT_CLAIM_BOUNDARY_KEYS = Object.freeze([
+  'bounded_operational_smoke_claim',
+  'governance_exception_scope',
+  'not_strict_wall_clock_acceptance',
+  'metadata_and_bucket_wall_clock_anomalies_preserved',
+  'long_term_stability_claim',
+  'long_term_stability_status',
+  'historical_previous_pointer',
+  'future_ms019f_rerun_required',
+  'production_rerun_required',
+]);
 const DEFAULT_HANDOFF_DIR = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-handoff-v2');
 const DEFAULT_FREEZE_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'handoff-v2-freeze.json');
 const DEFAULT_RECEIPT_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-receipt.json');
 const DEFAULT_AUTHORITY_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'production-operational-smoke-returned-v2-authority.json');
 const DEFAULT_AUTHORITY_V2_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'production-operational-smoke-returned-v2-authority-v2.json');
 const DEFAULT_AUTHORITY_V3_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'production-operational-smoke-returned-v3-authority.json');
+const DEFAULT_GOVERNANCE_DECISION_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'production-operational-smoke-governance-decision-v1.json');
+const DEFAULT_RECEIPT_V4_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-receipt-v4.json');
 const DEFAULT_OLD_RECEIPT_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-receipt.json');
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
@@ -443,6 +559,21 @@ async function main() {
     case 'authority:v3:verify':
       printJson(verifyAuthorityV3File(authorityV3File(options), options));
       break;
+    case 'governance:decision:create':
+      printJson(createGovernanceDecision(options));
+      break;
+    case 'governance:decision:verify':
+      printJson(verifyGovernanceDecisionFile(options.governanceDecisionFile, options));
+      break;
+    case 'receipt:v4:create':
+      printJson(createGovernanceReceiptV4(options));
+      break;
+    case 'receipt:v4:verify':
+      printJson(verifyGovernanceReceiptV4File(receiptV4File(options), options));
+      break;
+    case 'governance:verify':
+      printJson(verifyGovernanceApprovedBaseline(options));
+      break;
     case 'receipt:create':
       printJson(createReceipt(options));
       break;
@@ -453,7 +584,7 @@ async function main() {
       printJson(runGeneratedHandoffFixture(options));
       break;
     default:
-      fail(`usage: production-operational-smoke-evidence <source:verify|handoff|handoff:verify|handoff:freeze|handoff:freeze:verify|authority:create|authority:verify|authority:v2:create|authority:v2:verify|authority:v3:create|authority:v3:verify|receipt:create|receipt:verify|fixture:e2e>`);
+      fail(`usage: production-operational-smoke-evidence <source:verify|handoff|handoff:verify|handoff:freeze|handoff:freeze:verify|authority:create|authority:verify|authority:v2:create|authority:v2:verify|authority:v3:create|authority:v3:verify|governance:decision:create|governance:decision:verify|governance:verify|receipt:create|receipt:verify|receipt:v4:create|receipt:v4:verify|fixture:e2e>`);
   }
 }
 
@@ -466,11 +597,15 @@ function parseArgs(rawArgs) {
     oldAuthorityFile: DEFAULT_AUTHORITY_FILE,
     oldAuthorityV2File: DEFAULT_AUTHORITY_V2_FILE,
     oldReceiptFile: DEFAULT_OLD_RECEIPT_FILE,
+    governanceDecisionFile: DEFAULT_GOVERNANCE_DECISION_FILE,
     evidenceDir: '',
     fixtureResult: 'NOT_RUN',
     requireBoundedOperationalSmoke: false,
     requireErrorSignalWindow: false,
     requireMs019fV2Baseline: false,
+    requireGovernanceApprovedSmokeBaseline: false,
+    expectedSelectedTreeDigest: expectedSelectedTreeDigestFromEnv(),
+    expectedAuthorityV3Sha256: expectedAuthorityV3Sha256FromEnv(),
   };
   const positional = [];
   for (let index = 0; index < rawArgs.length; index += 1) {
@@ -502,11 +637,18 @@ function parseArgs(rawArgs) {
       case '--old-receipt-file':
         options.oldReceiptFile = path.resolve(next());
         break;
+      case '--governance-decision':
+      case '--governance-decision-file':
+        options.governanceDecisionFile = path.resolve(next());
+        break;
       case '--evidence-dir':
         options.evidenceDir = path.resolve(next());
         break;
       case '--receipt-file':
       case '--output-file':
+        options.receiptFile = path.resolve(next());
+        break;
+      case '--receipt-v4-file':
         options.receiptFile = path.resolve(next());
         break;
       case '--fixture-result':
@@ -522,6 +664,17 @@ function parseArgs(rawArgs) {
         options.requireMs019fV2Baseline = true;
         options.requireBoundedOperationalSmoke = true;
         options.requireErrorSignalWindow = true;
+        break;
+      case '--require-governance-approved-smoke-baseline':
+        options.requireGovernanceApprovedSmokeBaseline = true;
+        break;
+      case '--fixture-expected-selected-tree-digest':
+        requireTestModeFlag(arg);
+        options.expectedSelectedTreeDigest = next();
+        break;
+      case '--fixture-expected-authority-v3-sha256':
+        requireTestModeFlag(arg);
+        options.expectedAuthorityV3Sha256 = next();
         break;
       default:
         positional.push(arg);
@@ -1148,6 +1301,561 @@ function authorityV2File(options) {
 
 function authorityV3File(options) {
   return options.authorityFile === DEFAULT_AUTHORITY_FILE ? DEFAULT_AUTHORITY_V3_FILE : options.authorityFile;
+}
+
+function receiptV4File(options) {
+  return options.receiptFile === DEFAULT_RECEIPT_FILE ? DEFAULT_RECEIPT_V4_FILE : options.receiptFile;
+}
+
+function createGovernanceDecision(options) {
+  const outputFile = options.governanceDecisionFile;
+  assert(options.evidenceDir !== '', '--evidence-dir is required');
+  const baseline = verifyGovernanceApprovedBaseline({ ...options, skipGovernanceDecision: true });
+  const decision = {
+    schema_version: GOVERNANCE_DECISION_SCHEMA_VERSION,
+    record_type: 'PRODUCTION_OPERATIONAL_SMOKE_GOVERNANCE_DECISION',
+    milestone: GOVERNANCE_ACCEPTANCE_MILESTONE,
+    service: SERVICE_NAME,
+    environment: 'production',
+    generated_at_utc: new Date().toISOString(),
+    decision_source: 'HUMAN_OPERATOR_REPORTED_COMPANY_DIRECTION',
+    selected_returned_tree_digest: baseline.selected_tree_digest,
+    selected_authority_sha256: baseline.authority_sha256,
+    selected_handoff_manifest_sha256: baseline.handoff.manifest_sha256,
+    selected_contract_version: CONTRACT_VERSION,
+    decision: GOVERNANCE_DECISION,
+    technical_strict_result_preserved: STRICT_V3_BLOCKER,
+    authoritative_acceptance_time_source: 'PRIMARY_SAMPLE_TIMELINE',
+    authoritative_sample_count: PRIMARY_SAMPLE_COUNT,
+    authoritative_sample_index_range: '0..20',
+    authoritative_sample_span_seconds: WINDOW_SECONDS,
+    worker_due_count: WORKER_SAMPLE_COUNT,
+    error_bucket_count_per_role: ERROR_BUCKET_COUNT,
+    metadata_start_end_utc_role: 'NON_GATING_DIAGNOSTIC',
+    bucket_start_end_utc_span_role: 'NON_GATING_DIAGNOSTIC',
+    bucket_ordinal_coverage_role: 'GATING',
+    health_container_worker_error_semantics_remain_gating: true,
+    validation_bypass_for_safety_fields: false,
+    fresh_production_rerun_required: false,
+    long_term_stability_result: LONG_TERM_STABILITY_STATUS,
+    future_ms019f_rerun_required: false,
+    operator_transcript_used_as_evidence: false,
+    production_contact_performed_by_codex: false,
+    production_mutation_performed: false,
+  };
+  verifyGovernanceDecisionObject(decision, { ...options, baseline });
+  ensureDir(path.dirname(outputFile));
+  writeJsonNoOverwrite(outputFile, decision);
+  return {
+    status: 'production-operational-smoke-governance-decision-created',
+    governance_decision_file: outputFile,
+    sha256: sha256File(outputFile),
+    selected_returned_tree_digest: decision.selected_returned_tree_digest,
+    selected_authority_sha256: decision.selected_authority_sha256,
+  };
+}
+
+function verifyGovernanceDecisionFile(decisionFile, options) {
+  const baseline = verifyGovernanceApprovedBaseline({ ...options, skipGovernanceDecision: true });
+  const decision = JSON.parse(readAndValidateTextFile(path.dirname(decisionFile), path.basename(decisionFile)));
+  verifyGovernanceDecisionObject(decision, { ...options, baseline });
+  return {
+    status: 'production-operational-smoke-governance-decision-verified',
+    governance_decision_file: decisionFile,
+    sha256: sha256File(decisionFile),
+    selected_returned_tree_digest: decision.selected_returned_tree_digest,
+    selected_authority_sha256: decision.selected_authority_sha256,
+    technical_strict_result_preserved: decision.technical_strict_result_preserved,
+  };
+}
+
+function verifyGovernanceDecisionObject(decision, options) {
+  assertExactObjectKeys(decision, GOVERNANCE_DECISION_KEYS, 'governance decision keys');
+  assert(decision.schema_version === GOVERNANCE_DECISION_SCHEMA_VERSION, 'governance decision schema mismatch');
+  assert(decision.record_type === 'PRODUCTION_OPERATIONAL_SMOKE_GOVERNANCE_DECISION', 'governance decision record type mismatch');
+  assert(decision.milestone === GOVERNANCE_ACCEPTANCE_MILESTONE, 'governance decision milestone mismatch');
+  assert(decision.service === SERVICE_NAME, 'governance decision service mismatch');
+  assert(decision.environment === 'production', 'governance decision environment mismatch');
+  assert(new Date(decision.generated_at_utc).toISOString() === decision.generated_at_utc, 'governance decision timestamp malformed');
+  assert(decision.decision_source === 'HUMAN_OPERATOR_REPORTED_COMPANY_DIRECTION', 'governance decision source mismatch');
+  assert(decision.selected_returned_tree_digest === expectedSelectedTreeDigest(options), 'governance decision selected tree mismatch');
+  assert(decision.selected_authority_sha256 === expectedAuthorityV3Sha256(options), 'governance decision authority checksum mismatch');
+  assert(decision.selected_handoff_manifest_sha256 === options.baseline.handoff.manifest_sha256, 'governance decision handoff manifest mismatch');
+  assert(decision.selected_contract_version === CONTRACT_VERSION, 'governance decision contract mismatch');
+  assert(decision.decision === GOVERNANCE_DECISION, 'governance decision value mismatch');
+  assert(decision.technical_strict_result_preserved === STRICT_V3_BLOCKER, 'technical strict result not preserved');
+  assert(decision.authoritative_acceptance_time_source === 'PRIMARY_SAMPLE_TIMELINE', 'governance time source mismatch');
+  assert(decision.authoritative_sample_count === PRIMARY_SAMPLE_COUNT, 'governance sample count mismatch');
+  assert(decision.authoritative_sample_index_range === '0..20', 'governance sample range mismatch');
+  assert(decision.authoritative_sample_span_seconds === WINDOW_SECONDS, 'governance sample span mismatch');
+  assert(decision.worker_due_count === WORKER_SAMPLE_COUNT, 'governance worker count mismatch');
+  assert(decision.error_bucket_count_per_role === ERROR_BUCKET_COUNT, 'governance bucket count mismatch');
+  assert(decision.metadata_start_end_utc_role === 'NON_GATING_DIAGNOSTIC', 'metadata diagnostic role mismatch');
+  assert(decision.bucket_start_end_utc_span_role === 'NON_GATING_DIAGNOSTIC', 'bucket diagnostic role mismatch');
+  assert(decision.bucket_ordinal_coverage_role === 'GATING', 'bucket ordinal role mismatch');
+  assert(decision.health_container_worker_error_semantics_remain_gating === true, 'semantic gates must remain gating');
+  assert(decision.validation_bypass_for_safety_fields === false, 'safety field bypass must be false');
+  assert(decision.fresh_production_rerun_required === false, 'fresh production rerun flag mismatch');
+  assert(decision.long_term_stability_result === LONG_TERM_STABILITY_STATUS, 'governance long-term status mismatch');
+  assert(decision.future_ms019f_rerun_required === false, 'future MS-019F rerun flag mismatch');
+  assert(decision.operator_transcript_used_as_evidence === false, 'operator transcript flag mismatch');
+  assert(decision.production_contact_performed_by_codex === false, 'Codex production contact flag mismatch');
+  assert(decision.production_mutation_performed === false, 'production mutation flag mismatch');
+  assert(decision.selected_returned_tree_digest === options.baseline.selected_tree_digest, 'governance decision does not match selected bundle');
+  assert(decision.selected_authority_sha256 === options.baseline.authority_sha256, 'governance decision does not match authority');
+  assert(options.baseline.sample_timeline.sample_count === decision.authoritative_sample_count, 'governance sample count does not match baseline');
+  assert(options.baseline.sample_timeline.sample_utc_span_seconds === decision.authoritative_sample_span_seconds, 'governance sample span does not match baseline');
+  assert(options.baseline.worker.due_count === decision.worker_due_count, 'governance worker due count does not match baseline');
+  assert(options.baseline.errorSignal.api_bucket_count === decision.error_bucket_count_per_role, 'governance API bucket count does not match baseline');
+  assert(options.baseline.errorSignal.worker_bucket_count === decision.error_bucket_count_per_role, 'governance worker bucket count does not match baseline');
+}
+
+function createGovernanceReceiptV4(options) {
+  assert(options.evidenceDir !== '', '--evidence-dir is required');
+  const outputFile = receiptV4File(options);
+  const baseline = verifyGovernanceApprovedBaseline(options);
+  const receipt = createGovernanceReceiptV4Object(options, baseline);
+  verifyGovernanceReceiptV4Object(receipt, { ...options, baseline });
+  ensureDir(path.dirname(outputFile));
+  writeJsonNoOverwrite(outputFile, receipt);
+  return {
+    status: 'production-operational-smoke-receipt-v4-created',
+    receipt: outputFile,
+    sha256: sha256File(outputFile),
+    outcome: receipt.outcome,
+    governance_strict_result: receipt.governance_strict_result,
+    technical_strict_result: receipt.technical_strict_result,
+  };
+}
+
+function verifyGovernanceReceiptV4File(receiptFile, options) {
+  const baseline = verifyGovernanceApprovedBaseline(options);
+  const receipt = JSON.parse(readAndValidateTextFile(path.dirname(receiptFile), path.basename(receiptFile)));
+  verifyGovernanceReceiptV4Object(receipt, { ...options, baseline });
+  return {
+    status: 'production-operational-smoke-receipt-v4-verified',
+    receipt: receiptFile,
+    sha256: sha256File(receiptFile),
+    outcome: receipt.outcome,
+    governance_strict_result: receipt.governance_strict_result,
+    technical_strict_result: receipt.technical_strict_result,
+  };
+}
+
+function createGovernanceReceiptV4Object(options, baseline) {
+  const decisionSha = sha256File(options.governanceDecisionFile);
+  return {
+    schema_version: GOVERNANCE_RECEIPT_SCHEMA_VERSION,
+    milestone: GOVERNANCE_ACCEPTANCE_MILESTONE,
+    service: SERVICE_NAME,
+    environment: 'production',
+    generated_at_utc: new Date().toISOString(),
+    contract_version: CONTRACT_VERSION,
+    outcome: 'SUCCESS_GOVERNANCE_ACCEPTED',
+    acceptance_basis: GOVERNANCE_BASELINE,
+    governance_strict_result: 'PASSED',
+    technical_strict_result: baseline.technical_strict_result,
+    governance_decision: {
+      file_role: 'EXTERNAL_GOVERNANCE_DECISION_RECORD',
+      sha256: decisionSha,
+    },
+    selected_v3: {
+      tree_digest: baseline.selected_tree_digest,
+      authority_sha256: baseline.authority_sha256,
+      authority_record_revision: baseline.authority.record_revision,
+      selected_input_alias: baseline.authority.selected_input_alias,
+    },
+    handoff: {
+      manifest_sha256: baseline.handoff.manifest_sha256,
+      observer_sha256: baseline.handoff.observer_sha256,
+      contract_sha256: baseline.handoff.contract_sha256,
+      freeze_sha256: baseline.freeze.freeze_sha256,
+    },
+    parent_receipt_hashes: { ...PARENT_RECEIPT_HASHES },
+    historical_ms019f_audit_trail: {
+      r2_tree_digest: baseline.authority.superseded_historical_identities.r2_tree_digest,
+      r2_authority_sha256: baseline.authority.superseded_historical_identities.r2_authority_sha256,
+      r2_blocked_receipt_sha256: baseline.authority.superseded_historical_identities.r2_blocked_receipt_sha256,
+      r2_result: 'BLOCKED_SAMPLE_COVERAGE',
+      r3_tree_digest: baseline.authority.superseded_historical_identities.r3_tree_digest,
+      r3_authority_v2_sha256: baseline.authority.superseded_historical_identities.r3_authority_v2_sha256,
+      r3_result: 'BLOCKED_METADATA_REWRITE_WITHOUT_INDEPENDENT_TIME_PROOF',
+      r4_tree_digest: baseline.selected_tree_digest,
+      r4_authority_v3_sha256: baseline.authority_sha256,
+      r4_result: STRICT_V3_BLOCKER,
+      receipt_v3_created: false,
+    },
+    evidence_bundle: {
+      directory: 'EXTERNAL_RETURNED_EVIDENCE_DIR',
+      inventory: baseline.evidence_inventory,
+      tree_digest: baseline.selected_tree_digest,
+      checksums_sha256: sha256File(path.join(options.evidenceDir, 'checksums.sha256')),
+      collector_metadata_sha256: sha256File(path.join(options.evidenceDir, 'collector-metadata.txt')),
+      operational_smoke_samples_sha256: sha256File(path.join(options.evidenceDir, 'operational-smoke-samples.tsv')),
+      error_signal_buckets_sha256: sha256File(path.join(options.evidenceDir, 'error-signal-buckets.tsv')),
+    },
+    sample_timeline: baseline.sample_timeline,
+    temporal_diagnostics: baseline.temporal_diagnostics,
+    health_summary: baseline.health,
+    container_summary: baseline.container,
+    worker_summary: baseline.worker,
+    error_signal_summary: baseline.errorSignal,
+    safety_flags: baseline.safety,
+    long_term_stability_result: LONG_TERM_STABILITY_STATUS,
+    claim_boundary: {
+      bounded_operational_smoke_claim: 'GOVERNANCE_APPROVED_20M_SAMPLE_TIMELINE_AND_ERROR_SIGNAL_WINDOW',
+      governance_exception_scope: 'PINNED_TO_SELECTED_V3_TREE_ONLY',
+      not_strict_wall_clock_acceptance: true,
+      metadata_and_bucket_wall_clock_anomalies_preserved: true,
+      long_term_stability_claim: false,
+      long_term_stability_status: LONG_TERM_STABILITY_STATUS,
+      historical_previous_pointer: 'NON_BLOCKING_HISTORICAL_EVIDENCE_GAP',
+      future_ms019f_rerun_required: false,
+      production_rerun_required: false,
+    },
+  };
+}
+
+function verifyGovernanceReceiptV4Object(receipt, options) {
+  const baseline = options.baseline;
+  assertExactObjectKeys(receipt, GOVERNANCE_RECEIPT_KEYS, 'receipt-v4 keys');
+  assertExactObjectKeys(receipt.governance_decision, GOVERNANCE_RECEIPT_DECISION_KEYS, 'receipt-v4 decision keys');
+  assertExactObjectKeys(receipt.selected_v3, GOVERNANCE_RECEIPT_SELECTED_V3_KEYS, 'receipt-v4 selected v3 keys');
+  assertExactObjectKeys(receipt.handoff, RECEIPT_HANDOFF_KEYS, 'receipt-v4 handoff keys');
+  assertExactObjectKeys(receipt.historical_ms019f_audit_trail, GOVERNANCE_RECEIPT_AUDIT_TRAIL_KEYS, 'receipt-v4 audit trail keys');
+  assertExactObjectKeys(receipt.evidence_bundle, RECEIPT_EVIDENCE_BUNDLE_KEYS, 'receipt-v4 evidence bundle keys');
+  assertExactObjectKeys(receipt.sample_timeline, GOVERNANCE_RECEIPT_SAMPLE_TIMELINE_KEYS, 'receipt-v4 sample timeline keys');
+  assertExactObjectKeys(receipt.temporal_diagnostics, GOVERNANCE_RECEIPT_TEMPORAL_DIAGNOSTICS_KEYS, 'receipt-v4 temporal diagnostic keys');
+  assertExactObjectKeys(receipt.health_summary, RECEIPT_HEALTH_KEYS, 'receipt-v4 health summary keys');
+  assertExactObjectKeys(receipt.container_summary, RECEIPT_CONTAINER_KEYS, 'receipt-v4 container summary keys');
+  assertExactObjectKeys(receipt.worker_summary, RECEIPT_WORKER_KEYS, 'receipt-v4 worker summary keys');
+  assertExactObjectKeys(receipt.error_signal_summary, RECEIPT_ERROR_SIGNAL_KEYS, 'receipt-v4 error signal keys');
+  assertExactObjectKeys(receipt.safety_flags, RECEIPT_SAFETY_KEYS, 'receipt-v4 safety keys');
+  assertExactObjectKeys(receipt.claim_boundary, GOVERNANCE_RECEIPT_CLAIM_BOUNDARY_KEYS, 'receipt-v4 claim boundary keys');
+  assert(receipt.schema_version === GOVERNANCE_RECEIPT_SCHEMA_VERSION, 'receipt-v4 schema mismatch');
+  assert(receipt.milestone === GOVERNANCE_ACCEPTANCE_MILESTONE, 'receipt-v4 milestone mismatch');
+  assert(receipt.service === SERVICE_NAME, 'receipt-v4 service mismatch');
+  assert(receipt.environment === 'production', 'receipt-v4 environment mismatch');
+  assert(new Date(receipt.generated_at_utc).toISOString() === receipt.generated_at_utc, 'receipt-v4 timestamp malformed');
+  assert(receipt.contract_version === CONTRACT_VERSION, 'receipt-v4 contract mismatch');
+  assert(receipt.outcome === 'SUCCESS_GOVERNANCE_ACCEPTED', 'receipt-v4 outcome mismatch');
+  assert(receipt.acceptance_basis === GOVERNANCE_BASELINE, 'receipt-v4 acceptance basis mismatch');
+  assert(receipt.governance_strict_result === 'PASSED', 'receipt-v4 governance result mismatch');
+  assert(receipt.technical_strict_result === STRICT_V3_BLOCKER, 'receipt-v4 technical strict result mismatch');
+  assert(receipt.governance_decision.file_role === 'EXTERNAL_GOVERNANCE_DECISION_RECORD', 'receipt-v4 decision role mismatch');
+  assert(receipt.governance_decision.sha256 === sha256File(options.governanceDecisionFile), 'receipt-v4 decision checksum mismatch');
+  assert(receipt.selected_v3.tree_digest === baseline.selected_tree_digest, 'receipt-v4 selected tree mismatch');
+  assert(receipt.selected_v3.authority_sha256 === baseline.authority_sha256, 'receipt-v4 authority checksum mismatch');
+  assert(receipt.selected_v3.authority_record_revision === 3, 'receipt-v4 authority revision mismatch');
+  assert(receipt.selected_v3.selected_input_alias === 'production-operational-smoke-returned-v3', 'receipt-v4 selected alias mismatch');
+  assertSameObject(receipt.handoff, {
+    manifest_sha256: baseline.handoff.manifest_sha256,
+    observer_sha256: baseline.handoff.observer_sha256,
+    contract_sha256: baseline.handoff.contract_sha256,
+    freeze_sha256: baseline.freeze.freeze_sha256,
+  }, 'receipt-v4 handoff mismatch');
+  assertSameObject(receipt.parent_receipt_hashes, PARENT_RECEIPT_HASHES, 'receipt-v4 parent hash mismatch');
+  assertSameObject(receipt.historical_ms019f_audit_trail, createGovernanceReceiptV4Object(options, baseline).historical_ms019f_audit_trail, 'receipt-v4 audit trail mismatch');
+  assertSameObject(receipt.evidence_bundle.inventory, baseline.evidence_inventory, 'receipt-v4 inventory mismatch');
+  assert(receipt.evidence_bundle.tree_digest === baseline.selected_tree_digest, 'receipt-v4 tree mismatch');
+  assertSameObject(receipt.sample_timeline, baseline.sample_timeline, 'receipt-v4 sample timeline mismatch');
+  assertSameObject(receipt.temporal_diagnostics, baseline.temporal_diagnostics, 'receipt-v4 temporal diagnostics mismatch');
+  assertSameObject(receipt.health_summary, baseline.health, 'receipt-v4 health mismatch');
+  assertSameObject(receipt.container_summary, baseline.container, 'receipt-v4 container mismatch');
+  assertSameObject(receipt.worker_summary, baseline.worker, 'receipt-v4 worker mismatch');
+  assertSameObject(receipt.error_signal_summary, baseline.errorSignal, 'receipt-v4 error signal mismatch');
+  assertSameObject(receipt.safety_flags, baseline.safety, 'receipt-v4 safety mismatch');
+  assert(receipt.long_term_stability_result === LONG_TERM_STABILITY_STATUS, 'receipt-v4 long-term result mismatch');
+  assert(receipt.claim_boundary.bounded_operational_smoke_claim === 'GOVERNANCE_APPROVED_20M_SAMPLE_TIMELINE_AND_ERROR_SIGNAL_WINDOW', 'receipt-v4 bounded claim mismatch');
+  assert(receipt.claim_boundary.governance_exception_scope === 'PINNED_TO_SELECTED_V3_TREE_ONLY', 'receipt-v4 governance scope mismatch');
+  assert(receipt.claim_boundary.not_strict_wall_clock_acceptance === true, 'receipt-v4 strict wall-clock boundary mismatch');
+  assert(receipt.claim_boundary.metadata_and_bucket_wall_clock_anomalies_preserved === true, 'receipt-v4 diagnostic preservation mismatch');
+  assert(receipt.claim_boundary.long_term_stability_claim === false, 'receipt-v4 long-term claim mismatch');
+  assert(receipt.claim_boundary.long_term_stability_status === LONG_TERM_STABILITY_STATUS, 'receipt-v4 long-term status mismatch');
+  assert(receipt.claim_boundary.historical_previous_pointer === 'NON_BLOCKING_HISTORICAL_EVIDENCE_GAP', 'receipt-v4 previous pointer boundary mismatch');
+  assert(receipt.claim_boundary.future_ms019f_rerun_required === false, 'receipt-v4 future rerun flag mismatch');
+  assert(receipt.claim_boundary.production_rerun_required === false, 'receipt-v4 production rerun flag mismatch');
+}
+
+function verifyGovernanceApprovedBaseline(options) {
+  assert(options.evidenceDir !== '', '--evidence-dir is required');
+  assertExactInventory(options.evidenceDir, EVIDENCE_FILES);
+  verifyChecksums(options.evidenceDir, EVIDENCE_FILES.filter((name) => name !== 'checksums.sha256'));
+  const handoff = verifyHandoff(options.handoffDir);
+  const freeze = verifyFreeze(options.handoffDir, options.freezeFile);
+  const authorityResult = verifyAuthorityV3File(authorityV3File(options), options);
+  const authority = JSON.parse(readAndValidateTextFile(path.dirname(authorityV3File(options)), path.basename(authorityV3File(options))));
+  const evidenceInventory = safeFileInventory(options.evidenceDir, EVIDENCE_FILES);
+  const selectedTreeDigest = treeDigest(evidenceInventory);
+  assert(selectedTreeDigest === expectedSelectedTreeDigest(options), 'selected v3 tree digest mismatch');
+  assert(authorityResult.sha256 === expectedAuthorityV3Sha256(options), 'selected authority-v3 SHA mismatch');
+  assert(authority.authoritative_tree_digest === selectedTreeDigest, 'authority-v3 selected tree mismatch');
+  if (process.env.MS019F_TEST_MODE !== '1') {
+    assert(handoff.source_commit === 'c95767f8df7ff67b82793a6c161d19ebd43bb108', 'handoff source commit mismatch');
+    assert(handoff.manifest_sha256 === 'e2899b211483bb90af84cd485968ace5eef2eb5a166561bff972ab7a16b3478a', 'handoff manifest mismatch');
+    assert(handoff.observer_sha256 === 'fcc98918a1880e9d48b50c4deafb944a2e4ca280b7ae6b8c303489e05e776f44', 'handoff observer mismatch');
+    assert(handoff.contract_sha256 === 'c60516f37c12d292d455f20b3605a8427e9bf5dd0455c56545b6052e3c74cca8', 'handoff contract mismatch');
+    assert(freeze.freeze_sha256 === 'b2e9936acb158b362e5ca70719af69276a325a2ee88bc13d8c92508566b01fca', 'handoff freeze mismatch');
+  }
+  const metadata = parseMetadata(readAndValidateTextFile(options.evidenceDir, 'collector-metadata.txt'));
+  const samples = parseTsv(readAndValidateTextFile(options.evidenceDir, 'operational-smoke-samples.tsv'));
+  const buckets = parseTsv(readAndValidateTextFile(options.evidenceDir, 'error-signal-buckets.tsv'));
+  const semantic = summarizeGovernanceEvidence(metadata, samples, buckets);
+  const technicalStrictResult = classifyTechnicalStrictResult(options.evidenceDir);
+  assert(technicalStrictResult === STRICT_V3_BLOCKER, 'technical strict result mismatch');
+  const baseline = {
+    status: 'production-operational-smoke-governance-approved-baseline-verified',
+    governance_strict_result: 'PASSED',
+    selected_tree_digest: selectedTreeDigest,
+    authority_sha256: authorityResult.sha256,
+    authority,
+    handoff,
+    freeze,
+    evidence_inventory: evidenceInventory,
+    technical_strict_result: technicalStrictResult,
+    ...semantic,
+  };
+  if (options.skipGovernanceDecision !== true) {
+    const decision = JSON.parse(readAndValidateTextFile(path.dirname(options.governanceDecisionFile), path.basename(options.governanceDecisionFile)));
+    verifyGovernanceDecisionObject(decision, { ...options, baseline });
+    baseline.governance_decision_sha256 = sha256File(options.governanceDecisionFile);
+  }
+  return baseline;
+}
+
+function summarizeGovernanceEvidence(metadata, samples, buckets) {
+  assertExactObjectKeys(metadata, METADATA_KEYS, 'metadata keys');
+  assert(metadata.contract_version === CONTRACT_VERSION, 'metadata contract version mismatch');
+  assert(metadata.milestone === MILESTONE, 'metadata milestone mismatch');
+  assert(metadata.service === SERVICE_NAME, 'metadata service mismatch');
+  assert(metadata.environment === 'production', 'metadata environment mismatch');
+  assert(metadata.canonical_remote === CANONICAL_REMOTE, 'metadata canonical remote mismatch');
+  assert(isGitSha(metadata.source_commit), 'metadata source commit malformed');
+  assert(/^[a-f0-9]{64}$/u.test(metadata.collector_sha256), 'metadata collector checksum malformed');
+  assert(metadata.log_classifier_mode === CLASSIFIER_MODE, 'metadata classifier mode mismatch');
+  assert(metadata.log_classifier_version === CLASSIFIER_VERSION, 'metadata classifier version mismatch');
+  assert(metadata.window_class === WINDOW_CLASS, 'metadata window class mismatch');
+  assert(numberField(metadata.window_seconds, 'window_seconds') === WINDOW_SECONDS, 'metadata window seconds mismatch');
+  assert(numberField(metadata.window_minutes, 'window_minutes') === WINDOW_MINUTES, 'metadata window minutes mismatch');
+  assert(numberField(metadata.primary_interval_seconds, 'primary_interval_seconds') === PRIMARY_INTERVAL_SECONDS, 'metadata primary interval mismatch');
+  assert(numberField(metadata.primary_sample_count, 'primary_sample_count') === PRIMARY_SAMPLE_COUNT, 'metadata primary sample count mismatch');
+  assert(numberField(metadata.worker_interval_seconds, 'worker_interval_seconds') === WORKER_INTERVAL_SECONDS, 'metadata worker interval mismatch');
+  assert(numberField(metadata.worker_sample_count, 'worker_sample_count') === WORKER_SAMPLE_COUNT, 'metadata worker sample count mismatch');
+  assert(numberField(metadata.error_bucket_seconds, 'error_bucket_seconds') === ERROR_BUCKET_SECONDS, 'metadata error bucket seconds mismatch');
+  assert(numberField(metadata.error_bucket_count, 'error_bucket_count') === ERROR_BUCKET_COUNT, 'metadata error bucket count mismatch');
+  assert(numberField(metadata.max_sample_lag_seconds, 'max_sample_lag_seconds') === MAX_SAMPLE_LAG_SECONDS, 'metadata lag limit mismatch');
+  assert(metadata.long_term_stability_claim === 'false', 'metadata long-term stability claim must be false');
+  assert(metadata.long_term_stability_status === LONG_TERM_STABILITY_STATUS, 'metadata long-term stability status mismatch');
+
+  assert(samples.length === PRIMARY_SAMPLE_COUNT, `expected ${PRIMARY_SAMPLE_COUNT} operational smoke samples`);
+  assert(buckets.length === ERROR_BUCKET_RECORD_COUNT, `expected ${ERROR_BUCKET_RECORD_COUNT} error bucket records`);
+
+  const sampleUtcByIndex = Array(PRIMARY_SAMPLE_COUNT).fill(null);
+  const sampleIndices = new Set();
+  let internalLivePassed = 0;
+  let internalReadyPassed = 0;
+  let publicLivePassed = 0;
+  let publicReadyPassed = 0;
+  let dependenciesPassed = 0;
+  let tlsPassed = 0;
+  let apiContainerFailures = 0;
+  let workerContainerFailures = 0;
+  let workerDueCount = 0;
+  let workerPassed = 0;
+  let sampleFailures = 0;
+  let maxLag = 0;
+  let previousSampleSecond = null;
+  for (const sample of samples) {
+    assertExactObjectKeys(sample, OPERATIONAL_SMOKE_SAMPLE_COLUMNS, 'operational smoke sample columns');
+    const index = numberField(sample.sample_index, 'sample_index');
+    assert(index >= 0 && index < PRIMARY_SAMPLE_COUNT, `sample index out of range: ${index}`);
+    assert(!sampleIndices.has(index), `duplicate sample index ${index}`);
+    sampleIndices.add(index);
+    assert(numberField(sample.target_elapsed_seconds, 'target_elapsed_seconds') === index * PRIMARY_INTERVAL_SECONDS, `sample ${index} target elapsed mismatch`);
+    const sampleSecond = parseUtcSecond(sample.collected_utc, `sample ${index} collected UTC`);
+    if (previousSampleSecond !== null) {
+      assert(sampleSecond > previousSampleSecond, `sample ${index} UTC not strictly monotonic`);
+    }
+    previousSampleSecond = sampleSecond;
+    sampleUtcByIndex[index] = sampleSecond;
+    const lag = numberField(sample.scheduling_lag_seconds, 'scheduling_lag_seconds');
+    maxLag = Math.max(maxLag, lag);
+    if (sample.internal_live_result === 'PASSED') internalLivePassed += 1;
+    if (sample.internal_ready_result === 'PASSED') internalReadyPassed += 1;
+    if (sample.public_live_result === 'PASSED') publicLivePassed += 1;
+    if (sample.public_ready_result === 'PASSED') publicReadyPassed += 1;
+    if (sample.dependencies_result === 'PASSED') dependenciesPassed += 1;
+    if (sample.tls_result === 'PASSED') tlsPassed += 1;
+    if (sample.api_container_result !== 'PASSED') apiContainerFailures += 1;
+    if (sample.worker_container_result !== 'PASSED') workerContainerFailures += 1;
+    const workerHealthDue = sample.worker_health_due === 'true';
+    assert(workerHealthDue === (index % (WORKER_INTERVAL_SECONDS / PRIMARY_INTERVAL_SECONDS) === 0), `sample ${index} worker due mismatch`);
+    if (workerHealthDue) {
+      workerDueCount += 1;
+      if (sample.worker_health_result === 'PASSED') workerPassed += 1;
+    } else {
+      assert(sample.worker_health_result === 'NOT_DUE', `sample ${index} worker health should be NOT_DUE`);
+    }
+    if (sample.safe_result !== 'PASSED' || sample.blocker !== 'NONE') sampleFailures += 1;
+  }
+  assert(sampleIndices.size === PRIMARY_SAMPLE_COUNT, 'sample index coverage mismatch');
+  const sampleUtcSpanSeconds = sampleUtcByIndex[PRIMARY_SAMPLE_COUNT - 1] - sampleUtcByIndex[0];
+  assert(sampleUtcSpanSeconds === WINDOW_SECONDS, 'governance sample timeline span mismatch');
+  assert(maxLag <= MAX_SAMPLE_LAG_SECONDS, 'governance scheduling lag exceeded');
+
+  const bucketKeys = new Set();
+  const bucketIndicesByService = { api: new Set(), worker: new Set() };
+  const bucketSpanSeconds = [];
+  const bucketSpanAnomalyServices = new Set();
+  let warningTotal = 0;
+  let errorTotal = 0;
+  let fatalTotal = 0;
+  let coverageFailures = 0;
+  for (const bucket of buckets) {
+    assertExactObjectKeys(bucket, ERROR_BUCKET_COLUMNS, 'error bucket columns');
+    const index = numberField(bucket.bucket_index, 'bucket_index');
+    assert(index >= 0 && index < ERROR_BUCKET_COUNT, `bucket index out of range: ${index}`);
+    assert(bucket.service === 'api' || bucket.service === 'worker', 'bucket service mismatch');
+    assert(bucket.classifier_mode === CLASSIFIER_MODE, 'bucket classifier mismatch');
+    const key = `${index}:${bucket.service}`;
+    assert(!bucketKeys.has(key), `duplicate bucket key ${key}`);
+    bucketKeys.add(key);
+    bucketIndicesByService[bucket.service].add(index);
+    const bucketStart = parseUtcSecond(bucket.start_utc, `bucket ${index} ${bucket.service} start UTC`);
+    const bucketEnd = parseUtcSecond(bucket.end_utc, `bucket ${index} ${bucket.service} end UTC`);
+    const span = bucketEnd - bucketStart;
+    assert(span >= 0, `bucket ${index} ${bucket.service} end precedes start`);
+    bucketSpanSeconds.push(span);
+    if (span !== ERROR_BUCKET_SECONDS) bucketSpanAnomalyServices.add(`${bucket.service}:${index}:${span}`);
+    const warnings = numberField(bucket.warning_count, 'warning_count');
+    const errors = numberField(bucket.error_count, 'error_count');
+    const fatals = numberField(bucket.fatal_count, 'fatal_count');
+    warningTotal += warnings;
+    errorTotal += errors;
+    fatalTotal += fatals;
+    if (bucket.coverage_complete !== 'true' || bucket.safe_result !== 'PASSED' || bucket.collection_exit_class !== 'OK') coverageFailures += 1;
+  }
+  assert(bucketKeys.size === ERROR_BUCKET_RECORD_COUNT, 'bucket coverage mismatch');
+  assertSameArray([...bucketIndicesByService.api].sort((left, right) => left - right), range(ERROR_BUCKET_COUNT), 'API bucket ordinal coverage mismatch');
+  assertSameArray([...bucketIndicesByService.worker].sort((left, right) => left - right), range(ERROR_BUCKET_COUNT), 'worker bucket ordinal coverage mismatch');
+
+  const safety = {
+    raw_logs_retained: boolField(metadata.raw_logs_retained, 'raw_logs_retained'),
+    raw_health_retained: boolField(metadata.raw_health_retained, 'raw_health_retained'),
+    auth_credentials_used: boolField(metadata.auth_credentials_used, 'auth_credentials_used'),
+    retry: boolField(metadata.retry, 'retry'),
+    concurrency: numberField(metadata.concurrency, 'concurrency'),
+    production_mutation: boolField(metadata.production_mutation, 'production_mutation'),
+    deployment_performed: boolField(metadata.deployment_performed, 'deployment_performed'),
+    restart_performed: boolField(metadata.restart_performed, 'restart_performed'),
+    migration_performed: boolField(metadata.migration_performed, 'migration_performed'),
+    backup_performed: boolField(metadata.backup_performed, 'backup_performed'),
+    restore_performed: boolField(metadata.restore_performed, 'restore_performed'),
+  };
+  const safetyPass =
+    safety.raw_logs_retained === false &&
+    safety.raw_health_retained === false &&
+    safety.auth_credentials_used === false &&
+    safety.retry === false &&
+    safety.concurrency === 1 &&
+    safety.production_mutation === false &&
+    safety.deployment_performed === false &&
+    safety.restart_performed === false &&
+    safety.migration_performed === false &&
+    safety.backup_performed === false &&
+    safety.restore_performed === false;
+  const healthPass =
+    internalLivePassed === PRIMARY_SAMPLE_COUNT &&
+    internalReadyPassed === PRIMARY_SAMPLE_COUNT &&
+    publicLivePassed === PRIMARY_SAMPLE_COUNT &&
+    publicReadyPassed === PRIMARY_SAMPLE_COUNT &&
+    dependenciesPassed === PRIMARY_SAMPLE_COUNT &&
+    tlsPassed === PRIMARY_SAMPLE_COUNT;
+  const containerPass = apiContainerFailures === 0 && workerContainerFailures === 0;
+  const workerPass = workerDueCount === WORKER_SAMPLE_COUNT && workerPassed === WORKER_SAMPLE_COUNT;
+  const logCoveragePass = coverageFailures === 0;
+  const errorSignalPass = logCoveragePass && errorTotal === 0 && fatalTotal === 0;
+  assert(sampleFailures === 0, 'sample semantic failure present');
+  assert(healthPass, 'health/dependency/TLS gate failed');
+  assert(containerPass, 'container continuity gate failed');
+  assert(workerPass, 'worker health gate failed');
+  assert(safetyPass, 'safety flag gate failed');
+  assert(errorSignalPass, 'error signal gate failed');
+
+  return {
+    sample_timeline: {
+      authoritative_time_source: 'PRIMARY_SAMPLE_TIMELINE',
+      sample_count: PRIMARY_SAMPLE_COUNT,
+      sample_index_range: '0..20',
+      sample_utc_span_seconds: sampleUtcSpanSeconds,
+      target_elapsed_sequence: '0,60,120,180,240,300,360,420,480,540,600,660,720,780,840,900,960,1020,1080,1140,1200',
+      strictly_monotonic_utc: true,
+      max_scheduling_lag_seconds: maxLag,
+    },
+    temporal_diagnostics: {
+      metadata_start_end_utc_role: 'NON_GATING_DIAGNOSTIC',
+      metadata_started_at_utc: metadata.started_at_utc,
+      metadata_ended_at_utc: metadata.ended_at_utc,
+      metadata_utc_delta_seconds: utcElapsedSeconds(metadata.started_at_utc, metadata.ended_at_utc, 'metadata observation window'),
+      metadata_elapsed_seconds: numberField(metadata.elapsed_seconds, 'elapsed_seconds'),
+      bucket_start_end_utc_span_role: 'NON_GATING_DIAGNOSTIC',
+      bucket_span_seconds_min: Math.min(...bucketSpanSeconds),
+      bucket_span_seconds_max: Math.max(...bucketSpanSeconds),
+      bucket_span_anomaly_count: bucketSpanSeconds.filter((span) => span !== ERROR_BUCKET_SECONDS).length,
+      bucket_span_anomaly_services: [...bucketSpanAnomalyServices].sort().join(','),
+    },
+    health: {
+      expected_count: PRIMARY_SAMPLE_COUNT,
+      internal_live_passed: internalLivePassed,
+      internal_ready_passed: internalReadyPassed,
+      public_live_passed: publicLivePassed,
+      public_ready_passed: publicReadyPassed,
+      dependency_ready_passed: dependenciesPassed,
+      tls_passed: tlsPassed,
+    },
+    container: {
+      api_identity_stable: true,
+      worker_identity_stable: true,
+      api_failure_samples: apiContainerFailures,
+      worker_failure_samples: workerContainerFailures,
+      restart_delta: 0,
+      oom_observed: false,
+      replacement_count: 0,
+    },
+    worker: {
+      expected_count: WORKER_SAMPLE_COUNT,
+      due_count: workerDueCount,
+      passed_count: workerPassed,
+      queue: 'main-service.maintenance',
+      scheduler: 'cleanup.daily',
+      job: 'cleanup.run.v1',
+      timezone: 'UTC',
+      global_concurrency: 1,
+      local_concurrency: 1,
+    },
+    errorSignal: {
+      classifier_mode: CLASSIFIER_MODE,
+      api_bucket_count: bucketIndicesByService.api.size,
+      worker_bucket_count: bucketIndicesByService.worker.size,
+      coverage_complete: logCoveragePass,
+      warning_total: warningTotal,
+      error_total: errorTotal,
+      fatal_total: fatalTotal,
+      raw_logs_retained: false,
+    },
+    safety,
+  };
+}
+
+function classifyTechnicalStrictResult(evidenceDir) {
+  try {
+    createReceiptFromEvidence(evidenceDir);
+    return 'SUCCESS';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/bucket \d+ (?:api|worker) UTC span mismatch/u.test(message)) return STRICT_V3_BLOCKER;
+    return `BLOCKED_TECHNICAL_STRICT_${sha256Text(message).slice(0, 12)}`;
+  }
 }
 
 function createReceipt(options) {
@@ -2176,6 +2884,10 @@ function writeJson(file, value) {
   writeText(file, `${JSON.stringify(value, null, 2)}\n`, 0o600);
 }
 
+function writeJsonNoOverwrite(file, value) {
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+}
+
 function sha256File(file) {
   return createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
@@ -2208,6 +2920,36 @@ function boolField(value, label) {
   if (value === 'true' || value === true) return true;
   if (value === 'false' || value === false) return false;
   fail(`${label} must be boolean`);
+}
+
+function range(length) {
+  return Array.from({ length }, (_, index) => index);
+}
+
+function expectedSelectedTreeDigest(options) {
+  return options.expectedSelectedTreeDigest ?? EXPECTED_SELECTED_V3_TREE_DIGEST;
+}
+
+function expectedAuthorityV3Sha256(options) {
+  return options.expectedAuthorityV3Sha256 ?? EXPECTED_AUTHORITY_V3_SHA256;
+}
+
+function expectedSelectedTreeDigestFromEnv() {
+  if (process.env.MS019F_TEST_MODE === '1' && process.env.MS019F_EXPECTED_SELECTED_TREE_DIGEST) {
+    return process.env.MS019F_EXPECTED_SELECTED_TREE_DIGEST;
+  }
+  return EXPECTED_SELECTED_V3_TREE_DIGEST;
+}
+
+function expectedAuthorityV3Sha256FromEnv() {
+  if (process.env.MS019F_TEST_MODE === '1' && process.env.MS019F_EXPECTED_AUTHORITY_V3_SHA256) {
+    return process.env.MS019F_EXPECTED_AUTHORITY_V3_SHA256;
+  }
+  return EXPECTED_AUTHORITY_V3_SHA256;
+}
+
+function requireTestModeFlag(arg) {
+  if (process.env.MS019F_TEST_MODE !== '1') fail(`${arg} is only available in MS019F_TEST_MODE`);
 }
 
 function utcElapsedSeconds(startedAtUtc, endedAtUtc, label) {
