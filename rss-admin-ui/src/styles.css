@@ -37,6 +37,10 @@ code {
   padding-bottom: 28px;
 }
 
+.status-band {
+  align-items: center;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: #247060;
@@ -112,6 +116,125 @@ dd {
   padding: 18px;
 }
 
+.dashboard-toolbar,
+.status-summary {
+  border-bottom: 1px solid #d9e0e7;
+  padding: 22px 0;
+}
+
+.dashboard-toolbar {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dashboard-toolbar h2,
+.status-summary h2 {
+  margin-bottom: 8px;
+}
+
+.dashboard-toolbar p {
+  margin-bottom: 4px;
+  color: #4d5b66;
+}
+
+.dashboard-toolbar span {
+  color: #64717d;
+}
+
+button {
+  min-width: 112px;
+  min-height: 42px;
+  border: 1px solid #1d5f52;
+  border-radius: 8px;
+  background: #247060;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #1d5f52;
+}
+
+button:focus-visible {
+  outline: 3px solid #8fcbbd;
+  outline-offset: 2px;
+}
+
+button:disabled {
+  border-color: #aab5bf;
+  background: #d9e0e7;
+  color: #52606d;
+  cursor: wait;
+}
+
+.summary-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.25fr) minmax(220px, 0.4fr) minmax(260px, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.summary-label {
+  margin-bottom: 6px;
+  color: #64717d;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.summary-value,
+.metric-value {
+  margin: 0;
+  color: #1f3b57;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.safe-message {
+  margin: 0;
+  color: #4d5b66;
+  line-height: 1.55;
+}
+
+.state-healthy {
+  color: #1d6b4f;
+}
+
+.state-degraded {
+  color: #8a5b14;
+}
+
+.state-unavailable {
+  color: #a23a3a;
+}
+
+.state-partial {
+  color: #6b567c;
+}
+
+.dependency-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.dependency-list div {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #eef2f5;
+}
+
+.dependency-list div:last-child {
+  border-bottom: 0;
+}
+
 .panel p,
 .panel li {
   color: #4d5b66;
@@ -125,12 +248,22 @@ dd {
 
 @media (max-width: 900px) {
   .workspace-band,
-  .panel-grid {
+  .panel-grid,
+  .summary-row {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .status-grid {
     grid-template-columns: 1fr;
+  }
+
+  button {
+    width: 100%;
   }
 }
 

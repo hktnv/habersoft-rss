@@ -1,5 +1,7 @@
 const DEFAULT_LOCAL_API_BASE_URL = "http://localhost:3000";
+const DEFAULT_ENVIRONMENT_NAME = "local";
 const PRIVATE_HOST_PATTERNS = [/habersoft-auth/iu, /EVO-MRDM/iu, /192\.168\./u, /10\.\d{1,3}\./u, /172\.(1[6-9]|2\d|3[01])\./u];
+const UNSAFE_ENVIRONMENT_LABEL_PATTERNS = [/AGENT_KEY/iu, /Authorization/iu, /Bearer/iu, /https?:\/\//iu, /[?&#=]/u];
 
 declare global {
   interface Window {
@@ -25,7 +27,7 @@ export function resolveAdminUiConfig(): AdminUiConfig {
 
   return {
     apiBaseUrl,
-    environmentName: runtimeConfig?.environmentName ?? import.meta.env.MODE ?? "local"
+    environmentName: normalizeEnvironmentName(runtimeConfig?.environmentName ?? import.meta.env.MODE ?? DEFAULT_ENVIRONMENT_NAME)
   };
 }
 
@@ -61,8 +63,36 @@ function assertPublicSafeConfig(apiBaseUrl: string): void {
   }
 }
 
+export function normalizeEnvironmentName(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed === "") return DEFAULT_ENVIRONMENT_NAME;
+  if (trimmed.length > 64) {
+    throw new Error("Admin UI environment label must be 64 characters or fewer");
+  }
+  if (hasControlCharacter(trimmed)) {
+    throw new Error("Admin UI environment label must not contain control characters");
+  }
+  for (const pattern of UNSAFE_ENVIRONMENT_LABEL_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      throw new Error("Admin UI environment label must be a non-secret display label");
+    }
+  }
+  return trimmed;
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && (codePoint < 32 || codePoint === 127)) return true;
+  }
+  return false;
+}
+
 export const adminUiConfigContract = {
   defaultLocalApiBaseUrl: DEFAULT_LOCAL_API_BASE_URL,
+  defaultEnvironmentName: DEFAULT_ENVIRONMENT_NAME,
+  readOnlyHealthDashboardImplemented: true,
+  publicHealthObservationOnly: true,
   writesImplemented: false,
   agentKeyAllowed: false,
   tokenPersistenceImplemented: false
