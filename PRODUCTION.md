@@ -898,14 +898,14 @@ backup SHA-256: NOT_RECORDED
 restore verification: NOT_RECORDED
 current/previous pointers: NOT_RECORDED
 restart/OOM point-in-time snapshot: NOT_RECORDED
-bounded operational-smoke/error-signal: PENDING_OPERATOR_RUN
+bounded operational-smoke/error-signal: SUCCESS_GOVERNANCE_ACCEPTED
 long-term stability: NOT_APPLICABLE_BY_GOVERNANCE_DECISION
 artifact publication: NOT_PERFORMED
 Git tag: NOT_CREATED
 GitHub Release: NOT_CREATED
 rss-panel.habersoft.com: NOT_IMPLEMENTED_INACTIVE
 operator name/role: operator-confirmed transcript
-notes: basic production activation acceptance passed; extended operational acceptance partial/not fully recorded
+notes: basic production activation acceptance passed; MS-019F closed by governance-approved sample timeline; historical previous pointer remains non-blocking NOT_RECORDED
 ```
 
 Secret deger yazilmaz.
@@ -1054,15 +1054,27 @@ evidence-records.tsv
 
 Returned bundle local verifier tarafindan `production-edge-body-limit-receipt-v2.json` uretmek icin kullanilir. MS-019E-R2 receipt edge body-limit compatibility'i accepted hale getirdi. Exact vendor configured limit yine `NOT_RECORDED` kalir. Application body contract veya edge request-body config degisirse bu collector yeniden calistirilmalidir.
 
-### 19.4 Bounded 20-minute operational-smoke and error-signal handoff
+### 19.4 Bounded 20-minute operational-smoke and error-signal evidence
 
-MS-019F-R1 ile bounded 20-minute operational-smoke ve machine-safe error-signal observation icin read-only handoff-v2 tooling hazirlandi. Canonical contract ve receipt boundary [.docs/production-operational-smoke-and-error-signals.md](.docs/production-operational-smoke-and-error-signals.md) dosyasindadir. Historical handoff-v1 governance tarafindan `HISTORICAL_SUPERSEDED_GOVERNANCE_REJECTED_NEVER_RUN` olarak emekliye ayrildi ve fresh run icin kullanilmaz.
+MS-019F-R5 ile bounded 20-minute operational-smoke ve machine-safe error-signal evidence current production status icin `SUCCESS_GOVERNANCE_ACCEPTED` olarak kapandi. Canonical strict/governance verifier boundary [.docs/production-operational-smoke-and-error-signals.md](.docs/production-operational-smoke-and-error-signals.md) dosyasindadir. Historical handoff-v1 governance tarafindan `HISTORICAL_SUPERSEDED_GOVERNANCE_REJECTED_NEVER_RUN` olarak emekliye ayrildi ve fresh run icin kullanilmaz.
+
+Current accepted identity:
+
+```text
+selected v3 tree: 0ddc2021486d039718ca7d9350c0fca2f3bf6e467d8d01b1c9f087343c19c183
+authority-v3 SHA-256: ea229cfd06862b293f64c63ddf4d2171b9e83be1d94afce21bcc746e004e97d3
+governance decision SHA-256: 86d2f21ae78418cc00312ca4a18f6417cb2df4fb7314341d40b9c5ef344aed73
+receipt-v4 SHA-256: 4146d93b99776f2d11c603b57dc60e728942c4fc56fbd8b8f5a41c2077acaa27
+strict technical result: BLOCKED_ERROR_SIGNAL_BUCKET_SPAN_MISMATCH
+governance strict result: PASSED
+acceptance basis: GOVERNANCE_APPROVED_SAMPLE_TIMELINE_BASELINE_V1
+```
 
 Bu akisin siniri:
 
 - Codex production SSH kullanmaz.
 - Handoff bundle tek basina production evidence degildir; accepted receipt gerekir.
-- Operator observer'i production host uzerinde manuel calistirir.
+- Current MS-019F closeout icin yeni observer run istenmez.
 - Observer 20 dakika / 1200 saniye boyunca 60 saniye primary interval ile 21 sample toplar.
 - Worker health 300 saniye interval ile 5 sample olarak `docker compose exec -T main-service-worker npm run worker:health` uzerinden kontrol edilir.
 - Error-signal contract yalniz stable severity-prefix classifier kullanir; raw log, log snippet, line hash veya broad `grep -i error` retained edilmez.
@@ -1070,7 +1082,7 @@ Bu akisin siniri:
 - Output external operator-state alaninda tutulur ve Git'e commit edilmez.
 - Long-term stability, uptime SLO veya reliability claim uretmez; bu alan `NOT_APPLICABLE_BY_GOVERNANCE_DECISION` durumundadir.
 
-Generated handoff dogrulama:
+Historical/generated handoff dogrulama shape'i:
 
 ```bash
 cd <approved-ms-019f-handoff-v2-dir>
@@ -1078,7 +1090,7 @@ sha256sum -c checksums.sha256
 bash -n observe-production-operational-smoke.sh
 ```
 
-Observer command shape:
+Archived observer command shape'i. Current MS-019F closeout icin yeniden calistirilmaz; future runtime mutation olursa then-current smoke/governance policy uygulanir:
 
 ```bash
 cd /opt/habersoft-rss
@@ -1102,7 +1114,7 @@ operational-smoke-samples.tsv
 error-signal-buckets.tsv
 ```
 
-Interrupted run valid checksum bundle uretmez ve bastan calistirilir. Returned bundle local verifier tarafindan future `production-operational-smoke-receipt.json` uretmek icin kullanilir. MS-019F-R1 repository tooling hazirligi production operational-smoke veya error-signal evidence'i accepted yapmaz; bounded operational-smoke/error-signal status `PENDING_OPERATOR_RUN` kalir.
+Interrupted run valid checksum bundle uretmez. Current selected v3 bundle receipt-v4 ile accepted oldugu icin yeni v3/v4 run talep edilmez. Future runtime mutation icin bu R5 time-anomaly exception otomatik uygulanmaz; then-current bounded smoke contract ve explicit governance policy gerekir.
 
 ## 20. Gelecek backend/frontend monorepo gecisi
 

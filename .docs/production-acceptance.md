@@ -13,11 +13,11 @@ Bu belge production redeploy, server command log'u, exact production Git/image i
 - Evidence date: `2026-06-22`
 - Evidence source: `operator-confirmed transcript`
 - Basic activation acceptance: `PASSED`
-- Extended operational evidence: `PARTIAL_ACCEPTED`
+- Extended operational evidence: `CLOSED_WITH_NON_BLOCKING_HISTORICAL_POINTER_GAP`
 - Production backup/restore evidence: `PRODUCTION_BACKUP_RESTORE_VERIFIED`
 - Production checkout/current pointer evidence: `PARTIAL_ACCEPTED`
 - Production edge body-limit evidence: `PASSED`
-- Production operational-smoke/error-signal evidence: `PENDING_OPERATOR_RUN`
+- Production operational-smoke/error-signal evidence: `SUCCESS_GOVERNANCE_ACCEPTED`
 - Long-term stability evidence: `NOT_APPLICABLE_BY_GOVERNANCE_DECISION`
 
 `Production Aktif` yalniz `main-service` backend application icindir. Bagimsiz Agent application, bagimsiz Tenant applications, frontend/admin panel veya `rss-panel.habersoft.com` icin readiness iddiasi degildir.
@@ -146,16 +146,47 @@ Verified safe projections:
 
 Exact configured edge/vendor body-limit bytes remain `NOT_RECORDED`. MS-019E does not prove authenticated Agent ingestion, unlimited body acceptance, performance, capacity, operational-smoke result or error-signal absence.
 
+## MS-019F-R5 Operational-Smoke Governance Receipt
+
+MS-019F-R5 closes bounded 20-minute operational-smoke and same-window machine-safe error-signal evidence with a pinned governance decision for the exact fresh v3 returned bundle. Codex did not contact production, did not rerun the observer and did not edit returned evidence files.
+
+- Selected returned v3 tree digest: `0ddc2021486d039718ca7d9350c0fca2f3bf6e467d8d01b1c9f087343c19c183`
+- Authority-v3 filename: `production-operational-smoke-returned-v3-authority.json`
+- Authority-v3 SHA-256: `ea229cfd06862b293f64c63ddf4d2171b9e83be1d94afce21bcc746e004e97d3`
+- Governance decision filename: `production-operational-smoke-governance-decision-v1.json`
+- Governance decision SHA-256: `86d2f21ae78418cc00312ca4a18f6417cb2df4fb7314341d40b9c5ef344aed73`
+- Receipt-v4 filename: `production-operational-smoke-receipt-v4.json`
+- Receipt-v4 SHA-256: `4146d93b99776f2d11c603b57dc60e728942c4fc56fbd8b8f5a41c2077acaa27`
+- Outcome: `SUCCESS_GOVERNANCE_ACCEPTED`
+- Acceptance basis: `GOVERNANCE_APPROVED_SAMPLE_TIMELINE_BASELINE_V1`
+- Original technical strict result preserved: `BLOCKED_ERROR_SIGNAL_BUCKET_SPAN_MISMATCH`
+- Governance strict result: `PASSED`
+
+Verified safe projections:
+
+| Check | Result | Boundary |
+|---|---|---|
+| Primary sample timeline | `PASSED`, `21` samples, indices `0..20`, UTC span `1200` seconds | Authoritative acceptance time source for this exact v3 tree only. |
+| Worker health | `PASSED`, `5/5` due checks | Queue `main-service.maintenance`, scheduler `cleanup.daily`, job `cleanup.run.v1`, UTC, concurrency `1`. |
+| Error bucket ordinal coverage | `PASSED`, `20 API + 20 worker` rows | Bucket indices `0..19` per role are gating; individual bucket UTC spans are diagnostic for this exact acceptance. |
+| Health/dependency/TLS | `PASSED`, `21/21` | Internal/public live-ready, dependencies and TLS projections passed. |
+| Container continuity | `PASSED` | API/worker identities stable, restart delta `0`, OOM observed `false`, replacement count `0`. |
+| Error/fatal totals | `PASSED`, warning/error/fatal `0 / 0 / 0` | Stable severity-prefix classifier; raw logs not retained. |
+| Safety flags | `PASSED` | No auth credentials, retry, production mutation, deployment, restart, migration, backup or restore. |
+| Metadata UTC diagnostics | `NON_GATING_DIAGNOSTIC`, metadata start/end delta `63` seconds versus metadata elapsed `1203` | Not strict wall-clock acceptance and not corrected. |
+| Bucket UTC span diagnostics | `NON_GATING_DIAGNOSTIC`, span min/max `59 / 61`, anomaly count `12` | Original strict blocker remains visible and auditable. |
+
+Historical MS-019F blocked identities remain preserved: R2 `BLOCKED_SAMPLE_COVERAGE`, R3 `BLOCKED_METADATA_REWRITE_WITHOUT_INDEPENDENT_TIME_PROOF`, and R4 `BLOCKED_ERROR_SIGNAL_BUCKET_SPAN_MISMATCH`. Receipt-v4 supersedes them for current acceptance only; it is not a reusable future-bundle bypass.
+
 ## Not Recorded
 
 The following fields remain not proven by current accepted evidence and must not be treated as passed:
 
 - previous production pointer commit/image: `NOT_RECORDED`
-- bounded 20-minute operational smoke: `PENDING_OPERATOR_RUN`
-- bounded same-window error/fatal signal aggregate: `PENDING_OPERATOR_RUN`
+- historical previous production pointer: `NON_BLOCKING_HISTORICAL_EVIDENCE_GAP`
 - long-term stability observation: `NOT_APPLICABLE_BY_GOVERNANCE_DECISION`
 
-These gaps are not failures. They are the remaining extended operational evidence scope after the governance decision retired long-term stability as a requirement. The MS-018C external receipt filename and SHA-256 remain unchanged.
+These gaps are not failures. The historical previous pointer was not reconstructed and remains `NOT_RECORDED`, but it no longer blocks current operational evidence closeout. Long-term stability remains not applicable by governance decision. The MS-018C external receipt filename and SHA-256 remain unchanged.
 
 ## Delivery And Publication Boundary
 

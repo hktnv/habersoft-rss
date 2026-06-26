@@ -164,10 +164,10 @@ exact vendor configured limit: NOT_RECORDED
 Open extended operational residuals remain:
 
 - historical previous pointer: `NOT_RECORDED`
-- bounded operational-smoke/error-signal: `PENDING_OPERATOR_RUN`
+- bounded operational-smoke/error-signal: `SUCCESS_GOVERNANCE_ACCEPTED`
 - long-term stability: `NOT_APPLICABLE_BY_GOVERNANCE_DECISION`
 
-MS-019E touches only the edge body-limit evidence preparation path. It does not reopen previous pointer or MS-019F-R1 operational-smoke/error-signal evidence.
+MS-019E touches only the edge body-limit evidence preparation path. It does not reopen previous pointer or MS-019F-R5 operational-smoke/error-signal governance acceptance.
 
 ## Tests
 

@@ -83,4 +83,4 @@ MS-019C returned backup-v2 intake ve off-host disposable restore verification ac
 - Production off-host restore result: `PASSED`
 - Backup restore baseline: `PASSED`
 
-Bu evidence production backup/restore gate'ini `PRODUCTION_BACKUP_RESTORE_VERIFIED` yapar. Full operational acceptance historical previous production pointer eksikligi ve MS-019F-R1 bounded operational-smoke/error-signal returned bundle'inin henuz `PENDING_OPERATOR_RUN` olmasi nedeniyle partial kalir. Long-term stability evidence governance karariyla `NOT_APPLICABLE_BY_GOVERNANCE_DECISION` durumundadir.
+Bu evidence production backup/restore gate'ini `PRODUCTION_BACKUP_RESTORE_VERIFIED` yapar. MS-019F-R5 bounded operational-smoke/error-signal evidence'i `SUCCESS_GOVERNANCE_ACCEPTED` durumundadir. Historical previous production pointer `NOT_RECORDED` fakat non-blocking kalir. Long-term stability evidence governance karariyla `NOT_APPLICABLE_BY_GOVERNANCE_DECISION` durumundadir.

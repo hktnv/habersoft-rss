@@ -9,7 +9,7 @@ MS-019D hazirlik/handoff sonucu `OPERATOR_ACTION_REQUIRED` idi. MS-019D-R1 retur
 Out of scope:
 
 - edge body-limit evidence,
-- MS-019F-R1 bounded operational-smoke/error-signal evidence,
+- MS-019F-R5 bounded operational-smoke/error-signal governance acceptance,
 - deployment, migration, backup, restore veya release publication.
 
 ## Current Evidence Boundary
@@ -274,8 +274,8 @@ current pointer fresh evidence: PASSED
 previous pointer: NOT_RECORDED until returned strict pointer evidence exists
 rollback baseline for next deployment: ESTABLISHED_FROM_CURRENT_POINTER
 edge body-limit: PASSED by MS-019E-R2 receipt
-bounded operational-smoke/error-signal: PENDING_OPERATOR_RUN by MS-019F-R1
+bounded operational-smoke/error-signal: SUCCESS_GOVERNANCE_ACCEPTED by MS-019F-R5
 long-term stability: NOT_APPLICABLE_BY_GOVERNANCE_DECISION
 ```
 
-This partial acceptance updates `.docs/production-acceptance.md` with only the safe checkout/current pointer projections. Full operational acceptance remains partial because historical previous pointer is still absent and bounded operational-smoke/error-signal evidence is still pending operator run.
+This partial acceptance updates `.docs/production-acceptance.md` with only the safe checkout/current pointer projections. Historical previous pointer remains absent as a non-blocking historical evidence gap; bounded operational-smoke/error-signal evidence is closed by MS-019F-R5.

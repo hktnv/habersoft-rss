@@ -2,7 +2,7 @@
 
 ## Sorumluluk
 
-Bu belge MS-019F-R1 bounded 20-minute operational-smoke ve same-window machine-safe error-signal handoff-v2 contract'inin canonical repository-local sahibidir.
+Bu belge MS-019F bounded 20-minute operational-smoke ve same-window machine-safe error-signal handoff-v2 contract'inin, R2/R3/R4 blocked audit trail'inin ve R5 governance-approved closeout'unun canonical repository-local sahibidir.
 
 MS-019F v1 24-hour handoff governance tarafindan emekliye ayrildi ve historical external artifact olarak yalniz su class ile korunur:
 
@@ -14,7 +14,7 @@ Fresh operator run icin v1 kullanilmaz. Handoff generation production evidence d
 
 ## Governance Boundary
 
-Accepted MS-019F-R1 scope yalniz bounded 20-minute operational smoke ve ayni pencere error/fatal aggregate'idir.
+Accepted MS-019F scope yalniz bounded 20-minute operational smoke ve ayni pencere error/fatal aggregate'idir.
 
 - window class: `BOUNDED_20M_OPERATIONAL_SMOKE`
 - long-term stability claim: `false`
@@ -39,7 +39,7 @@ Observation contract closed degerlerle pinlenir:
 - retry: `false`
 - production mutation: `false`
 
-Strict acceptance ancak final elapsed `>=1200`, all sample indices present, all bucket intervals present, max lag `<=15`, all health/worker/container gates passed ve error/fatal signal totals zero ise mumkundur.
+Original technical strict acceptance final elapsed `>=1200`, all sample indices present, all bucket intervals present, max lag `<=15`, all health/worker/container gates passed ve error/fatal signal totals zero ister. MS-019F-R5 bu strict verifier'i silmez veya gevsetmez; strict result v3 icin `BLOCKED_ERROR_SIGNAL_BUCKET_SPAN_MISMATCH` olarak korunur.
 
 ## Health And Worker Sampling
 
@@ -160,14 +160,55 @@ npm run production:operational-smoke:receipt:create -- --handoff-dir <external-h
 npm run production:operational-smoke:receipt:verify -- --receipt-file <external-receipt-file> --require-bounded-operational-smoke --require-bounded-error-signal --require-ms019f-v2-baseline
 ```
 
+## MS-019F-R5 Governance-Accepted Current Evidence
+
+Governance-approved current acceptance exact fresh v3 returned bundle'a pinlidir; bu bir genel verifier gevsetmesi veya future-bundle bypass degildir.
+
+- Selected v3 tree digest: `0ddc2021486d039718ca7d9350c0fca2f3bf6e467d8d01b1c9f087343c19c183`
+- Authority-v3 SHA-256: `ea229cfd06862b293f64c63ddf4d2171b9e83be1d94afce21bcc746e004e97d3`
+- Governance decision record: `production-operational-smoke-governance-decision-v1.json`
+- Governance decision SHA-256: `86d2f21ae78418cc00312ca4a18f6417cb2df4fb7314341d40b9c5ef344aed73`
+- Receipt-v4: `production-operational-smoke-receipt-v4.json`
+- Receipt-v4 SHA-256: `4146d93b99776f2d11c603b57dc60e728942c4fc56fbd8b8f5a41c2077acaa27`
+- Outcome: `SUCCESS_GOVERNANCE_ACCEPTED`
+- Acceptance basis: `GOVERNANCE_APPROVED_SAMPLE_TIMELINE_BASELINE_V1`
+
+Authoritative acceptance time source:
+
+- primary samples: `21`, indices `0..20`
+- first-to-last primary sample UTC span: `1200` seconds
+- max scheduling lag: `0` seconds in the selected v3 bundle
+- worker health due checks: `5/5` passed
+- error buckets: `20 API + 20 worker`, ordinal indices `0..19` complete
+- warning/error/fatal totals: `0 / 0 / 0`
+
+Non-gating diagnostics preserved in receipt-v4:
+
+- metadata start/end UTC delta: `63` seconds while metadata elapsed is `1203`
+- bucket UTC span min/max: `59 / 61`
+- bucket UTC span anomaly count: `12`
+- original technical strict result: `BLOCKED_ERROR_SIGNAL_BUCKET_SPAN_MISMATCH`
+
+Non-waivable gates remain strict: exact handoff/freeze/authority identity, returned checksums, schema/contract, production mode, no test acceleration, health/dependency/TLS `21/21`, API/worker continuity, worker health, ordinal bucket coverage, zero error/fatal totals, no raw logs, no auth, no retry, concurrency `1`, no mutation/deploy/restart/migration/backup/restore.
+
+Governance verifier commands are local-only:
+
+```powershell
+npm run production:operational-smoke:governance-decision:verify -- --evidence-dir <selected-v3-returned-dir>
+npm run production:operational-smoke:governance:verify -- --evidence-dir <selected-v3-returned-dir> --require-governance-approved-smoke-baseline
+npm run production:operational-smoke:receipt-v4:verify -- --evidence-dir <selected-v3-returned-dir> --require-governance-approved-smoke-baseline
+```
+
+Future runtime mutations must not automatically reuse the R5 time-anomaly exception. Use the then-current bounded smoke contract and any explicit governance policy that exists at that time.
+
 ## Status Boundary
 
-MS-019F-R1 prepared tooling closes the handoff/verifier gap only. Until a real returned bundle is collected and strictly verified:
+MS-019F is closed for current production operational evidence by R5 governance acceptance:
 
-- bounded operational-smoke evidence: `PENDING_OPERATOR_RUN`
-- bounded error-signal evidence: `PENDING_OPERATOR_RUN`
+- bounded operational-smoke evidence: `SUCCESS_GOVERNANCE_ACCEPTED`
+- bounded error-signal evidence: `SUCCESS_GOVERNANCE_ACCEPTED`
 - long-term stability evidence: `NOT_APPLICABLE_BY_GOVERNANCE_DECISION`
-- historical previous production pointer: unchanged, `NOT_RECORDED`
+- historical previous production pointer: `NON_BLOCKING_HISTORICAL_EVIDENCE_GAP`
 - accepted production status: unchanged, `MVP - Production Aktif`
 
-This handoff must not be used to infer production success from local fixture output, staging evidence, Git commit identity, point-in-time health or prior operational receipts.
+Receipt-v4 must not be used to infer future production success from local fixture output, staging evidence, Git commit identity, point-in-time health or prior operational receipts.
