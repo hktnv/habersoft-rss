@@ -40,7 +40,10 @@ const requiredFrontendFiles = [
   "Dockerfile",
   ".dockerignore",
   "deploy/production/compose.yaml",
+  ".docs/read-only-status-dashboard.md",
   "src/App.tsx",
+  "src/status/healthClient.ts",
+  "src/status/StatusDashboard.tsx",
   "tests/app-shell.test.tsx"
 ];
 const protectedBackendPaths = [
@@ -141,8 +144,11 @@ function assertRootDocs() {
   if (!backendProduction.includes("SUCCESS_GOVERNANCE_ACCEPTED")) {
     failures.push("backend production guide lost accepted evidence history");
   }
-  if (!frontendProduction.includes("FOUNDATION_ONLY")) {
-    failures.push("frontend production guide must remain foundation-only");
+  if (
+    !frontendProduction.includes("READ_ONLY_STATUS_DASHBOARD_IMPLEMENTED") ||
+    !frontendProduction.includes("NOT_DEPLOYED")
+  ) {
+    failures.push("frontend production guide must state read-only dashboard implemented and not deployed");
   }
   if (/byte-identical mirror/iu.test(rootProduction) || /operator mirror PRODUCTION\.md SHA-256/iu.test(rootProduction)) {
     failures.push("root production guide still claims old mirror contract");

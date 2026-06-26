@@ -10,8 +10,19 @@ const workstationPathPattern = new RegExp(String.raw`C:\\Users\\EVO-MRDM`, "iu")
 const oldWorkspacePattern = new RegExp(["habersoft-auth", String.raw`\\`, "rss-habersoft-com"].join(""), "iu");
 
 describe("frontend security boundary", () => {
-  it("does not include Agent key or private-host strings in source", () => {
-    const forbidden = [/AGENT_KEY\s*=/u, /X-Agent-Key/iu, workstationPathPattern, oldWorkspacePattern];
+  it("does not include credentials, browser persistence, writes, or private-host strings in source", () => {
+    const forbidden = [
+      /AGENT_KEY\s*=/u,
+      /X-Agent-Key/iu,
+      /Authorization\s*:/iu,
+      /Cookie\s*:/iu,
+      /\b(localStorage|sessionStorage|indexedDB|cookieStore)\b/u,
+      /document\.cookie/u,
+      /method:\s*["'](?:POST|PUT|PATCH|DELETE)["']/iu,
+      /credentials:\s*["'](?:include|same-origin)["']/iu,
+      workstationPathPattern,
+      oldWorkspacePattern
+    ];
     const offenders = [];
     for (const file of sourceFiles) {
       if (!/\.(ts|tsx|js|mjs|css|html|md|json|yaml|yml|conf|sh)$/iu.test(file)) continue;

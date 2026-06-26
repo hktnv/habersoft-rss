@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Admin UI foundation | `FOUNDATION_ONLY - NOT_DEPLOYED` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard | `READ_ONLY_STATUS_DASHBOARD_IMPLEMENTED - NOT_DEPLOYED` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -55,7 +55,7 @@ npm run build
 npm audit --omit=dev
 ```
 
-The foundation shell reads a non-secret API base URL from build-time Vite config or runtime `env-config.js`. It does not implement login, browser token storage, Agent authentication, or backend writes.
+The admin UI reads a non-secret API base URL and environment label from build-time Vite config or runtime `env-config.js`. Its first product slice observes only public backend `/health/live` and `/health/ready` routes with no credentials, no browser persistence, no automatic polling, and no backend writes. It remains not deployed.
 
 ## Root Docker Workflow
 
@@ -77,8 +77,9 @@ The root admin UI port is `8081`, selected to avoid the backend API port (`3000`
 
 - [Root production guide](PRODUCTION.md) - product-level deployment boundaries and migration status.
 - [Backend production guide](rss-habersoft-com/PRODUCTION.md) - backend canonical production operations and evidence history.
-- [Admin UI production guide](rss-admin-ui/PRODUCTION.md) - frontend foundation delivery contract.
+- [Admin UI production guide](rss-admin-ui/PRODUCTION.md) - frontend read-only status dashboard delivery contract.
 - [Admin UI API/auth contract](rss-admin-ui/.docs/api-auth-contract.md) - deferred Tenant/admin authentication boundary.
+- [Admin UI read-only dashboard contract](rss-admin-ui/.docs/read-only-status-dashboard.md) - MS-020B health observation contract.
 - [Backend detailed docs](rss-habersoft-com/.docs/README.md) - backend service and evidence documentation.
 
 ## Production Evidence Status
@@ -94,7 +95,7 @@ The backend production evidence series remains closed and is not reopened by thi
 | MS-019E | `SUCCESS` |
 | MS-019F | `SUCCESS_GOVERNANCE_ACCEPTED` |
 
-MS-020A does not deploy, restart, pull on, or contact production.
+MS-020B adds a local/tested read-only admin status dashboard contract and frontend slice. It does not deploy, restart, pull on, or contact production.
 
 ## No-Secret Policy
 
