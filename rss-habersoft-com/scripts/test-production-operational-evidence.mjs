@@ -136,7 +136,7 @@ try {
   assertRepositoryHygieneFixtureFails("missing-attribute", { omitAttributes: true }, /missing .*LF rule|required file missing/u);
   assertRepositoryHygieneFixtureFails("crlf-tracked-collector", { collectorCrlf: true }, /collector.*CR byte/u);
   assertRepositoryHygieneFixtureFails("crlf-handoff-collector", { handoffCollectorCrlf: true }, /generated handoff collector.*CR byte/u);
-  assertRepositoryHygieneFixtureFails("mirror-mismatch", { mirrorMismatch: true }, /operator mirror PRODUCTION\.md SHA-256/u);
+  assertRepositoryHygieneFixtureFails("missing-frontend-guide", { omitFrontendGuide: true }, /production guide missing/u);
 
   const collectorText = readFileSync("scripts/production-operational-evidence-collector.sh", "utf8");
   assert.doesNotMatch(collectorText, /\bset\s+-x\b/u);
@@ -402,8 +402,6 @@ function assertRepositoryHygieneFixtureFails(label, options, pattern) {
     "scripts/repository-hygiene-verify.mjs",
     "--root",
     fixture.root,
-    "--production-mirror",
-    fixture.mirror,
     "--handoff",
     fixture.handoff
   ]);
@@ -931,24 +929,31 @@ function runGit(args, cwd) {
 }
 
 function writeRepositoryHygieneFixture(label, options) {
-  const root = path.join(temp, `hygiene-${label}`);
+  const repo = path.join(temp, `hygiene-${label}`);
+  const root = path.join(repo, "rss-habersoft-com");
   const scriptsDir = path.join(root, "scripts");
   const handoff = path.join(temp, `hygiene-${label}-handoff`);
-  const mirror = path.join(temp, `hygiene-${label}-PRODUCTION.md`);
+  const frontend = path.join(repo, "rss-admin-ui");
   mkdirSync(scriptsDir, { recursive: true });
   mkdirSync(handoff, { recursive: true });
+  mkdirSync(frontend, { recursive: true });
 
   const attributes = [
     ".gitattributes text eol=lf",
-    "scripts/*.sh text eol=lf",
-    "PRODUCTION.md text eol=lf"
+    "rss-habersoft-com/scripts/*.sh text eol=lf",
+    "PRODUCTION.md text eol=lf",
+    "rss-habersoft-com/PRODUCTION.md text eol=lf",
+    "rss-admin-ui/PRODUCTION.md text eol=lf"
   ].join("\n");
   if (!options.omitAttributes) {
-    writeFileSync(path.join(root, ".gitattributes"), `${attributes}\n`);
+    writeFileSync(path.join(repo, ".gitattributes"), `${attributes}\n`);
   }
 
+  writeFileSync(path.join(repo, "PRODUCTION.md"), "root guide\n");
   writeFileSync(path.join(root, "PRODUCTION.md"), "guide\n");
-  writeFileSync(mirror, options.mirrorMismatch ? "mirror\n" : "guide\n");
+  if (!options.omitFrontendGuide) {
+    writeFileSync(path.join(frontend, "PRODUCTION.md"), "frontend guide\n");
+  }
   writeFileSync(
     path.join(scriptsDir, "production-operational-evidence-collector.sh"),
     options.collectorCrlf ? "#!/usr/bin/env bash\r\nset -eu\r\n" : "#!/usr/bin/env bash\nset -eu\n"
@@ -957,7 +962,7 @@ function writeRepositoryHygieneFixture(label, options) {
     path.join(handoff, "collect-production-operational-evidence.sh"),
     options.handoffCollectorCrlf ? "#!/usr/bin/env bash\r\nset -eu\r\n" : "#!/usr/bin/env bash\nset -eu\n"
   );
-  return { root, mirror, handoff };
+  return { root, handoff };
 }
 
 function refreshHandoff(bundle) {

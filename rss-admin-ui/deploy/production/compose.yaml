@@ -1,0 +1,17 @@
+name: rss-admin-ui-production
+
+services:
+  rss-admin-ui:
+    image: ${RSS_ADMIN_UI_IMAGE:?RSS_ADMIN_UI_IMAGE is required and must be immutable}
+    environment:
+      ADMIN_UI_API_BASE_URL: ${ADMIN_UI_API_BASE_URL:?ADMIN_UI_API_BASE_URL is required}
+      ADMIN_UI_ENVIRONMENT_NAME: production
+    ports:
+      - "127.0.0.1:${ADMIN_UI_HOST_PORT:?ADMIN_UI_HOST_PORT is required}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
