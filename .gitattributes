@@ -1,3 +1,8 @@
 .gitattributes text eol=lf
-scripts/*.sh text eol=lf
+*.mjs text eol=lf
+**/Dockerfile text eol=lf
+rss-habersoft-com/scripts/*.sh text eol=lf
+rss-admin-ui/*.sh text eol=lf
 PRODUCTION.md text eol=lf
+rss-habersoft-com/PRODUCTION.md text eol=lf
+rss-admin-ui/PRODUCTION.md text eol=lf

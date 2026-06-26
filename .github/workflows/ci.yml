@@ -1,0 +1,75 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  topology:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24.17.0"
+      - run: node scripts/monorepo-topology-verify.mjs
+      - run: docker compose config --quiet
+        env:
+          POSTGRES_USER: main_service
+          POSTGRES_PASSWORD: main_service_local_password
+          POSTGRES_DB: main_service
+          DATABASE_URL: postgresql://main_service:main_service_local_password@postgres:5432/main_service?schema=public
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rss-habersoft-com
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24.17.0"
+          cache: npm
+          cache-dependency-path: rss-habersoft-com/package-lock.json
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:auth
+      - run: npm run test:production-operational-smoke-evidence
+      - run: npm run test:production-edge-body-limit-evidence
+      - run: npm run test:production-checkout-pointer-evidence
+      - run: npm run test:production-evidence
+      - run: npm run test:production-backup-restore-evidence
+      - run: npm run docs:verify
+      - run: npm run repository:hygiene:verify
+      - run: npm run build
+      - run: npm audit --omit=dev
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rss-admin-ui
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24.17.0"
+          cache: npm
+          cache-dependency-path: rss-admin-ui/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev
+      - run: docker build -t rss-admin-ui:ci .

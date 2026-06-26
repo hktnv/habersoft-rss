@@ -1,23 +1,105 @@
-# main-service
+# habersoft-rss
 
-`main-service`, rss.habersoft.com ekosisteminin merkezi sunucu uygulamasidir.
+`habersoft-rss` is the single Git repository for the RSS product family. It uses the `POLYREPO_STYLE_SINGLE_GIT_MONOREPO` topology: one canonical remote, two first-class project roots, and root-owned orchestration/docs.
 
-Uygulanan urun ve operasyon belgeleri icin bkz. [.docs/README.md](.docs/README.md).
+## Projects
 
-Servisleri sade bir entegrasyon okuma sirasiyla yeniden kavramak icin bkz. [.docs/service-handbook/README.md](.docs/service-handbook/README.md).
+| Project | Role | Status |
+|---|---|---|
+| [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Admin UI foundation | `FOUNDATION_ONLY - NOT_DEPLOYED` |
 
-Production operator guide: [PRODUCTION.md](PRODUCTION.md). Bu dosya insan sunucu operatoru icindir; current production status ve evidence sahibi [.docs/production-acceptance.md](.docs/production-acceptance.md) dosyasidir.
+The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
-Bu surum container tabanli API/worker iskeleti, config dogrulama, PostgreSQL/Redis baglanti siniri, health yuzeyi, canonical PostgreSQL business schema migration temeli, API process'ine ozel tenant RS256 JWT/JWKS dogrulama altyapisi, tenant feed abonelik endpoint'leri, tenant basina Redis rate limiting davranisi, `GET /api/entries` hafif liste endpoint'i, `GET /api/entries/{id}/detail` detail endpoint'i, Agent `X-Agent-Key` authentication altyapisi, `POST /agent/heartbeat` current-state endpoint'i, read-only `GET /agent/feeds/due` endpoint'i, read-only `POST /agent/feeds/{feed_id}/new-guids` endpoint'ini, idempotent `POST /agent/entries` ingestion endpoint'ini, idempotent batch `POST /agent/feed-check-results` outcome ingestion endpoint'ini, worker-only BullMQ cleanup job runner'ini ve production Compose/release package dogrulama araclarini icerir.
+## Prerequisites
 
-Application version: `0.1.0-ms-017`.
-Application status: `MVP — Production Aktif`.
-Master baseline: `rss-habersoft-master-v12`.
+| Tool | Contract |
+|---|---|
+| Node.js | Backend contract: `24.17.0`; frontend supports current Node 24 LTS-compatible tooling |
+| npm | Backend contract: `11`; frontend uses its own lockfile |
+| Docker Engine | Required for local Compose and image checks |
+| Docker Compose v2 | Required for root and project Compose validation |
 
-MS-018C operator-confirmed evidence'e gore `main-service` backend production'da aktiftir: internal/public live ve ready checks HTTP `200`, PostgreSQL/Redis/tenantAuth readiness `up`, API loopback upstream `127.0.0.1:3200`.
+## Backend Commands
 
-MS-019B collector-v2 operational evidence receipt partial accepted durumdadir: explicit production Compose context, runtime Git/image identity, service/port policy, migration, worker/scheduler, health, boundary, redirect, TLS ve point-in-time restart/OOM evidence passed. MS-019C production backup/restore receipt `PRODUCTION_BACKUP_RESTORE_VERIFIED` durumundadir. MS-019D-R1 checkout hygiene ve current release pointer evidence'i `PARTIAL_ACCEPTED` olarak kabul etti; forward rollback baseline state current pointer'dan external olarak kuruldu. MS-019E-R2 edge body-limit compatibility evidence'i `PASSED` durumundadir. MS-019F-R5 bounded 20-minute operational-smoke ve machine-safe error-signal evidence'i selected v3 sample timeline governance karariyla `SUCCESS_GOVERNANCE_ACCEPTED` durumundadir. Historical previous production pointer `NOT_RECORDED` ve non-blocking kalir; long-term stability evidence ise `NOT_APPLICABLE_BY_GOVERNANCE_DECISION` durumundadir. Sonraki bounded urun alani `MS-020A — rss-panel frontend bounded discovery`dir. Contract ve receipt verifier semantics [.docs/production-operational-evidence.md](.docs/production-operational-evidence.md), [.docs/backup-and-restore.md](.docs/backup-and-restore.md), [.docs/production-checkout-and-release-pointers.md](.docs/production-checkout-and-release-pointers.md), [.docs/production-edge-body-limit.md](.docs/production-edge-body-limit.md) ve [.docs/production-operational-smoke-and-error-signals.md](.docs/production-operational-smoke-and-error-signals.md) dosyalarindadir.
+Run from `rss-habersoft-com`:
 
-MS-017C staging drill tarihsel kanittir: `STAGING_USES_PRODUCTION_IDP` decision altinda approved staging target'ta candidate deployment, synthetic sentinel, PostgreSQL `pg_dump -Fc` backup, off-host restore verification, rollback to `0.1.0-ms-016`, roll-forward to `0.1.0-ms-017`, final current pointer promotion ve final running services acceptance passed. Staging package source/image kimlikleri production identity degildir.
+```bash
+npm ci
+npm run prisma:generate
+npm run lint
+npm run typecheck
+npm test
+npm run test:auth
+npm run test:production-evidence
+npm run test:production-operational-smoke-evidence
+npm run docs:verify
+npm run repository:hygiene:verify
+npm run release:verify
+npm run build
+npm audit --omit=dev
+```
 
-External registry publish, Git tag ve GitHub Release yapilmamistir. Frontend, `rss-panel.habersoft.com`, bagimsiz Agent application ve bagimsiz Tenant applications bu backend status claim'inin kapsami disindadir. Public route inventory, schema ve migrations degismemistir.
+`npm run release:verify` requires the same local non-secret `DATABASE_URL` convention documented in the backend guide when Prisma validation needs one. Do not point local verification at production.
+
+## Frontend Commands
+
+Run from `rss-admin-ui`:
+
+```bash
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm audit --omit=dev
+```
+
+The foundation shell reads a non-secret API base URL from build-time Vite config or runtime `env-config.js`. It does not implement login, browser token storage, Agent authentication, or backend writes.
+
+## Root Docker Workflow
+
+The root [`compose.yaml`](compose.yaml) owns local full-stack orchestration for PostgreSQL, Redis, backend API/worker, local JWKS fixture, and the admin UI.
+
+Use non-secret local values:
+
+```bash
+POSTGRES_USER=main_service
+POSTGRES_PASSWORD=main_service_local_password
+POSTGRES_DB=main_service
+DATABASE_URL=postgresql://main_service:main_service_local_password@postgres:5432/main_service?schema=public
+docker compose config
+```
+
+The root admin UI port is `8081`, selected to avoid the backend API port (`3000` container, commonly `3200` on production loopback), PostgreSQL, Redis, and the existing auth admin UI port. No root Compose command deploys production.
+
+## Documentation Map
+
+- [Root production guide](PRODUCTION.md) - product-level deployment boundaries and migration status.
+- [Backend production guide](rss-habersoft-com/PRODUCTION.md) - backend canonical production operations and evidence history.
+- [Admin UI production guide](rss-admin-ui/PRODUCTION.md) - frontend foundation delivery contract.
+- [Admin UI API/auth contract](rss-admin-ui/.docs/api-auth-contract.md) - deferred Tenant/admin authentication boundary.
+- [Backend detailed docs](rss-habersoft-com/.docs/README.md) - backend service and evidence documentation.
+
+## Production Evidence Status
+
+The backend production evidence series remains closed and is not reopened by this topology milestone:
+
+| Milestone | Result |
+|---|---|
+| MS-018C | `PASSED` |
+| MS-019B | `PARTIAL_ACCEPTED` |
+| MS-019C | `PRODUCTION_BACKUP_RESTORE_VERIFIED` |
+| MS-019D | `PARTIAL_ACCEPTED` |
+| MS-019E | `SUCCESS` |
+| MS-019F | `SUCCESS_GOVERNANCE_ACCEPTED` |
+
+MS-020A does not deploy, restart, pull on, or contact production.
+
+## No-Secret Policy
+
+Tracked files must not contain production credentials, database URLs with real passwords, Agent keys, JWTs, private keys, raw production evidence bodies, or private host credentials. External operator evidence lives under ignored `operator-state/`; central markdown docs may live under ignored `.md/`.
+
+## Path Conventions
+
+Repository commands should use relative paths. A local Windows checkout may be placed at `C:\Users\EVO-MRDM\Desktop\habersoft-rss`, but tracked automation must not depend on that absolute path.

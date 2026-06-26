@@ -1,9 +1,9 @@
-name: habersoft-rss-local
+name: main-service
 
 x-main-service-image: &main-service-image
   image: main-service-app:0.1.0-ms-017
   build:
-    context: ./rss-habersoft-com
+    context: .
     dockerfile: Dockerfile
 
 services:
@@ -14,7 +14,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
     volumes:
-      - habersoft-rss-postgres-data:/var/lib/postgresql/data
+      - main-service-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
@@ -79,7 +79,7 @@ services:
       CHECKED_AT_MAX_FUTURE_SKEW_SECONDS: ${CHECKED_AT_MAX_FUTURE_SKEW_SECONDS:-60}
       CHECKED_AT_MAX_AGE_SECONDS: ${CHECKED_AT_MAX_AGE_SECONDS:-900}
     ports:
-      - "127.0.0.1:${API_HOST_PORT:-3000}:3000"
+      - "${API_HOST_PORT:-3000}:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,26 +136,5 @@ services:
       retries: 20
       start_period: 10s
 
-  rss-admin-ui:
-    image: rss-admin-ui:0.1.0
-    build:
-      context: ./rss-admin-ui
-      dockerfile: Dockerfile
-      args:
-        VITE_API_BASE_URL: ${ADMIN_UI_BUILD_API_BASE_URL:-http://localhost:3000}
-    environment:
-      ADMIN_UI_API_BASE_URL: ${ADMIN_UI_API_BASE_URL:-http://localhost:3000}
-    ports:
-      - "127.0.0.1:${ADMIN_UI_HOST_PORT:-8081}:8080"
-    depends_on:
-      main-service-api:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 5s
-
 volumes:
-  habersoft-rss-postgres-data:
+  main-service-postgres-data:
