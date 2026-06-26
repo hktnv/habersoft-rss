@@ -253,7 +253,7 @@ export function validateReceipt(receipt, options = {}) {
   validateTls(receipt.tls);
   validatePointers(receipt.pointers);
   validateStability(receipt.stability, composeContext);
-  validateOutsideScope(receipt.outside_scope);
+  validateOutsideScope(receipt.outside_scope, receipt);
 
   const baseline = computeOperationalBaseline(receipt);
   assert(receipt.operational_baseline === baseline, `operational_baseline must be ${baseline}`);
@@ -1085,11 +1085,18 @@ function validateStability(stability, composeContext) {
   assert(stability.error_burst === "NOT_RECORDED", "error burst must remain NOT_RECORDED");
 }
 
-function validateOutsideScope(scope) {
+function validateOutsideScope(scope, receipt) {
   assert(scope.production_backup_sha256 === "NOT_RECORDED", "backup SHA must remain NOT_RECORDED");
   assert(scope.production_off_host_restore === "NOT_RECORDED", "restore result must remain NOT_RECORDED");
   assert(scope.edge_body_limit === "NOT_RECORDED", "edge body-limit must remain NOT_RECORDED");
-  assert(scope.long_term_stability === "NOT_APPLICABLE_BY_GOVERNANCE_DECISION", "long-term stability must remain not applicable by governance");
+  const historicalMs019bValue = receipt.contract_version === HANDOFF_CONTRACT_VERSION && receipt.milestone === HANDOFF_MILESTONE
+    ? "NOT_RECORDED"
+    : "NOT_APPLICABLE_BY_GOVERNANCE_DECISION";
+  assert(
+    scope.long_term_stability === "NOT_APPLICABLE_BY_GOVERNANCE_DECISION" ||
+      scope.long_term_stability === historicalMs019bValue,
+    "long-term stability must remain version-compatible with the receipt contract",
+  );
   assert(scope.artifact_publication === "NOT_PERFORMED", "artifact publication must be NOT_PERFORMED");
   assert(scope.registry_publication === "NOT_PERFORMED", "registry publication must be NOT_PERFORMED");
   assert(scope.git_tag === "NOT_CREATED", "git tag must be NOT_CREATED");

@@ -53,6 +53,8 @@
     "production:operational-smoke:authority:verify": "node scripts/production-operational-smoke-evidence.mjs authority:verify",
     "production:operational-smoke:authority-v2:create": "node scripts/production-operational-smoke-evidence.mjs authority:v2:create",
     "production:operational-smoke:authority-v2:verify": "node scripts/production-operational-smoke-evidence.mjs authority:v2:verify",
+    "production:operational-smoke:authority-v3:create": "node scripts/production-operational-smoke-evidence.mjs authority:v3:create",
+    "production:operational-smoke:authority-v3:verify": "node scripts/production-operational-smoke-evidence.mjs authority:v3:verify",
     "production:operational-smoke:receipt:create": "node scripts/production-operational-smoke-evidence.mjs receipt:create",
     "production:operational-smoke:receipt:verify": "node scripts/production-operational-smoke-evidence.mjs receipt:verify",
     "production:smoke": "node scripts/production-smoke.mjs",

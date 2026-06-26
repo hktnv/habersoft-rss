@@ -48,6 +48,7 @@ try {
   assertReturnedAuthorityPasses(base, success.returnedDir);
   assertUppercaseChecksumManifestPasses(base, success.returnedDir);
   assertMetadataOnlyRebaselineIsBlocked(base, success);
+  assertFreshReturnedAuthorityV3Passes(base, success);
 
   assertBlockedVariants(base);
   assertInterruptedRunHasNoFinalBundle(base);
@@ -530,6 +531,142 @@ function assertMetadataOnlyRebaselineIsBlocked(base, success) {
   ]);
   assert.equal(readJson(receiptFile).outcome, 'BLOCKED_SAMPLE_COVERAGE');
   nodeCliExpectFail(['receipt:verify', '--receipt-file', receiptFile, '--require-ms019f-v2-baseline']);
+}
+
+function assertFreshReturnedAuthorityV3Passes(base, success) {
+  const oldAuthorityFile = path.join(temp, 'old-returned-authority-for-v3.json');
+  nodeCli([
+    'authority:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    success.returnedDir,
+    '--authority-file',
+    oldAuthorityFile,
+  ]);
+
+  const metadataOnlyDir = path.join(temp, 'metadata-only-r3-for-v3');
+  cpSync(success.returnedDir, metadataOnlyDir, { recursive: true });
+  const startedAt = readMetadataValue(metadataOnlyDir, 'started_at_utc');
+  const shiftedStart = new Date(Date.parse(startedAt) + 1_140_000).toISOString().replace('.000Z', 'Z');
+  const shiftedEnd = new Date(Date.parse(shiftedStart) + 1_200_000).toISOString().replace('.000Z', 'Z');
+  replaceMetadataValue(metadataOnlyDir, 'started_at_utc', shiftedStart);
+  replaceMetadataValue(metadataOnlyDir, 'ended_at_utc', shiftedEnd);
+
+  const oldAuthorityV2File = path.join(temp, 'old-returned-authority-v2-for-v3.json');
+  nodeCli([
+    'authority:v2:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    metadataOnlyDir,
+    '--authority-file',
+    oldAuthorityV2File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]);
+
+  const freshDir = path.join(temp, 'fresh-returned-v3');
+  cpSync(success.returnedDir, freshDir, { recursive: true });
+  const freshStart = readMetadataValue(freshDir, 'started_at_utc');
+  const freshEnd = new Date(Date.parse(freshStart) + 1_201_000).toISOString().replace('.000Z', 'Z');
+  replaceMetadataValue(freshDir, 'ended_at_utc', freshEnd);
+  replaceMetadataValue(freshDir, 'elapsed_seconds', '1201');
+
+  const authorityV3File = path.join(temp, 'returned-authority-v3.json');
+  const authorityV3 = JSON.parse(nodeCli([
+    'authority:v3:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    freshDir,
+    '--authority-file',
+    authorityV3File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-authority-v2-file',
+    oldAuthorityV2File,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]).stdout);
+  assert.equal(authorityV3.status, 'production-operational-smoke-returned-authority-v3-created');
+  assert.equal(authorityV3.authoritative_safe_file_count, EVIDENCE_FILES.length);
+
+  const verified = JSON.parse(nodeCli([
+    'authority:v3:verify',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    freshDir,
+    '--authority-file',
+    authorityV3File,
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-authority-v2-file',
+    oldAuthorityV2File,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]).stdout);
+  assert.equal(verified.status, 'production-operational-smoke-returned-authority-v3-verified');
+  assert.equal(verified.authoritative_tree_digest, authorityV3.authoritative_tree_digest);
+
+  const authority = readJson(authorityV3File);
+  assert.equal(authority.record_revision, 3);
+  assert.equal(authority.milestone, 'MS-019F-R4');
+  assert.equal(authority.submission_kind, 'FRESH_REAL_20M_OBSERVER_RUN');
+  assert.equal(authority.fresh_run_claim_requires_bundle_validation, true);
+  assert.equal(authority.operator_transcript_used_as_evidence, false);
+  assert.equal(authority.returned_files_modified_by_codex, false);
+  assert.notEqual(authority.authoritative_tree_digest, authority.superseded_historical_identities.r2_tree_digest);
+  assert.notEqual(authority.authoritative_tree_digest, authority.superseded_historical_identities.r3_tree_digest);
+
+  const reusedV2 = nodeCliExpectFail([
+    'authority:v3:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    success.returnedDir,
+    '--authority-file',
+    path.join(temp, 'reused-v2-authority-v3.json'),
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-authority-v2-file',
+    oldAuthorityV2File,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]);
+  assert.match(reusedV2, /fresh returned identity reused R2 tree digest/u);
+
+  const reusedR3 = nodeCliExpectFail([
+    'authority:v3:create',
+    '--handoff-dir',
+    base.handoffDir,
+    '--freeze-file',
+    base.freezeFile,
+    '--evidence-dir',
+    metadataOnlyDir,
+    '--authority-file',
+    path.join(temp, 'reused-r3-authority-v3.json'),
+    '--old-authority-file',
+    oldAuthorityFile,
+    '--old-authority-v2-file',
+    oldAuthorityV2File,
+    '--old-receipt-file',
+    success.receiptFile,
+  ]);
+  assert.match(reusedR3, /fresh returned identity reused R3 tree digest/u);
 }
 
 function readMetadataValue(evidenceDir, key) {

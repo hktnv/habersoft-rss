@@ -12,9 +12,11 @@ const FREEZE_SCHEMA_VERSION = 'production-operational-smoke-handoff-freeze-v2';
 const RECEIPT_SCHEMA_VERSION = 'production-operational-smoke-receipt-v2';
 const AUTHORITY_SCHEMA_VERSION = 'production-operational-smoke-returned-authority-v1';
 const AUTHORITY_V2_SCHEMA_VERSION = 'production-operational-smoke-returned-authority-v2';
+const AUTHORITY_V3_SCHEMA_VERSION = 'production-operational-smoke-returned-authority-v3';
 const MILESTONE = 'MS-019F';
 const INTAKE_MILESTONE = 'MS-019F-R2';
 const REBASELINE_MILESTONE = 'MS-019F-R3';
+const FRESH_SUBMISSION_MILESTONE = 'MS-019F-R4';
 const SERVICE_NAME = 'main-service';
 const CANONICAL_REMOTE = 'https://github.com/hktnv/habersoft-rss';
 const CLASSIFIER_MODE = 'STABLE_SEVERITY_PREFIX';
@@ -325,11 +327,44 @@ const AUTHORITY_V2_KEYS = Object.freeze([
   'codex_production_contact',
   'production_mutation',
 ]);
+const AUTHORITY_V3_KEYS = Object.freeze([
+  'schema_version',
+  'record_type',
+  'record_revision',
+  'milestone',
+  'service',
+  'environment',
+  'generated_at_utc',
+  'submission_kind',
+  'authority_source',
+  'selected_input_alias',
+  'authoritative_tree_digest',
+  'authoritative_safe_file_count',
+  'safe_inventory',
+  'superseded_historical_identities',
+  'expected_handoff',
+  'expected_contract_version',
+  'parent_receipt_hashes',
+  'fresh_run_claim_requires_bundle_validation',
+  'validation_bypass_granted',
+  'operator_transcript_used_as_evidence',
+  'returned_files_modified_by_codex',
+  'production_contact_performed_by_codex',
+  'production_mutation_performed',
+]);
+const AUTHORITY_V3_SUPERSEDED_KEYS = Object.freeze([
+  'r2_tree_digest',
+  'r2_authority_sha256',
+  'r2_blocked_receipt_sha256',
+  'r3_tree_digest',
+  'r3_authority_v2_sha256',
+]);
 const DEFAULT_HANDOFF_DIR = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-handoff-v2');
 const DEFAULT_FREEZE_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'handoff-v2-freeze.json');
 const DEFAULT_RECEIPT_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-receipt.json');
 const DEFAULT_AUTHORITY_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'production-operational-smoke-returned-v2-authority.json');
 const DEFAULT_AUTHORITY_V2_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'production-operational-smoke-returned-v2-authority-v2.json');
+const DEFAULT_AUTHORITY_V3_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'verification', 'production-operational-smoke-returned-v3-authority.json');
 const DEFAULT_OLD_RECEIPT_FILE = path.join(WORKSPACE_ROOT, 'operator-state', 'ms-019f', 'production-operational-smoke-receipt.json');
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
@@ -402,6 +437,12 @@ async function main() {
     case 'authority:v2:verify':
       printJson(verifyAuthorityV2File(authorityV2File(options), options));
       break;
+    case 'authority:v3:create':
+      printJson(createAuthorityV3(options));
+      break;
+    case 'authority:v3:verify':
+      printJson(verifyAuthorityV3File(authorityV3File(options), options));
+      break;
     case 'receipt:create':
       printJson(createReceipt(options));
       break;
@@ -412,7 +453,7 @@ async function main() {
       printJson(runGeneratedHandoffFixture(options));
       break;
     default:
-      fail(`usage: production-operational-smoke-evidence <source:verify|handoff|handoff:verify|handoff:freeze|handoff:freeze:verify|authority:create|authority:verify|authority:v2:create|authority:v2:verify|receipt:create|receipt:verify|fixture:e2e>`);
+      fail(`usage: production-operational-smoke-evidence <source:verify|handoff|handoff:verify|handoff:freeze|handoff:freeze:verify|authority:create|authority:verify|authority:v2:create|authority:v2:verify|authority:v3:create|authority:v3:verify|receipt:create|receipt:verify|fixture:e2e>`);
   }
 }
 
@@ -423,6 +464,7 @@ function parseArgs(rawArgs) {
     receiptFile: DEFAULT_RECEIPT_FILE,
     authorityFile: DEFAULT_AUTHORITY_FILE,
     oldAuthorityFile: DEFAULT_AUTHORITY_FILE,
+    oldAuthorityV2File: DEFAULT_AUTHORITY_V2_FILE,
     oldReceiptFile: DEFAULT_OLD_RECEIPT_FILE,
     evidenceDir: '',
     fixtureResult: 'NOT_RUN',
@@ -453,6 +495,9 @@ function parseArgs(rawArgs) {
         break;
       case '--old-authority-file':
         options.oldAuthorityFile = path.resolve(next());
+        break;
+      case '--old-authority-v2-file':
+        options.oldAuthorityV2File = path.resolve(next());
         break;
       case '--old-receipt-file':
         options.oldReceiptFile = path.resolve(next());
@@ -898,21 +943,10 @@ function createAuthorityV2FromEvidence(options) {
 
 function verifyAuthorityV2Object(authority, options) {
   assertExactObjectKeys(authority, AUTHORITY_V2_KEYS, 'authority-v2 keys');
-  assert(authority.schema_version === AUTHORITY_V2_SCHEMA_VERSION, 'authority-v2 schema mismatch');
-  assert(authority.record_type === 'PRODUCTION_OPERATIONAL_SMOKE_RETURNED_AUTHORITY', 'authority-v2 record type mismatch');
-  assert(authority.record_revision === 2, 'authority-v2 revision mismatch');
-  assert(authority.milestone === REBASELINE_MILESTONE, 'authority-v2 milestone mismatch');
-  assert(authority.service === SERVICE_NAME, 'authority-v2 service mismatch');
-  assert(authority.environment === 'production', 'authority-v2 environment mismatch');
-  assert(new Date(authority.generated_at_utc).toISOString() === authority.generated_at_utc, 'authority-v2 generated timestamp malformed');
-  assert(authority.authority_source === 'HUMAN_OPERATOR_EXPLICIT_TIME_SYNC_CORRECTION_SUBMISSION', 'authority-v2 source mismatch');
-  assert(authority.operator_reported_time_sync_corrected === true, 'authority-v2 time sync flag mismatch');
-  assert(authority.operator_reported_checksum_updated === true, 'authority-v2 checksum flag mismatch');
-  assert(authority.checksum_alone_is_duration_evidence === false, 'authority-v2 checksum evidence flag mismatch');
-  assert(authority.validation_bypass_granted === false, 'authority-v2 bypass flag mismatch');
-  assert(authority.selected_input_alias === 'production-operational-smoke-returned-v2', 'authority-v2 selected input mismatch');
-  assert(authority.current_safe_file_count === EVIDENCE_FILES.length, 'authority-v2 file count mismatch');
-  assert(Array.isArray(authority.current_safe_inventory), 'authority-v2 inventory must be an array');
+  verifyAuthorityV2StaticFields(authority);
+  if (options.skipEvidenceMatch === true) {
+    return;
+  }
   const currentInventory = safeFileInventory(options.evidenceDir, EVIDENCE_FILES);
   assertSameObject(authority.current_safe_inventory, currentInventory, 'authority-v2 current inventory mismatch');
   assert(authority.current_tree_digest === treeDigest(currentInventory), 'authority-v2 current tree digest mismatch');
@@ -939,6 +973,157 @@ function verifyAuthorityV2Object(authority, options) {
   assert(authority.production_mutation === false, 'authority-v2 production mutation flag mismatch');
 }
 
+function verifyAuthorityV2StaticFields(authority) {
+  assert(authority.schema_version === AUTHORITY_V2_SCHEMA_VERSION, 'authority-v2 schema mismatch');
+  assert(authority.record_type === 'PRODUCTION_OPERATIONAL_SMOKE_RETURNED_AUTHORITY', 'authority-v2 record type mismatch');
+  assert(authority.record_revision === 2, 'authority-v2 revision mismatch');
+  assert(authority.milestone === REBASELINE_MILESTONE, 'authority-v2 milestone mismatch');
+  assert(authority.service === SERVICE_NAME, 'authority-v2 service mismatch');
+  assert(authority.environment === 'production', 'authority-v2 environment mismatch');
+  assert(new Date(authority.generated_at_utc).toISOString() === authority.generated_at_utc, 'authority-v2 generated timestamp malformed');
+  assert(authority.authority_source === 'HUMAN_OPERATOR_EXPLICIT_TIME_SYNC_CORRECTION_SUBMISSION', 'authority-v2 source mismatch');
+  assert(authority.operator_reported_time_sync_corrected === true, 'authority-v2 time sync flag mismatch');
+  assert(authority.operator_reported_checksum_updated === true, 'authority-v2 checksum flag mismatch');
+  assert(authority.checksum_alone_is_duration_evidence === false, 'authority-v2 checksum evidence flag mismatch');
+  assert(authority.validation_bypass_granted === false, 'authority-v2 bypass flag mismatch');
+  assert(authority.selected_input_alias === 'production-operational-smoke-returned-v2', 'authority-v2 selected input mismatch');
+  assert(authority.current_safe_file_count === EVIDENCE_FILES.length, 'authority-v2 file count mismatch');
+  assert(Array.isArray(authority.current_safe_inventory), 'authority-v2 inventory must be an array');
+  assertExactObjectKeys(authority.expected_handoff, AUTHORITY_HANDOFF_KEYS, 'authority-v2 handoff keys');
+  assert(authority.expected_handoff.contract_version === CONTRACT_VERSION, 'authority-v2 contract version mismatch');
+  assertSameObject(authority.parent_receipt_hashes, PARENT_RECEIPT_HASHES, 'authority-v2 parent receipt hash mismatch');
+  assert(authority.returned_files_modified_by_codex === false, 'authority-v2 returned modification flag mismatch');
+  assert(authority.codex_production_contact === false, 'authority-v2 production contact flag mismatch');
+  assert(authority.production_mutation === false, 'authority-v2 production mutation flag mismatch');
+}
+
+function createAuthorityV3(options) {
+  assert(options.evidenceDir !== '', '--evidence-dir is required');
+  const outputFile = authorityV3File(options);
+  assertNoOverwrite(outputFile);
+  const authority = createAuthorityV3FromEvidence(options);
+  ensureDir(path.dirname(outputFile));
+  writeJson(outputFile, authority);
+  return {
+    status: 'production-operational-smoke-returned-authority-v3-created',
+    authority_file: outputFile,
+    sha256: sha256File(outputFile),
+    authoritative_tree_digest: authority.authoritative_tree_digest,
+    authoritative_safe_file_count: authority.authoritative_safe_file_count,
+  };
+}
+
+function verifyAuthorityV3File(authorityFile, options) {
+  const authority = JSON.parse(readAndValidateTextFile(path.dirname(authorityFile), path.basename(authorityFile)));
+  verifyAuthorityV3Object(authority, options);
+  return {
+    status: 'production-operational-smoke-returned-authority-v3-verified',
+    authority_file: authorityFile,
+    sha256: sha256File(authorityFile),
+    authoritative_tree_digest: authority.authoritative_tree_digest,
+    authoritative_safe_file_count: authority.authoritative_safe_file_count,
+  };
+}
+
+function createAuthorityV3FromEvidence(options) {
+  assertExactInventory(options.evidenceDir, EVIDENCE_FILES);
+  const handoff = verifyHandoff(options.handoffDir);
+  const freeze = verifyFreeze(options.handoffDir, options.freezeFile);
+  const oldAuthority = JSON.parse(readAndValidateTextFile(path.dirname(options.oldAuthorityFile), path.basename(options.oldAuthorityFile)));
+  verifyAuthorityObject(oldAuthority, { ...options, skipEvidenceMatch: true });
+  const oldAuthorityV2 = JSON.parse(readAndValidateTextFile(path.dirname(options.oldAuthorityV2File), path.basename(options.oldAuthorityV2File)));
+  verifyAuthorityV2Object(oldAuthorityV2, { ...options, skipEvidenceMatch: true });
+  const inventory = safeFileInventory(options.evidenceDir, EVIDENCE_FILES);
+  const currentTreeDigest = treeDigest(inventory);
+  assert(currentTreeDigest !== oldAuthority.authoritative_tree_digest, 'fresh returned identity reused R2 tree digest');
+  assert(currentTreeDigest !== oldAuthorityV2.current_tree_digest, 'fresh returned identity reused R3 tree digest');
+  return {
+    schema_version: AUTHORITY_V3_SCHEMA_VERSION,
+    record_type: 'PRODUCTION_OPERATIONAL_SMOKE_RETURNED_AUTHORITY',
+    record_revision: 3,
+    milestone: FRESH_SUBMISSION_MILESTONE,
+    service: SERVICE_NAME,
+    environment: 'production',
+    generated_at_utc: new Date().toISOString(),
+    submission_kind: 'FRESH_REAL_20M_OBSERVER_RUN',
+    authority_source: 'HUMAN_OPERATOR_EXPLICIT_FRESH_SUBMISSION',
+    selected_input_alias: 'production-operational-smoke-returned-v3',
+    authoritative_tree_digest: currentTreeDigest,
+    authoritative_safe_file_count: inventory.length,
+    safe_inventory: inventory,
+    superseded_historical_identities: {
+      r2_tree_digest: oldAuthority.authoritative_tree_digest,
+      r2_authority_sha256: sha256File(options.oldAuthorityFile),
+      r2_blocked_receipt_sha256: sha256File(options.oldReceiptFile),
+      r3_tree_digest: oldAuthorityV2.current_tree_digest,
+      r3_authority_v2_sha256: sha256File(options.oldAuthorityV2File),
+    },
+    expected_handoff: {
+      source_commit: handoff.source_commit,
+      manifest_sha256: handoff.manifest_sha256,
+      observer_sha256: handoff.observer_sha256,
+      contract_version: CONTRACT_VERSION,
+      contract_sha256: handoff.contract_sha256,
+      freeze_sha256: freeze.freeze_sha256,
+    },
+    expected_contract_version: CONTRACT_VERSION,
+    parent_receipt_hashes: { ...PARENT_RECEIPT_HASHES },
+    fresh_run_claim_requires_bundle_validation: true,
+    validation_bypass_granted: false,
+    operator_transcript_used_as_evidence: false,
+    returned_files_modified_by_codex: false,
+    production_contact_performed_by_codex: false,
+    production_mutation_performed: false,
+  };
+}
+
+function verifyAuthorityV3Object(authority, options) {
+  assertExactObjectKeys(authority, AUTHORITY_V3_KEYS, 'authority-v3 keys');
+  assert(authority.schema_version === AUTHORITY_V3_SCHEMA_VERSION, 'authority-v3 schema mismatch');
+  assert(authority.record_type === 'PRODUCTION_OPERATIONAL_SMOKE_RETURNED_AUTHORITY', 'authority-v3 record type mismatch');
+  assert(authority.record_revision === 3, 'authority-v3 revision mismatch');
+  assert(authority.milestone === FRESH_SUBMISSION_MILESTONE, 'authority-v3 milestone mismatch');
+  assert(authority.service === SERVICE_NAME, 'authority-v3 service mismatch');
+  assert(authority.environment === 'production', 'authority-v3 environment mismatch');
+  assert(new Date(authority.generated_at_utc).toISOString() === authority.generated_at_utc, 'authority-v3 generated timestamp malformed');
+  assert(authority.submission_kind === 'FRESH_REAL_20M_OBSERVER_RUN', 'authority-v3 submission kind mismatch');
+  assert(authority.authority_source === 'HUMAN_OPERATOR_EXPLICIT_FRESH_SUBMISSION', 'authority-v3 source mismatch');
+  assert(authority.selected_input_alias === 'production-operational-smoke-returned-v3', 'authority-v3 selected input mismatch');
+  assert(authority.authoritative_safe_file_count === EVIDENCE_FILES.length, 'authority-v3 file count mismatch');
+  const currentInventory = safeFileInventory(options.evidenceDir, EVIDENCE_FILES);
+  assertSameObject(authority.safe_inventory, currentInventory, 'authority-v3 inventory mismatch');
+  assert(authority.authoritative_tree_digest === treeDigest(currentInventory), 'authority-v3 tree digest mismatch');
+  assertExactObjectKeys(authority.superseded_historical_identities, AUTHORITY_V3_SUPERSEDED_KEYS, 'authority-v3 superseded identity keys');
+  const oldAuthority = JSON.parse(readAndValidateTextFile(path.dirname(options.oldAuthorityFile), path.basename(options.oldAuthorityFile)));
+  verifyAuthorityObject(oldAuthority, { ...options, skipEvidenceMatch: true });
+  const oldAuthorityV2 = JSON.parse(readAndValidateTextFile(path.dirname(options.oldAuthorityV2File), path.basename(options.oldAuthorityV2File)));
+  verifyAuthorityV2Object(oldAuthorityV2, { ...options, skipEvidenceMatch: true });
+  assert(authority.superseded_historical_identities.r2_tree_digest === oldAuthority.authoritative_tree_digest, 'authority-v3 R2 tree mismatch');
+  assert(authority.superseded_historical_identities.r2_authority_sha256 === sha256File(options.oldAuthorityFile), 'authority-v3 R2 authority checksum mismatch');
+  assert(authority.superseded_historical_identities.r2_blocked_receipt_sha256 === sha256File(options.oldReceiptFile), 'authority-v3 R2 receipt checksum mismatch');
+  assert(authority.superseded_historical_identities.r3_tree_digest === oldAuthorityV2.current_tree_digest, 'authority-v3 R3 tree mismatch');
+  assert(authority.superseded_historical_identities.r3_authority_v2_sha256 === sha256File(options.oldAuthorityV2File), 'authority-v3 R3 authority checksum mismatch');
+  assert(authority.authoritative_tree_digest !== oldAuthority.authoritative_tree_digest, 'authority-v3 reused R2 tree digest');
+  assert(authority.authoritative_tree_digest !== oldAuthorityV2.current_tree_digest, 'authority-v3 reused R3 tree digest');
+  assertExactObjectKeys(authority.expected_handoff, AUTHORITY_HANDOFF_KEYS, 'authority-v3 handoff keys');
+  const handoff = verifyHandoff(options.handoffDir);
+  const freeze = verifyFreeze(options.handoffDir, options.freezeFile);
+  assert(authority.expected_handoff.source_commit === handoff.source_commit, 'authority-v3 source commit mismatch');
+  assert(authority.expected_handoff.manifest_sha256 === handoff.manifest_sha256, 'authority-v3 manifest checksum mismatch');
+  assert(authority.expected_handoff.observer_sha256 === handoff.observer_sha256, 'authority-v3 observer checksum mismatch');
+  assert(authority.expected_handoff.contract_version === CONTRACT_VERSION, 'authority-v3 contract version mismatch');
+  assert(authority.expected_handoff.contract_sha256 === handoff.contract_sha256, 'authority-v3 contract checksum mismatch');
+  assert(authority.expected_handoff.freeze_sha256 === freeze.freeze_sha256, 'authority-v3 freeze checksum mismatch');
+  assert(authority.expected_contract_version === CONTRACT_VERSION, 'authority-v3 expected contract version mismatch');
+  assertSameObject(authority.parent_receipt_hashes, PARENT_RECEIPT_HASHES, 'authority-v3 parent hash mismatch');
+  assert(authority.fresh_run_claim_requires_bundle_validation === true, 'authority-v3 validation requirement mismatch');
+  assert(authority.validation_bypass_granted === false, 'authority-v3 bypass flag mismatch');
+  assert(authority.operator_transcript_used_as_evidence === false, 'authority-v3 transcript flag mismatch');
+  assert(authority.returned_files_modified_by_codex === false, 'authority-v3 returned mutation flag mismatch');
+  assert(authority.production_contact_performed_by_codex === false, 'authority-v3 production contact flag mismatch');
+  assert(authority.production_mutation_performed === false, 'authority-v3 production mutation flag mismatch');
+}
+
 function changedFilesFromOldAuthority(currentInventory, oldInventory) {
   const oldByName = Object.fromEntries(oldInventory.map((item) => [item.relative_path, item]));
   return currentInventory
@@ -959,6 +1144,10 @@ function classifyBundleChange(changedFiles) {
 
 function authorityV2File(options) {
   return options.authorityFile === DEFAULT_AUTHORITY_FILE ? DEFAULT_AUTHORITY_V2_FILE : options.authorityFile;
+}
+
+function authorityV3File(options) {
+  return options.authorityFile === DEFAULT_AUTHORITY_FILE ? DEFAULT_AUTHORITY_V3_FILE : options.authorityFile;
 }
 
 function createReceipt(options) {
