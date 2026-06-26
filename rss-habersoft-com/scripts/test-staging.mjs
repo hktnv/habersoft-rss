@@ -788,6 +788,7 @@ function formatTestEnv(env) {
 function resolveAuthoritativeContractFile() {
   const candidates = [
     process.env.STAGING_IDP_CONTRACT_FILE,
+    path.resolve("..", "..", "..", "auth-habersoft-com", ".docs", "07-staging-contract.md"),
     path.resolve("..", "..", "auth-habersoft-com", ".docs", "07-staging-contract.md")
   ].filter(Boolean);
   const contractFile = candidates.find((candidate) => existsSync(candidate));
