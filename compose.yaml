@@ -1,7 +1,7 @@
 name: habersoft-rss-local
 
 x-main-service-image: &main-service-image
-  image: main-service-app:0.1.0-ms-017
+  image: ${RSS_HABERSOFT_COM_IMAGE:-main-service-app:0.1.0-ms-017}
   build:
     context: ./rss-habersoft-com
     dockerfile: Dockerfile
@@ -78,6 +78,14 @@ services:
       AGENT_KEY: ${AGENT_KEY:-replace_with_local_only_agent_key_at_least_32_bytes}
       CHECKED_AT_MAX_FUTURE_SKEW_SECONDS: ${CHECKED_AT_MAX_FUTURE_SKEW_SECONDS:-60}
       CHECKED_AT_MAX_AGE_SECONDS: ${CHECKED_AT_MAX_AGE_SECONDS:-900}
+      ADMIN_UI_AUTH_MODE: ${ADMIN_UI_AUTH_MODE:-disabled}
+      ADMIN_UI_ADMIN_USERNAME: ${ADMIN_UI_ADMIN_USERNAME:-}
+      ADMIN_UI_ADMIN_PASSWORD_HASH: ${ADMIN_UI_ADMIN_PASSWORD_HASH:-}
+      ADMIN_UI_SESSION_SECRET: ${ADMIN_UI_SESSION_SECRET:-}
+      ADMIN_UI_SESSION_TTL_SECONDS: ${ADMIN_UI_SESSION_TTL_SECONDS:-3600}
+      ADMIN_UI_SESSION_COOKIE_NAME: ${ADMIN_UI_SESSION_COOKIE_NAME:-habersoft_admin_session}
+      ADMIN_UI_SESSION_COOKIE_SECURE: ${ADMIN_UI_SESSION_COOKIE_SECURE:-false}
+      ADMIN_UI_SESSION_REDIS_PREFIX: ${ADMIN_UI_SESSION_REDIS_PREFIX:-admin_auth:local}
     ports:
       - "127.0.0.1:${API_HOST_PORT:-3000}:3000"
     depends_on:
@@ -137,12 +145,13 @@ services:
       start_period: 10s
 
   rss-admin-ui:
-    image: rss-admin-ui:0.1.0
+    image: ${RSS_ADMIN_UI_IMAGE:-rss-admin-ui:0.1.0}
     build:
       context: ./rss-admin-ui
       dockerfile: Dockerfile
     environment:
       ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: http://main-service-api:3000
+      ADMIN_UI_AUTH_UPSTREAM_ORIGIN: ${ADMIN_UI_AUTH_UPSTREAM_ORIGIN:-}
       ADMIN_UI_ENVIRONMENT_NAME: ${ADMIN_UI_ENVIRONMENT_NAME:-local}
     ports:
       - "127.0.0.1:${ADMIN_UI_HOST_PORT:-8081}:8080"

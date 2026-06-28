@@ -20,6 +20,7 @@ export type RuntimeConfig = {
   readonly tenantRateLimit?: TenantRateLimitConfig;
   readonly agentAuth?: AgentAuthConfig;
   readonly agentEntries?: AgentEntriesConfig;
+  readonly adminAuth?: AdminAuthConfig;
   readonly maintenance?: MaintenanceConfig;
 };
 
@@ -51,6 +52,23 @@ export type AgentEntriesConfig = {
   readonly checkedAtMaxAgeSeconds: number;
 };
 
+export type AdminAuthMode = "disabled" | "single_admin";
+
+export type AdminAuthConfig =
+  | {
+      readonly mode: "disabled";
+    }
+  | {
+      readonly mode: "single_admin";
+      readonly username: string;
+      readonly passwordHash: string;
+      readonly sessionSecret: string;
+      readonly sessionTtlSeconds: number;
+      readonly sessionCookieName: string;
+      readonly sessionCookieSecure: boolean;
+      readonly redisPrefix: string;
+    };
+
 export type MaintenanceConfig = {
   readonly entryRetentionDays: number;
   readonly entryMaxPerFeed: number;
@@ -78,6 +96,7 @@ type RawEnvironment = Record<string, string | undefined>;
 const appEnvironments = new Set<AppEnvironment>(["local", "test", "production"]);
 const logLevels = new Set<LogLevel>(["debug", "info", "warn", "error"]);
 const runtimeRoles = new Set<RuntimeRole>(["api", "worker"]);
+const adminAuthModes = new Set<AdminAuthMode>(["disabled", "single_admin"]);
 export const localAgentKeyPlaceholder = "replace_with_local_only_agent_key_at_least_32_bytes";
 
 export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole): RuntimeConfig {
@@ -114,6 +133,23 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
             checkedAtMaxFutureSkewSeconds: env.CHECKED_AT_MAX_FUTURE_SKEW_SECONDS,
             checkedAtMaxAgeSeconds: env.CHECKED_AT_MAX_AGE_SECONDS
           },
+          issues
+        )
+      : undefined;
+  const adminAuth =
+    expectedRole === "api"
+      ? requireAdminAuthConfig(
+          {
+            mode: env.ADMIN_UI_AUTH_MODE,
+            username: env.ADMIN_UI_ADMIN_USERNAME,
+            passwordHash: env.ADMIN_UI_ADMIN_PASSWORD_HASH,
+            sessionSecret: env.ADMIN_UI_SESSION_SECRET,
+            sessionTtlSeconds: env.ADMIN_UI_SESSION_TTL_SECONDS,
+            sessionCookieName: env.ADMIN_UI_SESSION_COOKIE_NAME,
+            sessionCookieSecure: env.ADMIN_UI_SESSION_COOKIE_SECURE,
+            redisPrefix: env.ADMIN_UI_SESSION_REDIS_PREFIX
+          },
+          environment,
           issues
         )
       : undefined;
@@ -161,6 +197,7 @@ export function loadRuntimeConfig(env: RawEnvironment, expectedRole: RuntimeRole
     ...(tenantRateLimit === undefined ? {} : { tenantRateLimit }),
     ...(agentAuth === undefined ? {} : { agentAuth }),
     ...(agentEntries === undefined ? {} : { agentEntries }),
+    ...(adminAuth === undefined ? {} : { adminAuth }),
     ...(maintenance === undefined ? {} : { maintenance })
   };
 }
@@ -288,6 +325,108 @@ function requireAgentEntriesConfig(
   };
 }
 
+function requireAdminAuthConfig(
+  values: {
+    readonly mode: string | undefined;
+    readonly username: string | undefined;
+    readonly passwordHash: string | undefined;
+    readonly sessionSecret: string | undefined;
+    readonly sessionTtlSeconds: string | undefined;
+    readonly sessionCookieName: string | undefined;
+    readonly sessionCookieSecure: string | undefined;
+    readonly redisPrefix: string | undefined;
+  },
+  environment: AppEnvironment | undefined,
+  issues: string[]
+): AdminAuthConfig {
+  const mode = values.mode === undefined || values.mode.trim() === "" ? "disabled" : values.mode;
+
+  if (!adminAuthModes.has(mode as AdminAuthMode)) {
+    issues.push("ADMIN_UI_AUTH_MODE is invalid");
+    return { mode: "disabled" };
+  }
+
+  if (mode === "disabled") {
+    return { mode: "disabled" };
+  }
+
+  const username = requireText(values.username, "ADMIN_UI_ADMIN_USERNAME", issues);
+  const passwordHash = requireText(values.passwordHash, "ADMIN_UI_ADMIN_PASSWORD_HASH", issues);
+  const sessionSecret = requireText(values.sessionSecret, "ADMIN_UI_SESSION_SECRET", issues);
+  const sessionTtlSeconds = parseOptionalPositiveInteger(
+    values.sessionTtlSeconds,
+    "ADMIN_UI_SESSION_TTL_SECONDS",
+    3600,
+    issues
+  );
+  const sessionCookieName = values.sessionCookieName?.trim() === "" || values.sessionCookieName === undefined
+    ? "habersoft_admin_session"
+    : values.sessionCookieName;
+  const sessionCookieSecure = parseOptionalBoolean(
+    values.sessionCookieSecure,
+    "ADMIN_UI_SESSION_COOKIE_SECURE",
+    environment === "production",
+    issues
+  );
+  const redisPrefix = values.redisPrefix?.trim() === "" || values.redisPrefix === undefined
+    ? "admin_auth:session"
+    : values.redisPrefix;
+
+  if (username !== "") {
+    if (username.trim() !== username) {
+      issues.push("ADMIN_UI_ADMIN_USERNAME must not include leading or trailing whitespace");
+    }
+
+    if (username.length > 128 || containsAsciiControlCharacter(username)) {
+      issues.push("ADMIN_UI_ADMIN_USERNAME must be 1-128 visible characters");
+    }
+  }
+
+  if (
+    passwordHash !== "" &&
+    !/^pbkdf2-sha256\$[1-9][0-9]{4,}\$[A-Za-z0-9_-]{16,}\$[A-Za-z0-9_-]{32,}$/u.test(passwordHash)
+  ) {
+    issues.push("ADMIN_UI_ADMIN_PASSWORD_HASH must use the pbkdf2-sha256 encoded hash format");
+  }
+
+  if (sessionSecret !== "") {
+    if (Buffer.byteLength(sessionSecret, "utf8") < 32) {
+      issues.push("ADMIN_UI_SESSION_SECRET must be at least 32 UTF-8 bytes");
+    }
+
+    if (containsAsciiControlCharacter(sessionSecret)) {
+      issues.push("ADMIN_UI_SESSION_SECRET must not contain ASCII control characters");
+    }
+
+    if (environment === "production" && (sessionSecret.includes("replace_with") || sessionSecret.includes("local_only"))) {
+      issues.push("ADMIN_UI_SESSION_SECRET must be explicit in production");
+    }
+  }
+
+  if (!/^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$/u.test(sessionCookieName)) {
+    issues.push("ADMIN_UI_SESSION_COOKIE_NAME may contain only letters, digits, underscore, and hyphen");
+  }
+
+  if (!/^[a-z0-9:_-]+$/u.test(redisPrefix)) {
+    issues.push("ADMIN_UI_SESSION_REDIS_PREFIX may contain only lowercase letters, digits, colon, underscore, and hyphen");
+  }
+
+  if (environment === "production" && !sessionCookieSecure) {
+    issues.push("ADMIN_UI_SESSION_COOKIE_SECURE must be true in production");
+  }
+
+  return {
+    mode: "single_admin",
+    username,
+    passwordHash,
+    sessionSecret,
+    sessionTtlSeconds,
+    sessionCookieName,
+    sessionCookieSecure,
+    redisPrefix
+  };
+}
+
 function requireMaintenanceConfig(
   values: {
     readonly entryRetentionDays: string | undefined;
@@ -390,6 +529,35 @@ function requirePositiveInteger(value: string | undefined, name: string, issues:
   }
 
   return parsed;
+}
+
+function parseOptionalPositiveInteger(
+  value: string | undefined,
+  name: string,
+  fallback: number,
+  issues: string[]
+): number {
+  if (value === undefined || value.trim() === "") {
+    return fallback;
+  }
+
+  return requirePositiveInteger(value, name, issues);
+}
+
+function parseOptionalBoolean(
+  value: string | undefined,
+  name: string,
+  fallback: boolean,
+  issues: string[]
+): boolean {
+  if (value === undefined || value.trim() === "") {
+    return fallback;
+  }
+
+  if (value === "true") return true;
+  if (value === "false") return false;
+  issues.push(`${name} must be true or false`);
+  return fallback;
 }
 
 function requireUrl(

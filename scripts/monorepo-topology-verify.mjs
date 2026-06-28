@@ -56,6 +56,7 @@ const requiredFrontendFiles = [
   "src/status/StatusDashboard.tsx",
   "scripts/auth-boundary-verify.mjs",
   "scripts/auth-session-sentinel-harness.mjs",
+  "scripts/auth-proxy-harness.mjs",
   "scripts/production-readiness-verify.mjs",
   "tests/app-shell.test.tsx",
   "tests/admin-session-boundary.test.ts",
@@ -73,6 +74,11 @@ const protectedBackendPaths = [
   "package.json",
   "package-lock.json"
 ];
+const allowedBackendAdminAuthDelta = new Set([
+  "src/api.module.ts",
+  "src/bootstrap/api-entrypoint.ts",
+  "src/configuration/runtime-config.ts"
+]);
 
 assertDirectory(backendRoot);
 assertDirectory(frontendRoot);
@@ -100,7 +106,7 @@ console.log(JSON.stringify({
   topology: "POLYREPO_STYLE_SINGLE_GIT_MONOREPO",
   migration_base: migrationBase,
   project_roots: [backendRoot, frontendRoot],
-  backend_protected_content: "byte-identical",
+  backend_protected_content: "byte-identical-except-ms022a-admin-auth-delta",
   nested_git: false
 }, null, 2));
 
@@ -165,11 +171,12 @@ function assertRootDocs() {
     failures.push("backend production guide lost accepted evidence history");
   }
   if (
-    !frontendProduction.includes("MS-021B_SAME_ORIGIN_AUTH_SENTINEL_ONLY") ||
+    !frontendProduction.includes("MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY") ||
     !frontendProduction.includes("/admin-auth/session") ||
+    !frontendProduction.includes("/admin-auth/login") ||
     !frontendProduction.includes("NOT_DEPLOYED")
   ) {
-    failures.push("frontend production guide must state MS-021B auth sentinel and not deployed");
+    failures.push("frontend production guide must state MS-022A auth foundation and not deployed");
   }
   if (/byte-identical mirror/iu.test(rootProduction) || /operator mirror PRODUCTION\.md SHA-256/iu.test(rootProduction)) {
     failures.push("root production guide still claims old mirror contract");
@@ -222,6 +229,9 @@ function assertProtectedBackendContent() {
       continue;
     }
     for (const oldFile of oldFiles) {
+      if (allowedBackendAdminAuthDelta.has(toPosix(oldFile))) {
+        continue;
+      }
       const newFile = toPosix(path.join(backendRoot, oldFile));
       if (!existsSync(path.join(root, newFile))) {
         failures.push(`protected file missing after move: ${newFile}`);

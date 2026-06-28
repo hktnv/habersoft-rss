@@ -8,54 +8,64 @@ import {
   resolveAdminAuthBoundaryState,
   type AdminAuthBoundaryState
 } from "../src/auth/adminSessionBoundary";
+import type { AdminSessionStatus } from "../src/auth/adminSessionClient";
 
 describe("admin auth/session boundary", () => {
-  it("defaults to not configured and never authenticated", () => {
-    expect(resolveAdminAuthBoundaryState()).toEqual({ kind: "not_configured" });
-    expect(defaultAdminAuthBoundaryState.kind).toBe("not_configured");
-    expect(JSON.stringify(resolveAdminAuthBoundaryState())).not.toMatch(/authenticated/i);
+  it("defaults to same-origin session support without an authenticated default", () => {
+    expect(resolveAdminAuthBoundaryState()).toEqual({ kind: "same_origin_session" });
+    expect(defaultAdminAuthBoundaryState.kind).toBe("same_origin_session");
+    expect(
+      canRenderProtectedAdminContent(resolveAdminAuthBoundaryState(), {
+        kind: "unauthenticated",
+        message: "Admin authentication is required."
+      })
+    ).toBe(false);
   });
 
-  it("does not allow protected admin content for any current boundary state", () => {
+  it("allows protected admin content only for the authenticated session state", () => {
+    const authenticated: AdminSessionStatus = {
+      kind: "authenticated",
+      message: "Admin session is authenticated.",
+      principal: { kind: "single_admin", displayName: "Admin" },
+      expiresAt: "2026-06-20T00:00:00.000Z"
+    };
     const states: AdminAuthBoundaryState[] = [
+      { kind: "same_origin_session" },
       { kind: "not_configured" },
       { kind: "authority_required", requirements: futureAdminAuthorityRequirements },
-      { kind: "blocked", reason: "real_auth_not_implemented" },
+      { kind: "blocked", reason: "admin_auth_not_configured" },
       { kind: "blocked", reason: "authority_required_before_business_admin_features" },
       { kind: "blocked", reason: "configuration_missing" }
     ];
 
-    for (const state of states) {
-      expect(canRenderProtectedAdminContent(state)).toBe(false);
-      expect(describeAdminAuthBoundaryState(state)).not.toMatch(/welcome|tenant|feed count|admin@example/i);
+    expect(canRenderProtectedAdminContent({ kind: "same_origin_session" }, authenticated)).toBe(true);
+    for (const state of states.slice(1)) {
+      expect(canRenderProtectedAdminContent(state, authenticated)).toBe(false);
+      expect(describeAdminAuthBoundaryState(state)).not.toMatch(/tenant id|feed count|admin@example/i);
     }
   });
 
-  it("records future authority blockers without implementing credential flow", () => {
+  it("records implemented auth/session transport and remaining future authority blockers", () => {
     expect(futureAdminAuthorityRequirements).toEqual([
-      "browser_session_authority",
-      "credential_transport_policy",
-      "token_storage_policy",
       "csrf_xss_stance",
-      "refresh_logout_semantics",
-      "same_origin_edge_policy",
       "tenant_admin_identity_boundary",
       "role_permission_model",
       "authenticated_field_classification",
       "backend_route_inventory",
-      "production_activation_evidence"
+      "production_activation_evidence",
+      "production_secret_provisioning"
     ]);
     expect(adminAuthBoundaryContract).toMatchObject({
-      statusDashboardPublic: true,
+      statusDashboardPublic: false,
       protectedAdminShellPresent: true,
-      realAuthImplemented: false,
+      realAuthImplemented: true,
       defaultAllowsProtectedContent: false,
-      browserCredentialExchangeImplemented: false,
+      browserCredentialExchangeImplemented: true,
       browserCredentialPersistenceImplemented: false,
       fakeAdminIdentityAllowed: false,
       privilegedBusinessDataAllowed: false,
       adminApiWritesImplemented: false,
-      futureAuthorityRequired: true
+      futureAuthorityRequiredBeforeBusinessAdminFeatures: true
     });
   });
 });

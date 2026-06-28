@@ -247,23 +247,24 @@ button:disabled {
 }
 
 .protected-admin-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
-  gap: 20px;
-  margin: 0 32px 32px;
-  border-top: 1px solid #d9e0e7;
-  border-bottom: 1px solid #d9e0e7;
-  padding: 24px 0;
+  min-height: 100vh;
 }
 
-.protected-admin-shell h2 {
-  margin-bottom: 8px;
-  font-size: 1rem;
+.protected-admin-gate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  border-bottom: 1px solid #d9e0e7;
+  padding: 32px;
+}
+
+.protected-admin-gate h1 {
+  max-width: 760px;
 }
 
 .protected-admin-status {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin: 0;
 }
@@ -276,13 +277,103 @@ button:disabled {
   padding: 12px;
 }
 
+.admin-login-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 260px) minmax(160px, 260px) auto;
+  gap: 10px;
+  align-items: end;
+  max-width: 760px;
+}
+
+.admin-login-form label {
+  color: #64717d;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.admin-login-form input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #b9c4cd;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #182027;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.admin-login-form input:focus-visible {
+  outline: 3px solid #8fcbbd;
+  outline-offset: 2px;
+}
+
+.admin-login-form label:nth-of-type(1),
+.admin-login-form input:nth-of-type(1) {
+  grid-column: 1;
+}
+
+.admin-login-form label:nth-of-type(2),
+.admin-login-form input:nth-of-type(2) {
+  grid-column: 2;
+}
+
+.admin-login-form button {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.form-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #a23a3a;
+  font-weight: 700;
+}
+
+.authenticated-toolbar {
+  display: flex;
+  max-width: 760px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.authenticated-toolbar p {
+  margin: 0;
+  color: #4d5b66;
+}
+
+.protected-admin-slot .app-shell {
+  padding-top: 24px;
+}
+
 @media (max-width: 900px) {
   .workspace-band,
   .panel-grid,
   .summary-row,
-  .protected-admin-shell,
   .protected-admin-status {
     grid-template-columns: 1fr;
+  }
+
+  .admin-login-form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-login-form label:nth-of-type(1),
+  .admin-login-form input:nth-of-type(1),
+  .admin-login-form label:nth-of-type(2),
+  .admin-login-form input:nth-of-type(2),
+  .admin-login-form button,
+  .form-error {
+    grid-column: 1;
+  }
+
+  .admin-login-form button {
+    grid-row: auto;
+  }
+
+  .authenticated-toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .dashboard-toolbar {
@@ -300,12 +391,9 @@ button:disabled {
 }
 
 @media (max-width: 560px) {
-  .app-shell {
+  .app-shell,
+  .protected-admin-gate {
     padding: 20px;
-  }
-
-  .protected-admin-shell {
-    margin: 0 20px 20px;
   }
 
   h1 {

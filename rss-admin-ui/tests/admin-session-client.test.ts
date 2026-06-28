@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ADMIN_SESSION_LOGIN_PATH,
+  ADMIN_SESSION_LOGOUT_PATH,
   ADMIN_SESSION_SENTINEL_HTTP_STATUS,
   ADMIN_SESSION_STATUS_PATH,
   adminSessionClientContract,
   fetchAdminSessionStatus,
   isFailClosedAdminSessionStatus,
+  loginAdminSession,
+  logoutAdminSession,
   parseAdminSessionResponse,
   type FetchLike
 } from "../src/auth/adminSessionClient";
@@ -14,8 +18,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("admin session status client", () => {
-  it("uses the exact same-origin sentinel path with credential-free GET semantics", async () => {
+describe("admin session client", () => {
+  it("uses exact same-origin session GET semantics without custom credential headers", async () => {
     const fetchImpl = vi.fn<FetchLike>().mockResolvedValueOnce(sentinelResponse());
 
     const status = await fetchAdminSessionStatus({ fetchImpl });
@@ -25,7 +29,7 @@ describe("admin session status client", () => {
       ADMIN_SESSION_STATUS_PATH,
       expect.objectContaining({
         method: "GET",
-        credentials: "omit",
+        credentials: "same-origin",
         cache: "no-store",
         redirect: "manual",
         headers: { Accept: "application/json" }
@@ -35,17 +39,64 @@ describe("admin session status client", () => {
     expect(fetchImpl.mock.calls[0]?.[1]).not.toHaveProperty("body");
     expect(adminSessionClientContract).toMatchObject({
       path: "/admin-auth/session",
-      currentAuthenticatedStateImplemented: false,
+      loginPath: "/admin-auth/login",
+      logoutPath: "/admin-auth/logout",
+      currentAuthenticatedStateImplemented: true,
       browserPersistence: false,
       customCredentialHeaders: false
     });
     expect(isFailClosedAdminSessionStatus(status)).toBe(true);
   });
 
-  it("accepts only the not_configured sentinel shape", async () => {
+  it("uses exact same-origin POST semantics for login and logout", async () => {
+    const fetchImpl = vi
+      .fn<FetchLike>()
+      .mockResolvedValueOnce(authenticatedResponse())
+      .mockResolvedValueOnce(unauthenticatedResponse("logged_out"));
+
+    const login = await loginAdminSession({
+      fetchImpl,
+      username: "admin",
+      password: "test-only-password"
+    });
+    const logout = await logoutAdminSession({ fetchImpl });
+
+    expect(login.kind).toBe("authenticated");
+    expect(logout.kind).toBe("unauthenticated");
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      ADMIN_SESSION_LOGIN_PATH,
+      expect.objectContaining({
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        redirect: "manual"
+      })
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      ADMIN_SESSION_LOGOUT_PATH,
+      expect.objectContaining({
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        redirect: "manual"
+      })
+    );
+    expect(JSON.stringify(fetchImpl.mock.calls)).not.toMatch(/Authorization|Cookie|AGENT_KEY|X-Agent-Key/iu);
+  });
+
+  it("accepts only the not_configured, unauthenticated, and authenticated contract shapes", async () => {
     await expect(parseAdminSessionResponse(sentinelResponse())).resolves.toMatchObject({
       kind: "not_configured",
       message: "Admin authentication is not configured."
+    });
+    await expect(parseAdminSessionResponse(unauthenticatedResponse())).resolves.toMatchObject({
+      kind: "unauthenticated"
+    });
+    await expect(parseAdminSessionResponse(authenticatedResponse())).resolves.toMatchObject({
+      kind: "authenticated",
+      principal: { kind: "single_admin", displayName: "Admin" }
     });
 
     await expect(
@@ -55,17 +106,18 @@ describe("admin session status client", () => {
     ).resolves.toMatchObject({ kind: "invalid_response" });
 
     await expect(
-      parseAdminSessionResponse(jsonResponse({ status: "not_configured", message: "missing flag" }))
-    ).resolves.toMatchObject({ kind: "invalid_response" });
-
-    await expect(
       parseAdminSessionResponse(
         jsonResponse({ status: "not_configured", authenticated: false, message: "ok", role: "admin" })
       )
     ).resolves.toMatchObject({ kind: "invalid_response" });
     await expect(
       parseAdminSessionResponse(
-        jsonResponse({ status: "not_configured", authenticated: false, message: "ok", user_id: "operator" })
+        jsonResponse({
+          configured: true,
+          authenticated: true,
+          principal: { kind: "single_admin", displayName: "Admin", email: "admin@example.test" },
+          expiresAt: "2026-06-20T00:00:00.000Z"
+        })
       )
     ).resolves.toMatchObject({ kind: "invalid_response" });
   });
@@ -109,7 +161,27 @@ function sentinelResponse(): Response {
   );
 }
 
-function jsonResponse(body: unknown, status = ADMIN_SESSION_SENTINEL_HTTP_STATUS): Response {
+function unauthenticatedResponse(reason = "unauthenticated"): Response {
+  return jsonResponse({
+    configured: true,
+    authenticated: false,
+    reason
+  });
+}
+
+function authenticatedResponse(): Response {
+  return jsonResponse({
+    configured: true,
+    authenticated: true,
+    principal: {
+      kind: "single_admin",
+      displayName: "Admin"
+    },
+    expiresAt: "2026-06-20T00:00:00.000Z"
+  });
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" }

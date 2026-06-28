@@ -10,6 +10,8 @@ Current main-service production activation status ve operator-confirmed evidence
 
 Current application status: `MVP — Production Aktif`.
 
+MS-022A source contains a disabled-by-default admin auth/session foundation for the not-deployed `rss-admin-ui`. Production backend operation does not enable it by default: `ADMIN_UI_AUTH_MODE=disabled` is the safe baseline, no default admin credential exists, and production secret provisioning for `single_admin` remains separate operator-authorized work. MS-022A does not deploy the admin UI, does not change production CORS or edge routing, and does not bump the active backend package version.
+
 Production source delivery icin tek gecerli akış:
 
 ```text

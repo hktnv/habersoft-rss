@@ -3,6 +3,7 @@ import {
   loadRuntimeConfig,
   localAgentKeyPlaceholder
 } from "../../src/configuration/runtime-config";
+import { hashAdminPassword } from "../../src/admin-auth/admin-password-hash";
 
 const validEnv = {
   APP_ENV: "local",
@@ -102,6 +103,9 @@ describe("loadRuntimeConfig", () => {
       agentEntries: {
         checkedAtMaxFutureSkewSeconds: 60,
         checkedAtMaxAgeSeconds: 900
+      },
+      adminAuth: {
+        mode: "disabled"
       }
     });
   });
@@ -228,6 +232,85 @@ describe("loadRuntimeConfig", () => {
   it("requires checked_at window configuration for the API role", () => {
     expect(() =>
       loadRuntimeConfig({ ...validEnv, CHECKED_AT_MAX_AGE_SECONDS: undefined }, "api")
+    ).toThrow(ConfigValidationError);
+  });
+
+  it("defaults admin auth to disabled without requiring an admin credential", () => {
+    const config = loadRuntimeConfig(
+      {
+        ...validEnv,
+        ADMIN_UI_AUTH_MODE: undefined,
+        ADMIN_UI_ADMIN_USERNAME: undefined,
+        ADMIN_UI_ADMIN_PASSWORD_HASH: undefined,
+        ADMIN_UI_SESSION_SECRET: undefined
+      },
+      "api"
+    );
+
+    expect(config.adminAuth).toEqual({ mode: "disabled" });
+  });
+
+  it("requires explicit admin auth values only when single_admin mode is enabled", () => {
+    expect(() =>
+      loadRuntimeConfig(
+        {
+          ...validEnv,
+          ADMIN_UI_AUTH_MODE: "single_admin",
+          ADMIN_UI_ADMIN_USERNAME: undefined,
+          ADMIN_UI_ADMIN_PASSWORD_HASH: undefined,
+          ADMIN_UI_SESSION_SECRET: undefined
+        },
+        "api"
+      )
+    ).toThrow(ConfigValidationError);
+
+    const passwordHash = hashAdminPassword("test-only-admin-password", Buffer.from("config-test-salt0", "utf8"));
+    const config = loadRuntimeConfig(
+      {
+        ...validEnv,
+        ADMIN_UI_AUTH_MODE: "single_admin",
+        ADMIN_UI_ADMIN_USERNAME: "admin",
+        ADMIN_UI_ADMIN_PASSWORD_HASH: passwordHash,
+        ADMIN_UI_SESSION_SECRET: "test_only_admin_session_secret_at_least_32_bytes",
+        ADMIN_UI_SESSION_TTL_SECONDS: "900",
+        ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
+        ADMIN_UI_SESSION_COOKIE_SECURE: "false",
+        ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:test"
+      },
+      "api"
+    );
+
+    expect(config.adminAuth).toEqual({
+      mode: "single_admin",
+      username: "admin",
+      passwordHash,
+      sessionSecret: "test_only_admin_session_secret_at_least_32_bytes",
+      sessionTtlSeconds: 900,
+      sessionCookieName: "habersoft_admin_session",
+      sessionCookieSecure: false,
+      redisPrefix: "admin_auth:test"
+    });
+  });
+
+  it("rejects weak admin auth hash, cookie, and production session settings", () => {
+    expect(() =>
+      loadRuntimeConfig(
+        {
+          ...validEnv,
+          APP_ENV: "production",
+          TENANT_AUTH_JWKS_URL: "https://auth.habersoft.com/.well-known/jwks.json",
+          TENANT_RATE_LIMIT_KEY_SECRET: "production_rate_limit_key_secret_32",
+          AGENT_KEY: "production_agent_key_secret_at_least_32_bytes",
+          ADMIN_UI_AUTH_MODE: "single_admin",
+          ADMIN_UI_ADMIN_USERNAME: " admin ",
+          ADMIN_UI_ADMIN_PASSWORD_HASH: "plaintext-password",
+          ADMIN_UI_SESSION_SECRET: "replace_with_local_only_admin_secret_32",
+          ADMIN_UI_SESSION_COOKIE_NAME: "bad cookie",
+          ADMIN_UI_SESSION_COOKIE_SECURE: "false",
+          ADMIN_UI_SESSION_REDIS_PREFIX: "Admin Auth"
+        },
+        "api"
+      )
     ).toThrow(ConfigValidationError);
   });
 

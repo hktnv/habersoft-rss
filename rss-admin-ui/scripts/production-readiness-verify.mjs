@@ -7,7 +7,7 @@ const repoRoot = path.resolve(frontendRoot, "..");
 const image =
   process.env.RSS_ADMIN_UI_READINESS_IMAGE ??
   process.env.RSS_ADMIN_UI_TEST_IMAGE ??
-  "rss-admin-ui:ms021b-local";
+  "rss-admin-ui:ms022a-local";
 const productionHostPattern = /(?:^|[/:.])rss-panel\.habersoft\.com(?:$|[/:])/iu;
 const invalidOrigins = [
   "ftp://sentinel:3100",
@@ -17,14 +17,16 @@ const invalidOrigins = [
   "http://sentinel:3100#fragment",
   "http://sentinel:abc",
   "http://sentinel:70000",
-  "http://sentinel:3100;touch-ms021b"
+  "http://sentinel:3100;touch-ms022a"
 ];
+const invalidOptionalAuthOrigins = invalidOrigins.map((origin) => ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", origin]);
 
 const rootComposeEnv = {
-  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms021b-local",
+  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms022a-local",
   RSS_ADMIN_UI_IMAGE: image,
   ADMIN_UI_HOST_PORT: "8081",
   ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
+  ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "",
   ADMIN_UI_ENVIRONMENT_NAME: "production-readiness-local",
   POSTGRES_USER: "postgres",
   POSTGRES_PASSWORD: "postgres",
@@ -35,6 +37,7 @@ const rootComposeEnv = {
 const productionComposeEnv = {
   RSS_ADMIN_UI_IMAGE: "rss-admin-ui@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://127.0.0.1:3200",
+  ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "",
   ADMIN_UI_ENVIRONMENT_NAME: "production-readiness-local",
   ADMIN_UI_HOST_PORT: "8081"
 };
@@ -57,6 +60,12 @@ for (const origin of invalidOrigins) {
     ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: origin
   });
 }
+for (const [name, origin] of invalidOptionalAuthOrigins) {
+  expectContainerStartupFailure(`invalid ${name}=${origin}`, {
+    ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://sentinel:3100",
+    [name]: origin
+  });
+}
 
 run("docker", ["compose", "config", "--quiet"], {
   cwd: repoRoot,
@@ -71,6 +80,10 @@ run("npm", ["run", "test:proxy-security"], {
   timeoutMs: 600000
 });
 run("npm", ["run", "test:auth-session-sentinel"], {
+  env: { RSS_ADMIN_UI_TEST_IMAGE: image },
+  timeoutMs: 600000
+});
+run("npm", ["run", "test:auth-proxy"], {
   env: { RSS_ADMIN_UI_TEST_IMAGE: image },
   timeoutMs: 600000
 });
@@ -90,6 +103,7 @@ console.log(
         "browser config excludes upstream origin and API base",
         "exact health route proxy security passes",
         "same-origin admin session sentinel fails closed",
+        "same-origin admin auth proxy exact-route security passes",
         "root compose config passes with synthetic values",
         "frontend production compose config passes with synthetic values",
         "no production hostname used by verifier command environments"

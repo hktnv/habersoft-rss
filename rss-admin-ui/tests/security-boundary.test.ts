@@ -11,23 +11,25 @@ const oldWorkspacePattern = new RegExp(["habersoft-auth", String.raw`\\`, "rss-h
 
 describe("frontend security boundary", () => {
   it("does not include credentials, browser persistence, writes, or private-host strings in source", () => {
-    const forbidden = [
-      /AGENT_KEY\s*=/u,
-      /X-Agent-Key/iu,
-      /Authorization\s*:/iu,
-      /Cookie\s*:/iu,
-      /\b(localStorage|sessionStorage|indexedDB|cookieStore)\b/u,
-      /document\.cookie/u,
-      /method:\s*["'](?:POST|PUT|PATCH|DELETE)["']/iu,
-      /credentials:\s*["'](?:include|same-origin)["']/iu,
-      workstationPathPattern,
-      oldWorkspacePattern
-    ];
     const offenders = [];
     for (const file of sourceFiles) {
       if (!/\.(ts|tsx|js|mjs|css|html|md|json|yaml|yml|conf|sh)$/iu.test(file)) continue;
       const text = readFileSync(file, "utf8");
-      if (forbidden.some((pattern) => pattern.test(text))) offenders.push(path.relative(root, file));
+      const relative = path.relative(root, file).replaceAll("\\", "/");
+      const authClient = relative === "src/auth/adminSessionClient.ts";
+      const forbidden = [
+        /AGENT_KEY\s*=/u,
+        /X-Agent-Key/iu,
+        /Authorization\s*:/iu,
+        /Cookie\s*:/iu,
+        /\b(localStorage|sessionStorage|indexedDB|cookieStore)\b/u,
+        /document\.cookie/u,
+        workstationPathPattern,
+        oldWorkspacePattern,
+        authClient ? /method:\s*["'](?:PUT|PATCH|DELETE)["']/iu : /method:\s*["'](?:POST|PUT|PATCH|DELETE)["']/iu,
+        authClient ? /credentials:\s*["']include["']/iu : /credentials:\s*["'](?:include|same-origin)["']/iu
+      ];
+      if (forbidden.some((pattern) => pattern.test(text))) offenders.push(relative);
     }
 
     expect(offenders).toEqual([]);

@@ -3,6 +3,7 @@ import type { INestApplication } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter } from "@nestjs/platform-fastify";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
+import { ADMIN_AUTH_LOGIN_BODY_LIMIT_BYTES } from "../admin-auth/admin-auth.constants";
 import {
   AGENT_ENTRIES_BODY_LIMIT_BYTES,
   DEFAULT_FASTIFY_BODY_LIMIT_BYTES
@@ -47,7 +48,9 @@ export function configureApiBodyLimits(app: NestFastifyApplication): void {
         ? AGENT_ENTRIES_BODY_LIMIT_BYTES
         : path === "/agent/feed-check-results"
           ? AGENT_FEED_CHECK_RESULTS_BODY_LIMIT_BYTES
-          : DEFAULT_FASTIFY_BODY_LIMIT_BYTES;
+          : path === "/admin-auth/login"
+            ? ADMIN_AUTH_LOGIN_BODY_LIMIT_BYTES
+            : DEFAULT_FASTIFY_BODY_LIMIT_BYTES;
 
     if (contentLength > limit) {
       reply.code(413).send({ error_code: "REQUEST_BODY_TOO_LARGE" });

@@ -1,19 +1,31 @@
 export const ADMIN_SESSION_STATUS_PATH = "/admin-auth/session" as const;
+export const ADMIN_SESSION_LOGIN_PATH = "/admin-auth/login" as const;
+export const ADMIN_SESSION_LOGOUT_PATH = "/admin-auth/logout" as const;
 export const ADMIN_SESSION_SENTINEL_HTTP_STATUS = 501;
 
-export type AdminSessionStatusKind =
-  | "unknown"
-  | "checking"
-  | "not_configured"
-  | "auth_unavailable"
-  | "invalid_response"
-  | "timeout";
-
-export type AdminSessionStatus = {
-  readonly kind: AdminSessionStatusKind;
-  readonly message: string;
-  readonly httpStatus?: number;
+export type AdminPrincipal = {
+  readonly kind: "single_admin";
+  readonly displayName: "Admin";
 };
+
+export type AdminSessionStatus =
+  | {
+      readonly kind: "unknown" | "checking" | "not_configured" | "auth_unavailable" | "invalid_response" | "timeout";
+      readonly message: string;
+      readonly httpStatus?: number;
+    }
+  | {
+      readonly kind: "unauthenticated";
+      readonly message: string;
+      readonly httpStatus?: number;
+    }
+  | {
+      readonly kind: "authenticated";
+      readonly message: string;
+      readonly principal: AdminPrincipal;
+      readonly expiresAt: string;
+      readonly httpStatus?: number;
+    };
 
 export type FetchAdminSessionStatusOptions = {
   readonly fetchImpl?: FetchLike;
@@ -21,15 +33,22 @@ export type FetchAdminSessionStatusOptions = {
   readonly signal?: AbortSignal;
 };
 
+export type LoginAdminSessionOptions = FetchAdminSessionStatusOptions & {
+  readonly username: string;
+  readonly password: string;
+};
+
+export type LogoutAdminSessionOptions = FetchAdminSessionStatusOptions;
+
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 const ADMIN_SESSION_TIMEOUT_MS = 4000;
 const sentinelMessage = "Admin authentication is not configured.";
+const unauthenticatedMessage = "Admin authentication is required.";
 const principalLikeKeys = new Set([
   "accessToken",
   "email",
   "jwt",
-  "principal",
   "refreshToken",
   "role",
   "roles",
@@ -43,13 +62,19 @@ const principalLikeKeys = new Set([
 
 export const adminSessionClientContract = {
   path: ADMIN_SESSION_STATUS_PATH,
-  method: "GET",
-  credentials: "omit",
+  loginPath: ADMIN_SESSION_LOGIN_PATH,
+  logoutPath: ADMIN_SESSION_LOGOUT_PATH,
+  methods: {
+    session: "GET",
+    login: "POST",
+    logout: "POST"
+  },
+  credentials: "same-origin",
   cache: "no-store",
   redirectsAcceptedAsSuccess: false,
   browserPersistence: false,
   customCredentialHeaders: false,
-  currentAuthenticatedStateImplemented: false
+  currentAuthenticatedStateImplemented: true
 } as const;
 
 export const unknownAdminSessionStatus: AdminSessionStatus = {
@@ -65,39 +90,60 @@ export const checkingAdminSessionStatus: AdminSessionStatus = {
 export async function fetchAdminSessionStatus(
   options: FetchAdminSessionStatusOptions = {}
 ): Promise<AdminSessionStatus> {
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const abort = createRequestAbort(options);
-
-  try {
-    const response = await fetchImpl(ADMIN_SESSION_STATUS_PATH, {
+  return requestAdminSession({
+    path: ADMIN_SESSION_STATUS_PATH,
+    init: {
       method: "GET",
       headers: {
         Accept: "application/json"
       },
-      credentials: "omit",
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "manual"
+    },
+    options
+  });
+}
+
+export async function loginAdminSession(options: LoginAdminSessionOptions): Promise<AdminSessionStatus> {
+  return requestAdminSession({
+    path: ADMIN_SESSION_LOGIN_PATH,
+    init: {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      credentials: "same-origin",
       cache: "no-store",
       redirect: "manual",
-      signal: abort.signal
-    });
+      body: JSON.stringify({
+        username: options.username,
+        password: options.password
+      })
+    },
+    options
+  });
+}
 
-    return await parseAdminSessionResponse(response);
-  } catch (error) {
-    if (abort.didTimeout()) return timeoutStatus();
-    if (isAbortError(error)) {
-      return unavailableStatus("Admin authentication status could not be verified.");
-    }
-    return unavailableStatus("Admin authentication status is unavailable.");
-  } finally {
-    abort.cleanup();
-  }
+export async function logoutAdminSession(options: LogoutAdminSessionOptions = {}): Promise<AdminSessionStatus> {
+  return requestAdminSession({
+    path: ADMIN_SESSION_LOGOUT_PATH,
+    init: {
+      method: "POST",
+      headers: {
+        Accept: "application/json"
+      },
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "manual"
+    },
+    options
+  });
 }
 
 export async function parseAdminSessionResponse(response: Response): Promise<AdminSessionStatus> {
   if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
-    return invalidStatus(response.status);
-  }
-
-  if (response.status !== ADMIN_SESSION_SENTINEL_HTTP_STATUS) {
     return invalidStatus(response.status);
   }
 
@@ -113,27 +159,75 @@ export async function parseAdminSessionResponse(response: Response): Promise<Adm
     return invalidStatus(response.status);
   }
 
-  if (!isValidNotConfiguredSentinel(body)) {
-    return invalidStatus(response.status);
+  if (response.status === ADMIN_SESSION_SENTINEL_HTTP_STATUS && isValidNotConfiguredSentinel(body)) {
+    return notConfiguredStatus(response.status);
   }
 
-  return {
-    kind: "not_configured",
-    httpStatus: response.status,
-    message: sentinelMessage
-  };
+  if ((response.status === 502 || response.status === 503 || response.status === 504) && isAuthUnavailableBody(body)) {
+    return unavailableStatus("Admin authentication service is unavailable.", response.status);
+  }
+
+  if ((response.status === 200 || response.status === 401) && isValidUnauthenticatedBody(body)) {
+    return unauthenticatedStatus(response.status);
+  }
+
+  if (response.status === 200) {
+    const authenticated = parseAuthenticatedBody(body);
+    if (authenticated !== undefined) {
+      return {
+        kind: "authenticated",
+        httpStatus: response.status,
+        message: "Admin session is authenticated.",
+        principal: authenticated.principal,
+        expiresAt: authenticated.expiresAt
+      };
+    }
+  }
+
+  return invalidStatus(response.status);
 }
 
-export function isFailClosedAdminSessionStatus(status: AdminSessionStatus): true {
-  void status;
-  return true;
+export function isFailClosedAdminSessionStatus(status: AdminSessionStatus): boolean {
+  return status.kind !== "authenticated";
+}
+
+async function requestAdminSession({
+  path,
+  init,
+  options
+}: {
+  readonly path: string;
+  readonly init: RequestInit;
+  readonly options: FetchAdminSessionStatusOptions;
+}): Promise<AdminSessionStatus> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const abort = createRequestAbort(options);
+
+  try {
+    const response = await fetchImpl(path, {
+      ...init,
+      signal: abort.signal
+    });
+
+    return await parseAdminSessionResponse(response);
+  } catch (error) {
+    if (abort.didTimeout()) return timeoutStatus();
+    if (isAbortError(error)) {
+      return unavailableStatus("Admin authentication request could not be verified.");
+    }
+    return unavailableStatus("Admin authentication service is unavailable.");
+  } finally {
+    abort.cleanup();
+  }
 }
 
 function isValidNotConfiguredSentinel(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  if (value.status !== "not_configured") return false;
+  const configured = value.configured;
+  if (configured !== undefined && configured !== false) return false;
+  if (value.status !== "not_configured" && value.reason !== "not_configured") return false;
   if (value.authenticated !== false) return false;
-  if (typeof value.message !== "string" || value.message.length === 0) return false;
+  if (value.message !== undefined && (typeof value.message !== "string" || value.message.length === 0)) return false;
 
   for (const key of Object.keys(value)) {
     if (isPrincipalLikeKey(key)) return false;
@@ -142,10 +236,60 @@ function isValidNotConfiguredSentinel(value: unknown): boolean {
   return true;
 }
 
+function isValidUnauthenticatedBody(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (value.configured !== true) return false;
+  if (value.authenticated !== false) return false;
+  if (value.reason !== "unauthenticated" && value.reason !== "logged_out") return false;
+
+  for (const key of Object.keys(value)) {
+    if (isPrincipalLikeKey(key)) return false;
+  }
+
+  return true;
+}
+
+function parseAuthenticatedBody(value: unknown):
+  | {
+      readonly principal: AdminPrincipal;
+      readonly expiresAt: string;
+    }
+  | undefined {
+  if (!isRecord(value)) return undefined;
+  if (value.configured !== true || value.authenticated !== true) return undefined;
+  if (typeof value.expiresAt !== "string" || Number.isNaN(Date.parse(value.expiresAt))) return undefined;
+  if (!isRecord(value.principal)) return undefined;
+  if (value.principal.kind !== "single_admin" || value.principal.displayName !== "Admin") return undefined;
+
+  for (const key of Object.keys(value)) {
+    if (key !== "configured" && key !== "authenticated" && key !== "principal" && key !== "expiresAt") {
+      return undefined;
+    }
+  }
+
+  for (const key of Object.keys(value.principal)) {
+    if (key !== "kind" && key !== "displayName") return undefined;
+  }
+
+  return {
+    principal: {
+      kind: "single_admin",
+      displayName: "Admin"
+    },
+    expiresAt: value.expiresAt
+  };
+}
+
+function isAuthUnavailableBody(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (value.authenticated !== false) return false;
+  return value.reason === "auth_unavailable" || value.status === "auth_unavailable";
+}
+
 function isPrincipalLikeKey(key: string): boolean {
   return (
     principalLikeKeys.has(key) ||
-    /^(?:access[_-]?token|email|jwt|principal|refresh[_-]?token|roles?|session[_-]?id|session|tenant[_-]?id|tenant|user[_-]?id|user)$/iu.test(key)
+    /^(?:access[_-]?token|email|jwt|refresh[_-]?token|roles?|session[_-]?id|session|tenant[_-]?id|tenant|user[_-]?id|user)$/iu.test(key)
   );
 }
 
@@ -181,9 +325,26 @@ function createRequestAbort(options: FetchAdminSessionStatusOptions): {
   };
 }
 
-function unavailableStatus(message: string): AdminSessionStatus {
+function notConfiguredStatus(httpStatus?: number): AdminSessionStatus {
+  return {
+    kind: "not_configured",
+    httpStatus,
+    message: sentinelMessage
+  };
+}
+
+function unauthenticatedStatus(httpStatus?: number): AdminSessionStatus {
+  return {
+    kind: "unauthenticated",
+    httpStatus,
+    message: unauthenticatedMessage
+  };
+}
+
+function unavailableStatus(message: string, httpStatus?: number): AdminSessionStatus {
   return {
     kind: "auth_unavailable",
+    httpStatus,
     message
   };
 }
@@ -199,7 +360,7 @@ function invalidStatus(httpStatus?: number): AdminSessionStatus {
 function timeoutStatus(): AdminSessionStatus {
   return {
     kind: "timeout",
-    message: "Admin authentication status timed out."
+    message: "Admin authentication request timed out."
   };
 }
 

@@ -1,22 +1,23 @@
+import type { AdminSessionStatus } from "./adminSessionClient";
+
 export type AdminAuthBlockReason =
-  | "real_auth_not_implemented"
+  | "admin_auth_not_configured"
   | "authority_required_before_business_admin_features"
   | "configuration_missing";
 
 export type FutureAdminAuthorityRequirement =
-  | "browser_session_authority"
-  | "credential_transport_policy"
-  | "token_storage_policy"
   | "csrf_xss_stance"
-  | "refresh_logout_semantics"
-  | "same_origin_edge_policy"
   | "tenant_admin_identity_boundary"
   | "role_permission_model"
   | "authenticated_field_classification"
   | "backend_route_inventory"
-  | "production_activation_evidence";
+  | "production_activation_evidence"
+  | "production_secret_provisioning";
 
 export type AdminAuthBoundaryState =
+  | {
+      readonly kind: "same_origin_session";
+    }
   | {
       readonly kind: "not_configured";
     }
@@ -30,36 +31,34 @@ export type AdminAuthBoundaryState =
     };
 
 export const futureAdminAuthorityRequirements: readonly FutureAdminAuthorityRequirement[] = [
-  "browser_session_authority",
-  "credential_transport_policy",
-  "token_storage_policy",
   "csrf_xss_stance",
-  "refresh_logout_semantics",
-  "same_origin_edge_policy",
   "tenant_admin_identity_boundary",
   "role_permission_model",
   "authenticated_field_classification",
   "backend_route_inventory",
-  "production_activation_evidence"
+  "production_activation_evidence",
+  "production_secret_provisioning"
 ];
 
 export const defaultAdminAuthBoundaryState: AdminAuthBoundaryState = {
-  kind: "not_configured"
+  kind: "same_origin_session"
 };
 
 export const adminAuthBoundaryContract = {
-  statusDashboardPublic: true,
+  statusDashboardPublic: false,
   protectedAdminShellPresent: true,
-  sameOriginAdminSessionSentinelPath: "/admin-auth/session",
-  sameOriginAdminSessionSentinelOnly: true,
-  realAuthImplemented: false,
+  sameOriginAdminSessionPath: "/admin-auth/session",
+  sameOriginAdminLoginPath: "/admin-auth/login",
+  sameOriginAdminLogoutPath: "/admin-auth/logout",
+  sameOriginAdminSessionSentinelOnly: false,
+  realAuthImplemented: true,
   defaultAllowsProtectedContent: false,
-  browserCredentialExchangeImplemented: false,
+  browserCredentialExchangeImplemented: true,
   browserCredentialPersistenceImplemented: false,
   fakeAdminIdentityAllowed: false,
   privilegedBusinessDataAllowed: false,
   adminApiWritesImplemented: false,
-  futureAuthorityRequired: true,
+  futureAuthorityRequiredBeforeBusinessAdminFeatures: true,
   requiredFutureAuthority: futureAdminAuthorityRequirements
 } as const;
 
@@ -67,16 +66,21 @@ export function resolveAdminAuthBoundaryState(): AdminAuthBoundaryState {
   return defaultAdminAuthBoundaryState;
 }
 
-export function canRenderProtectedAdminContent(_state: AdminAuthBoundaryState): false {
-  return false;
+export function canRenderProtectedAdminContent(
+  state: AdminAuthBoundaryState,
+  sessionStatus?: AdminSessionStatus
+): boolean {
+  return state.kind === "same_origin_session" && sessionStatus?.kind === "authenticated";
 }
 
 export function describeAdminAuthBoundaryState(state: AdminAuthBoundaryState): string {
   switch (state.kind) {
+    case "same_origin_session":
+      return "Admin access is controlled by the same-origin session contract.";
     case "not_configured":
       return "Admin access is not configured yet.";
     case "authority_required":
-      return "Admin access requires a future authority-backed auth/session milestone.";
+      return "Business admin features require a future authority-backed milestone.";
     case "blocked":
       return describeBlockReason(state.reason);
   }
@@ -84,8 +88,8 @@ export function describeAdminAuthBoundaryState(state: AdminAuthBoundaryState): s
 
 function describeBlockReason(reason: AdminAuthBlockReason): string {
   switch (reason) {
-    case "real_auth_not_implemented":
-      return "Real admin auth/session is not implemented.";
+    case "admin_auth_not_configured":
+      return "Admin auth/session is not configured.";
     case "authority_required_before_business_admin_features":
       return "Business admin features require explicit future authority.";
     case "configuration_missing":

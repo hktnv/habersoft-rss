@@ -4,12 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultImage = "rss-admin-ui:ms021b-local";
+const defaultImage = "rss-admin-ui:ms022a-local";
 const image = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? defaultImage;
 const suffix = randomUUID().slice(0, 8);
-const network = `rss-admin-ui-ms021b-${suffix}`;
-const recorderName = `rss-admin-ui-ms021b-recorder-${suffix}`;
-const frontendName = `rss-admin-ui-ms021b-runtime-${suffix}`;
+const network = `rss-admin-ui-ms022a-sentinel-${suffix}`;
+const recorderName = `rss-admin-ui-ms022a-recorder-${suffix}`;
+const frontendName = `rss-admin-ui-ms022a-runtime-${suffix}`;
 
 try {
   ensureImage();
@@ -60,6 +60,10 @@ try {
   assert(!results.sessionQuery.body.includes("example"), "session query token was reflected");
   assert(results.sessionQuery.body === results.session.body, "session query changed sentinel body");
   assert(results.postSession.status === 405, "non-GET session request was not rejected");
+  assert(results.getLogin.status === 405, "non-POST login request was not rejected");
+  assert(results.postLogin.status === 503, "static login did not remain fail-closed");
+  assert(results.getLogout.status === 405, "non-POST logout request was not rejected");
+  assert(results.postLogout.status === 501, "static logout did not remain fail-closed");
   assert(results.unknown.status === 404, "unknown admin-auth path was not rejected");
   assert(!results.unknown.body.includes("Habersoft RSS Admin"), "unknown admin-auth path fell back to the SPA");
   assert(results.assets.length > 0, "no static JS/CSS assets were checked");
@@ -67,6 +71,10 @@ try {
     session: results.session,
     sessionQuery: results.sessionQuery,
     postSession: results.postSession,
+    getLogin: results.getLogin,
+    postLogin: results.postLogin,
+    getLogout: results.getLogout,
+    postLogout: results.postLogout,
     unknown: results.unknown
   })) {
     assert(/no-store/iu.test(result.headers.cacheControl ?? ""), `${label} response is cacheable`);
@@ -92,8 +100,10 @@ try {
         network,
         path: "/admin-auth/session",
         get_status: results.session.status,
-        post_status: results.postSession.status,
-        unknown_status: results.unknown.status,
+      post_status: results.postSession.status,
+      login_post_status: results.postLogin.status,
+      logout_post_status: results.postLogout.status,
+      unknown_status: results.unknown.status,
         upstream_records: records.length,
         static_assets_checked: results.assets.length
       },
@@ -155,6 +165,10 @@ function runFrontendRequests() {
       session: await request("/admin-auth/session", { headers: sensitiveHeaders }),
       sessionQuery: await request("/admin-auth/session?token=example", { headers: sensitiveHeaders }),
       postSession: await request("/admin-auth/session", { method: "POST", body: "mutate=true", headers: sensitiveHeaders }),
+      getLogin: await request("/admin-auth/login", { headers: sensitiveHeaders }),
+      postLogin: await request("/admin-auth/login", { method: "POST", body: "{}", headers: sensitiveHeaders }),
+      getLogout: await request("/admin-auth/logout", { headers: sensitiveHeaders }),
+      postLogout: await request("/admin-auth/logout", { method: "POST", headers: sensitiveHeaders }),
       unknown: await request("/admin-auth/unknown", { headers: sensitiveHeaders })
     };
     console.log(JSON.stringify(results));

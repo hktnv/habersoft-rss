@@ -1,14 +1,18 @@
 import { ProtectedAdminShell } from "./auth/ProtectedAdminShell";
-import { useAdminSessionStatus } from "./auth/useAdminSessionStatus";
+import { useAdminSessionController } from "./auth/useAdminSessionStatus";
 import { StatusDashboard } from "./status/StatusDashboard";
 
 export function App() {
-  const adminSessionStatus = useAdminSessionStatus();
+  const adminSession = useAdminSessionController();
 
   return (
-    <>
+    <ProtectedAdminShell
+      sessionStatus={adminSession.status}
+      busy={adminSession.busy}
+      onLogin={adminSession.login}
+      onLogout={adminSession.logout}
+    >
       <StatusDashboard />
-      <ProtectedAdminShell sessionStatus={adminSessionStatus} />
-    </>
+    </ProtectedAdminShell>
   );
 }

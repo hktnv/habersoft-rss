@@ -1,3 +1,4 @@
+import { pbkdf2Sync } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
@@ -5,18 +6,33 @@ import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
-const projectName = `habersoft-rss-ms020c-${Date.now()}`;
+const projectName = `habersoft-rss-ms022a-${Date.now()}`;
 const uiPort = await freePort();
 const apiPort = await freePort();
+const adminUsername = "admin";
+const adminPassword = "test-only-ms022a-admin-password";
+const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms022a-local-salt", "utf8"));
+const adminSessionSecret = "test_only_ms022a_admin_session_secret_at_least_32_bytes";
 
 const composeEnv = {
   ...process.env,
+  RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms022a-fullstack-local",
+  RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms022a-local",
   POSTGRES_USER: "main_service",
   POSTGRES_PASSWORD: "main_service_local_password",
   POSTGRES_DB: "main_service",
   DATABASE_URL: "postgresql://main_service:main_service_local_password@postgres:5432/main_service?schema=public",
   ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
-  ADMIN_UI_ENVIRONMENT_NAME: "local-fullstack-rehearsal",
+  ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
+  ADMIN_UI_AUTH_MODE: "single_admin",
+  ADMIN_UI_ADMIN_USERNAME: adminUsername,
+  ADMIN_UI_ADMIN_PASSWORD_HASH: adminPasswordHash,
+  ADMIN_UI_SESSION_SECRET: adminSessionSecret,
+  ADMIN_UI_SESSION_TTL_SECONDS: "900",
+  ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
+  ADMIN_UI_SESSION_COOKIE_SECURE: "false",
+  ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms022a",
+  ADMIN_UI_ENVIRONMENT_NAME: "local-fullstack-auth-rehearsal",
   ADMIN_UI_HOST_PORT: String(uiPort),
   API_HOST_PORT: String(apiPort)
 };
@@ -25,7 +41,7 @@ let primaryFailure;
 
 try {
   compose(["config", "--quiet"], { timeoutMs: 120000 });
-  compose(["up", "-d", "--build", "--wait", "--wait-timeout", "360"], { timeoutMs: 900000 });
+  compose(["up", "-d", "--build", "--wait", "--wait-timeout", "420"], { timeoutMs: 900000 });
 
   const base = `http://127.0.0.1:${uiPort}`;
   const healthz = await requestText(`${base}/healthz`);
@@ -38,7 +54,50 @@ try {
   assert(envConfig.status === 200, "env-config.js failed");
   assert(!envConfig.body.includes("main-service-api:3000"), "server-only upstream leaked into env-config.js");
 
-  const live = await requestJson(`${base}/status-api/health/live`);
+  const unauthenticated = await requestJson(`${base}/admin-auth/session`);
+  assert(unauthenticated.status === 200, "unauthenticated session check failed");
+  assert(unauthenticated.body?.configured === true, "auth session did not report configured");
+  assert(unauthenticated.body?.authenticated === false, "fresh session should be unauthenticated");
+  assert(unauthenticated.headers.setCookie === null, "fresh session emitted a cookie");
+
+  const invalidLogin = await requestJson(`${base}/admin-auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: adminUsername, password: "wrong-password" })
+  });
+  assert(invalidLogin.status === 401, "invalid login was not rejected");
+  assert(invalidLogin.headers.setCookie === null, "invalid login emitted a cookie");
+
+  const validLogin = await requestJson(`${base}/admin-auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: adminUsername, password: adminPassword })
+  });
+  assert(validLogin.status === 200, "valid login failed");
+  assert(validLogin.body?.authenticated === true, "valid login did not authenticate");
+  assert(!JSON.stringify(validLogin.body).includes(adminPassword), "login body leaked password");
+  assert(!JSON.stringify(validLogin.body).includes(adminPasswordHash), "login body leaked password hash");
+  assert(/HttpOnly/iu.test(validLogin.headers.setCookie ?? ""), "login cookie is not HTTP-only");
+  assert(/SameSite=Lax/iu.test(validLogin.headers.setCookie ?? ""), "login cookie is not SameSite=Lax");
+  assert(/Path=\/admin-auth/iu.test(validLogin.headers.setCookie ?? ""), "login cookie path mismatch");
+
+  const sessionCookie = cookiePair(validLogin.headers.setCookie);
+  assert(sessionCookie !== undefined, "login did not produce a session cookie");
+
+  const authenticated = await requestJson(`${base}/admin-auth/session`, {
+    headers: { Cookie: sessionCookie }
+  });
+  assert(authenticated.status === 200, "authenticated session check failed");
+  assert(authenticated.body?.authenticated === true, "session did not authenticate with cookie");
+  assert(authenticated.body?.principal?.kind === "single_admin", "authenticated principal mismatch");
+
+  const live = await requestJson(`${base}/status-api/health/live`, {
+    headers: {
+      Authorization: "Bearer redacted",
+      Cookie: sessionCookie,
+      "X-Agent-Key": "redacted"
+    }
+  });
   assert(live.status === 200 && live.body.status === "live", "live health did not reach the local backend");
 
   const ready = await waitForReady(`${base}/status-api/health/ready`);
@@ -47,22 +106,52 @@ try {
   assert(ready.body.dependencies.redis === "up", "Redis readiness was not up");
   assert(ready.body.dependencies.tenantAuth === "up", "Tenant auth readiness was not up");
 
-  const unknown = await requestText(`${base}/status-api/agent/heartbeat`);
-  assert(unknown.status === 404, "unknown backend-like status path was not rejected");
-
-  const write = await requestText(`${base}/status-api/health/live`, {
+  const wrongMethod = await requestText(`${base}/admin-auth/session`, {
     method: "POST",
     body: "mutate=true"
   });
-  assert(write.status === 405, "write method reached the health transport");
+  assert(wrongMethod.status === 405, "wrong auth method was not rejected");
+
+  const unknownAuth = await requestText(`${base}/admin-auth/unknown`);
+  assert(unknownAuth.status === 404, "unknown auth route was not rejected");
+  assert(!unknownAuth.body.includes("Habersoft RSS Admin"), "unknown auth route fell back to the SPA");
+
+  const logout = await requestJson(`${base}/admin-auth/logout`, {
+    method: "POST",
+    headers: { Cookie: sessionCookie }
+  });
+  assert(logout.status === 200, "logout failed");
+  assert(logout.body?.authenticated === false, "logout did not return unauthenticated state");
+  assert(/Max-Age=0/iu.test(logout.headers.setCookie ?? ""), "logout did not clear the cookie");
+
+  const afterLogout = await requestJson(`${base}/admin-auth/session`, {
+    headers: { Cookie: sessionCookie }
+  });
+  assert(afterLogout.status === 200, "post-logout session check failed");
+  assert(afterLogout.body?.authenticated === false, "logout did not invalidate the server-side session");
+
+  const staticSurface = [index.body, envConfig.body, ...(await staticAssets(base, index.body))].join("\n");
+  assert(!staticSurface.includes(adminPassword), "admin password leaked to static surface");
+  assert(!staticSurface.includes(adminPasswordHash), "admin password hash leaked to static surface");
+  assert(!staticSurface.includes(adminSessionSecret), "admin session secret leaked to static surface");
+  assert(!/AGENT_KEY|X-Agent-Key|DATABASE_URL|BEGIN PRIVATE KEY|BEGIN RSA PRIVATE KEY/iu.test(staticSurface), "secret-like string leaked to static surface");
+  assert(!/\b(localStorage|sessionStorage|indexedDB)\b|document\.cookie/u.test(staticSurface), "browser persistence string leaked to static surface");
 
   console.log(
     JSON.stringify(
       {
-        status: "root-fullstack-acceptance-ok",
+        status: "root-fullstack-auth-acceptance-ok",
         project: projectName,
         ui_origin: base,
         api_loopback_port: apiPort,
+        auth: {
+          fresh_session: unauthenticated.body.reason,
+          invalid_login_status: invalidLogin.status,
+          valid_login_status: validLogin.status,
+          authenticated_session: authenticated.body.authenticated,
+          logout_status: logout.status,
+          after_logout_authenticated: afterLogout.body.authenticated
+        },
         readiness: ready.body.dependencies
       },
       null,
@@ -94,16 +183,41 @@ async function waitForReady(url) {
   throw new Error(`ready health did not become ready; last status ${last?.status ?? "none"}`);
 }
 
+async function staticAssets(base, indexBody) {
+  const paths = [...indexBody.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/gu)].map((match) => match[1]);
+  const assets = [];
+  for (const assetPath of paths) {
+    const asset = await requestText(`${base}${assetPath}`);
+    assert(asset.status === 200, `static asset failed: ${assetPath}`);
+    assets.push(asset.body);
+  }
+  return assets;
+}
+
 async function requestText(url, init) {
-  const response = await fetch(url, init);
+  const response = await fetch(url, {
+    redirect: "manual",
+    ...init
+  });
   return {
     status: response.status,
-    body: await response.text()
+    body: await response.text(),
+    headers: {
+      setCookie: response.headers.get("set-cookie"),
+      wwwAuthenticate: response.headers.get("www-authenticate")
+    }
   };
 }
 
-async function requestJson(url) {
-  const response = await fetch(url);
+async function requestJson(url, init) {
+  const response = await fetch(url, {
+    redirect: "manual",
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...init?.headers
+    }
+  });
   let body;
   try {
     body = await response.json();
@@ -112,7 +226,11 @@ async function requestJson(url) {
   }
   return {
     status: response.status,
-    body
+    body,
+    headers: {
+      setCookie: response.headers.get("set-cookie"),
+      wwwAuthenticate: response.headers.get("www-authenticate")
+    }
   };
 }
 
@@ -155,6 +273,16 @@ function run(args, options = {}) {
   }
 
   return result;
+}
+
+function hashAdminPassword(password, salt) {
+  const digest = pbkdf2Sync(password, salt, 120000, 32, "sha256");
+  return ["pbkdf2-sha256", "120000", salt.toString("base64url"), digest.toString("base64url")].join("$");
+}
+
+function cookiePair(setCookie) {
+  if (setCookie === null || setCookie === undefined) return undefined;
+  return setCookie.split(";", 1)[0];
 }
 
 function freePort() {

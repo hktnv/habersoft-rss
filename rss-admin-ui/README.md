@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-021B_SAME_ORIGIN_AUTH_SENTINEL_ONLY - NOT_DEPLOYED`.
+Status: `MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY - NOT_DEPLOYED`.
 
 ## Scope
 
-Included through MS-021B:
+Included through MS-022A:
 
 - application shell,
 - root route,
@@ -25,16 +25,20 @@ Included through MS-021B:
 - production activation readiness contract,
 - local production readiness verifier,
 - fail-closed protected admin/business shell foundation,
-- same-origin admin session sentinel at `/admin-auth/session`,
-- fail-closed auth-status client,
+- same-origin admin session routes at `/admin-auth/session`, `/admin-auth/login`, and `/admin-auth/logout`,
+- static fail-closed auth sentinel when `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is absent,
+- exact-route auth proxy when server-only `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is configured,
+- protected login/session/logout UI,
 - frontend auth/session boundary verifier,
-- auth-session sentinel runtime harness.
+- auth-session sentinel runtime harness,
+- auth proxy runtime harness,
+- local full-stack auth acceptance harness.
 
 Not included:
 
 - business pages,
-- login/session implementation,
-- real credential exchange,
+- production login/session activation,
+- production credential provisioning,
 - Agent authentication,
 - backend writes,
 - automatic polling or monitoring history,
@@ -50,6 +54,9 @@ npm run typecheck
 npm test
 npm run build
 npm run test:auth-session-sentinel
+npm run test:auth-proxy
+npm run test:proxy-security
+npm run test:fullstack
 npm run verify:production-readiness
 npm run verify:auth-boundary
 npm audit --omit=dev
@@ -61,10 +68,13 @@ Docker runtime config is supplied through:
 
 ```text
 ADMIN_UI_HEALTH_UPSTREAM_ORIGIN
+ADMIN_UI_AUTH_UPSTREAM_ORIGIN
 ADMIN_UI_ENVIRONMENT_NAME
 ```
 
 `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` is server-only and must be an absolute HTTP(S) origin without userinfo, path, query, or fragment. No secret belongs in the frontend bundle or runtime config. The dashboard does not render the upstream origin; it shows only the non-secret environment label and current browser-observed health state.
+
+`ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is also server-only and optional. When absent, `/admin-auth/**` stays in static fail-closed mode. When present, only `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` are proxied upstream.
 
 ## Health Dashboard
 
@@ -79,7 +89,7 @@ The frontend runtime maps those routes to `/health/live` and `/health/ready` on 
 
 ## Admin Auth Boundary
 
-The protected admin/business shell is present but blocked and unconfigured. MS-021B adds only `GET /admin-auth/session` as a same-origin not_configured sentinel. `REAL_AUTH_NOT_IMPLEMENTED`, `SAME_ORIGIN_AUTH_SENTINEL_ONLY`, and `AUTHORITY_REQUIRED_BEFORE_BUSINESS_ADMIN_FEATURES` remain active. No Agent key, Tenant bearer token, password, JWT, refresh token, cookie secret, private key, or privileged business data belongs in the browser. Future business admin features require a separate authority-backed real auth/session milestone.
+MS-022A adds a local/tested admin auth/session foundation. Backend auth defaults to `ADMIN_UI_AUTH_MODE=disabled`, has no default credential, and requires explicit synthetic/local or future production-provisioned values before `single_admin` mode can run. Sessions are server-side and use an HttpOnly `SameSite=Lax` cookie scoped to `/admin-auth`. No Agent key, Tenant bearer token, JWT, refresh token, cookie secret, private key, or privileged business data belongs in the browser. Future business admin features and production activation require separate authority.
 
 ## Docker
 
@@ -97,11 +107,12 @@ Container health endpoint:
 
 Local root Compose publishes the UI on loopback port `8081`.
 
-MS-021B local rehearsal commands:
+MS-022A local rehearsal commands:
 
 ```bash
-docker build -t rss-admin-ui:ms021b-local .
+docker build -t rss-admin-ui:ms022a-local .
 npm run test:auth-session-sentinel
+npm run test:auth-proxy
 npm run test:proxy-security
 npm run test:fullstack
 npm run verify:production-readiness
