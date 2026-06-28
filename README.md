@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard | `READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED - NOT_DEPLOYED` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard | `MS-020D_PRODUCTION_READINESS_PACKAGED_NO_DEPLOY - NOT_DEPLOYED` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -52,10 +52,13 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run verify:production-readiness
 npm audit --omit=dev
 ```
 
 The admin UI uses fixed same-origin browser routes `/status-api/health/live` and `/status-api/health/ready`. Its frontend runtime maps only those routes to the configured server-only `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` `/health/live` and `/health/ready` routes with no credentials, no browser persistence, no automatic polling, no generic proxy, and no backend writes. It remains not deployed.
+
+MS-020D adds the local-only production activation readiness package. It includes a public-data classification for the current status-only fields, an operator authority record template, a future post-deploy evidence checklist, and `npm run verify:production-readiness`. It does not authorize production mutation.
 
 ## Root Docker Workflow
 
@@ -79,6 +82,7 @@ Root Compose wires `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000
 - [Backend production guide](rss-habersoft-com/PRODUCTION.md) - backend canonical production operations and evidence history.
 - [Admin UI production guide](rss-admin-ui/PRODUCTION.md) - frontend read-only status dashboard delivery contract.
 - [Admin UI API/auth contract](rss-admin-ui/.docs/api-auth-contract.md) - deferred Tenant/admin authentication boundary.
+- [Admin UI production activation readiness](rss-admin-ui/.docs/production-activation-readiness.md) - MS-020D no-deploy activation readiness contract and local verifier.
 - [Admin UI read-only dashboard contract](rss-admin-ui/.docs/read-only-status-dashboard.md) - read-only dashboard behavior.
 - [Admin UI same-origin health transport](rss-admin-ui/.docs/same-origin-health-transport.md) - MS-020C health transport contract and local rehearsal.
 - [Backend detailed docs](rss-habersoft-com/.docs/README.md) - backend service and evidence documentation.
@@ -96,7 +100,7 @@ The backend production evidence series remains closed and is not reopened by thi
 | MS-019E | `SUCCESS` |
 | MS-019F | `SUCCESS_GOVERNANCE_ACCEPTED` |
 
-MS-020C adds a local/tested same-origin health transport contract and local full-stack rehearsal for the read-only admin status dashboard. It does not deploy, restart, pull on, or contact production.
+MS-020C adds a local/tested same-origin health transport contract and local full-stack rehearsal for the read-only admin status dashboard. MS-020D packages the production activation readiness contract and local verifier. These milestones do not deploy, restart, pull on, publish an image to, or contact production.
 
 ## No-Secret Policy
 

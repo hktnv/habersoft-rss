@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED - NOT_DEPLOYED`.
+Status: `MS-020D_PRODUCTION_READINESS_PACKAGED_NO_DEPLOY - NOT_DEPLOYED`.
 
 ## Scope
 
-Included through MS-020C:
+Included through MS-020D:
 
 - application shell,
 - root route,
@@ -21,7 +21,9 @@ Included through MS-020C:
 - unit tests,
 - production build,
 - static Docker runtime,
-- production deployment template.
+- production deployment template,
+- production activation readiness contract,
+- local production readiness verifier.
 
 Not included:
 
@@ -41,6 +43,7 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run verify:production-readiness
 npm audit --omit=dev
 ```
 
@@ -82,17 +85,19 @@ Container health endpoint:
 
 Local root Compose publishes the UI on loopback port `8081`.
 
-MS-020C local rehearsal commands:
+MS-020D local rehearsal commands:
 
 ```bash
-docker build -t rss-admin-ui:ms020c-local .
+docker build -t rss-admin-ui:ms020d-local .
 npm run test:proxy-security
 npm run test:fullstack
+npm run verify:production-readiness
 ```
 
 ## Docs
 
 - [Production guide](PRODUCTION.md)
 - [API/auth contract](.docs/api-auth-contract.md)
+- [Production activation readiness contract](.docs/production-activation-readiness.md)
 - [Read-only status dashboard contract](.docs/read-only-status-dashboard.md)
 - [Same-origin health transport contract](.docs/same-origin-health-transport.md)

@@ -16,6 +16,7 @@ const forbidden = [
   /AGENT_KEY\s*=/u,
   /X-Agent-Key/iu,
   /ADMIN_UI_HEALTH_UPSTREAM_ORIGIN/iu,
+  /ADMIN_UI_API_BASE_URL/iu,
   /main-service-api:3000/iu,
   /C:\\Users\\EVO-MRDM/iu,
   /habersoft-auth\\rss-habersoft-com/iu,

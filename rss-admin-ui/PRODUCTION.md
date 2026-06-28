@@ -1,8 +1,8 @@
 # rss-admin-ui Production Guide
 
-Status: `READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED - NOT_DEPLOYED`.
+Status: `MS-020D_PRODUCTION_READINESS_PACKAGED_NO_DEPLOY - NOT_DEPLOYED`.
 
-This guide owns the frontend delivery contract for `rss-admin-ui`. MS-020C adds a local/tested same-origin health transport for the read-only status dashboard, but no production deployment is performed.
+This guide owns the frontend delivery contract for `rss-admin-ui`. MS-020D packages the production activation readiness contract and a local verifier for the read-only status dashboard, but no production deployment is performed.
 
 Historical note: MS-020B supersedes the MS-020A `FOUNDATION_ONLY` state. `FOUNDATION_ONLY` is not the current frontend status token.
 
@@ -19,15 +19,17 @@ ADMIN_UI_ENVIRONMENT_NAME
 
 The read-only dashboard observes only same-origin `GET /status-api/health/live` and `GET /status-api/health/ready`, mapped by the frontend runtime to backend `/health/live` and `/health/ready`. It uses no `Authorization` header, no cookie credential, no bearer or Tenant token, no Agent key, no browser persistence, and no write method. The full transport contract is [.docs/same-origin-health-transport.md](.docs/same-origin-health-transport.md).
 
+The future production activation data classification, authority record template, edge/server requirements, and post-deploy evidence checklist are [.docs/production-activation-readiness.md](.docs/production-activation-readiness.md). Status tokens remain `PRODUCTION_MUTATION_NOT_PERFORMED`, `ADMIN_UI_NOT_DEPLOYED`, and `AUTH_SESSION_DEFERRED`.
+
 ## Image Contract
 
 The production template in [`deploy/production/compose.yaml`](deploy/production/compose.yaml) expects an immutable `RSS_ADMIN_UI_IMAGE` value, a server-only `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`, a non-secret `ADMIN_UI_ENVIRONMENT_NAME`, and loopback-only host port `8081`.
 
 ## Deployment Boundary
 
-MS-020C does not deploy this UI and does not activate `rss-panel.habersoft.com`.
+MS-020D does not deploy this UI and does not activate `rss-panel.habersoft.com`.
 
-Production edge/DNS/TLS/OpenLiteSpeed routing and backend reachability from the frontend container are not validated by MS-020C. Backend CORS, backend routes, DNS, TLS, OpenLiteSpeed, and production reverse proxy settings are not changed by this milestone.
+MS-020D does not validate production edge/DNS/TLS/OpenLiteSpeed routing or backend reachability from the frontend container. Backend CORS, backend routes, DNS, TLS, OpenLiteSpeed, and production reverse proxy settings are not changed by this milestone.
 
 Before any future deployment:
 
@@ -36,8 +38,15 @@ Before any future deployment:
 - validate future CORS/cookie/token behavior only for a separately authorized authenticated slice,
 - build and verify an immutable image,
 - configure OpenLiteSpeed/TLS separately,
-- run frontend production evidence gates.
+- run frontend production evidence gates,
+- complete the MS-020D operator authority record and future post-deploy evidence checklist.
+
+Local readiness package command:
+
+```bash
+npm run verify:production-readiness
+```
 
 ## Rollback Boundary
 
-Rollback is image-based once a future deployment exists. There is no active frontend production runtime to roll back in MS-020C.
+Rollback is image-based once a future deployment exists. There is no active frontend production runtime to roll back in MS-020D.

@@ -12,9 +12,9 @@ Topology classification: `POLYREPO_STYLE_SINGLE_GIT_MONOREPO`.
 | Project | Production status | Deployment status |
 |---|---|---|
 | `rss-habersoft-com` | `MVP - Production Active` | Existing backend runtime remains untouched |
-| `rss-admin-ui` | `READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED - NOT_DEPLOYED` | Not deployed |
+| `rss-admin-ui` | `MS-020D_PRODUCTION_READINESS_PACKAGED_NO_DEPLOY - NOT_DEPLOYED` | Not deployed |
 
-MS-020A performed repository topology migration and local workspace cutover only. MS-020B added a local/tested read-only admin status dashboard contract and frontend slice. MS-020C adds a local/tested same-origin health transport and local full-stack rehearsal for that dashboard. These milestones do not SSH to production, run production `git pull`, restart containers, rebuild a production image, publish an image, or mutate production environment files.
+MS-020A performed repository topology migration and local workspace cutover only. MS-020B added a local/tested read-only admin status dashboard contract and frontend slice. MS-020C adds a local/tested same-origin health transport and local full-stack rehearsal for that dashboard. MS-020D packages the production activation readiness contract, operator authority template, future evidence checklist, and local readiness verifier. These milestones do not SSH to production, run production `git pull`, restart containers, rebuild a production image, publish an image, or mutate production environment files.
 
 Explicit path migration status:
 
@@ -42,7 +42,7 @@ Do not claim the running host has already migrated to that layout until the oper
 
 Backend production environment variables, image identity, database/Redis/JWKS contracts, backup/restore, rollout, rollback, and evidence receipts are owned by [`rss-habersoft-com/PRODUCTION.md`](rss-habersoft-com/PRODUCTION.md).
 
-Admin UI runtime config, read-only health dashboard behavior, same-origin health transport, static image delivery, reverse-proxy expectations, and frontend rollback are owned by [`rss-admin-ui/PRODUCTION.md`](rss-admin-ui/PRODUCTION.md).
+Admin UI runtime config, read-only health dashboard behavior, same-origin health transport, activation readiness classification, future authority template, static image delivery, reverse-proxy expectations, and frontend rollback are owned by [`rss-admin-ui/PRODUCTION.md`](rss-admin-ui/PRODUCTION.md).
 
 Root Compose is for local orchestration and CI config validation. It is not a production deployment file.
 
@@ -50,7 +50,7 @@ Root Compose is for local orchestration and CI config validation. It is not a pr
 
 Local root Compose project name: `habersoft-rss-local`.
 
-Backend production Compose project name remains backend-owned and unchanged. Admin UI production image naming is frontend-owned and remains template-only in MS-020C.
+Backend production Compose project name remains backend-owned and unchanged. Admin UI production image naming is frontend-owned and remains template-only in MS-020D.
 
 ## Version Boundary
 
@@ -59,7 +59,7 @@ Backend production Compose project name remains backend-owned and unchanged. Adm
 | Backend `main-service` | `0.1.0-ms-017` |
 | Frontend `rss-admin-ui` | `0.1.0` |
 
-There is no shared product version bump, Git tag, GitHub Release, registry publication, or production image publication in MS-020C.
+There is no shared product version bump, Git tag, GitHub Release, registry publication, or production image publication in MS-020D.
 
 ## Evidence Ownership
 

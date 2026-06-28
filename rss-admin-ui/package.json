@@ -12,7 +12,8 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run --config vitest.config.ts",
     "test:proxy-security": "node scripts/proxy-security-harness.mjs",
-    "test:fullstack": "node scripts/root-fullstack-acceptance.mjs"
+    "test:fullstack": "node scripts/root-fullstack-acceptance.mjs",
+    "verify:production-readiness": "node scripts/production-readiness-verify.mjs"
   },
   "dependencies": {
     "react": "^19.2.7",

@@ -42,10 +42,13 @@ const requiredFrontendFiles = [
   "deploy/production/compose.yaml",
   ".docs/read-only-status-dashboard.md",
   ".docs/same-origin-health-transport.md",
+  ".docs/production-activation-readiness.md",
   "src/App.tsx",
   "src/status/healthClient.ts",
   "src/status/StatusDashboard.tsx",
-  "tests/app-shell.test.tsx"
+  "scripts/production-readiness-verify.mjs",
+  "tests/app-shell.test.tsx",
+  "tests/production-readiness-doc.test.ts"
 ];
 const protectedBackendPaths = [
   "src",
@@ -146,10 +149,10 @@ function assertRootDocs() {
     failures.push("backend production guide lost accepted evidence history");
   }
   if (
-    !frontendProduction.includes("READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED") ||
+    !frontendProduction.includes("MS-020D_PRODUCTION_READINESS_PACKAGED_NO_DEPLOY") ||
     !frontendProduction.includes("NOT_DEPLOYED")
   ) {
-    failures.push("frontend production guide must state same-origin read-only dashboard rehearsed and not deployed");
+    failures.push("frontend production guide must state MS-020D readiness packaged and not deployed");
   }
   if (/byte-identical mirror/iu.test(rootProduction) || /operator mirror PRODUCTION\.md SHA-256/iu.test(rootProduction)) {
     failures.push("root production guide still claims old mirror contract");
