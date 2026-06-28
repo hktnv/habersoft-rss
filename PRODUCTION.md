@@ -7,6 +7,8 @@ This root guide owns product-level production boundaries for the `habersoft-rss`
 
 Topology classification: `POLYREPO_STYLE_SINGLE_GIT_MONOREPO`.
 
+Codex workspace hygiene is governed by [`CODEX_WORKSPACE_POLICY.md`](CODEX_WORKSPACE_POLICY.md). MS-020E requires new Codex temporary workspaces, clones, worktrees, test folders, build outputs, package outputs, and task caches to live under `E:\Codex\rss-habersoft-com\workplace\`. This is not a production path migration and does not move production checkout ownership.
+
 ## Current Status
 
 | Project | Production status | Deployment status |
@@ -45,6 +47,8 @@ Backend production environment variables, image identity, database/Redis/JWKS co
 Admin UI runtime config, read-only health dashboard behavior, same-origin health transport, activation readiness classification, future authority template, static image delivery, reverse-proxy expectations, and frontend rollback are owned by [`rss-admin-ui/PRODUCTION.md`](rss-admin-ui/PRODUCTION.md).
 
 Root Compose is for local orchestration and CI config validation. It is not a production deployment file.
+
+The E: Codex workplace root is for Codex-created temporary task artifacts only. It does not authorize cleanup or relocation of production evidence, `.md`, `operator-state`, historical Desktop worktrees, legacy tombstone paths, or user data.
 
 ## Docker Naming
 

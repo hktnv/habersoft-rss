@@ -11,6 +11,8 @@
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
+Codex-created temporary workspaces, clones, Git worktrees, test folders, build outputs, package outputs, and task caches must follow the root [Codex workspace policy](CODEX_WORKSPACE_POLICY.md). The only active autonomous workplace root for new Codex task artifacts is `E:\Codex\rss-habersoft-com\workplace\`.
+
 ## Prerequisites
 
 | Tool | Contract |
@@ -79,6 +81,7 @@ Root Compose wires `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000
 ## Documentation Map
 
 - [Root production guide](PRODUCTION.md) - product-level deployment boundaries and migration status.
+- [Codex workspace policy](CODEX_WORKSPACE_POLICY.md) - MS-020E E: workplace policy, cleanup contract, and future-agent guardrails.
 - [Backend production guide](rss-habersoft-com/PRODUCTION.md) - backend canonical production operations and evidence history.
 - [Admin UI production guide](rss-admin-ui/PRODUCTION.md) - frontend read-only status dashboard delivery contract.
 - [Admin UI API/auth contract](rss-admin-ui/.docs/api-auth-contract.md) - deferred Tenant/admin authentication boundary.
@@ -108,4 +111,4 @@ Tracked files must not contain production credentials, database URLs with real p
 
 ## Path Conventions
 
-Repository commands should use relative paths. A local Windows checkout may be placed at `C:\Users\EVO-MRDM\Desktop\habersoft-rss`, but tracked automation must not depend on that absolute path.
+Repository commands should use relative paths. The former local Windows checkout example `C:\Users\EVO-MRDM\Desktop\habersoft-rss` is historical/legacy/do-not-use for new Codex temporary workspaces, clones, worktrees, test folders, build outputs, package outputs, or task caches. Active Codex task artifacts must be placed under `E:\Codex\rss-habersoft-com\workplace\`.

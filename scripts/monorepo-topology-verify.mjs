@@ -12,7 +12,9 @@ const failures = [];
 const requiredRootFiles = [
   "README.md",
   "PRODUCTION.md",
+  "CODEX_WORKSPACE_POLICY.md",
   "compose.yaml",
+  "scripts/codex-workspace-hygiene-verify.mjs",
   "scripts/monorepo-topology-verify.mjs",
   ".gitattributes",
   ".gitignore"
@@ -140,6 +142,9 @@ function assertRootDocs() {
     }
     if (!text.includes("rss-habersoft-com") || !text.includes("rss-admin-ui")) {
       failures.push("root docs must link both project roots");
+    }
+    if (!text.includes("CODEX_WORKSPACE_POLICY.md")) {
+      failures.push("root docs must link Codex workspace policy");
     }
   }
   if (!rootProduction.includes("PRODUCTION_PATH_MIGRATION_NOT_PERFORMED_IN_MS-020A")) {
