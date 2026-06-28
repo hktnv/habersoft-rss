@@ -47,6 +47,8 @@ const requiredFrontendFiles = [
   ".docs/read-only-status-dashboard.md",
   ".docs/same-origin-health-transport.md",
   ".docs/production-activation-readiness.md",
+  ".docs/production-activation-package.md",
+  ".docs/admin-auth-production-operator-handoff.md",
   "src/App.tsx",
   "src/auth/adminSessionBoundary.ts",
   "src/auth/adminSessionClient.ts",
@@ -58,6 +60,8 @@ const requiredFrontendFiles = [
   "scripts/auth-session-sentinel-harness.mjs",
   "scripts/auth-proxy-harness.mjs",
   "scripts/production-readiness-verify.mjs",
+  "scripts/production-activation-package-verify.mjs",
+  "scripts/production-mode-rc.mjs",
   "tests/app-shell.test.tsx",
   "tests/admin-session-boundary.test.ts",
   "tests/admin-session-client.test.ts",
@@ -75,6 +79,7 @@ const protectedBackendPaths = [
   "package-lock.json"
 ];
 const allowedBackendAdminAuthDelta = new Set([
+  "package.json",
   "src/api.module.ts",
   "src/bootstrap/api-entrypoint.ts",
   "src/configuration/runtime-config.ts"
@@ -106,7 +111,7 @@ console.log(JSON.stringify({
   topology: "POLYREPO_STYLE_SINGLE_GIT_MONOREPO",
   migration_base: migrationBase,
   project_roots: [backendRoot, frontendRoot],
-  backend_protected_content: "byte-identical-except-ms022a-admin-auth-delta",
+  backend_protected_content: "byte-identical-except-ms022a-admin-auth-and-ms022b-package-delta",
   nested_git: false
 }, null, 2));
 
@@ -171,7 +176,8 @@ function assertRootDocs() {
     failures.push("backend production guide lost accepted evidence history");
   }
   if (
-    !frontendProduction.includes("MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY") ||
+    (!frontendProduction.includes("MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY") &&
+      !frontendProduction.includes("MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY")) ||
     !frontendProduction.includes("/admin-auth/session") ||
     !frontendProduction.includes("/admin-auth/login") ||
     !frontendProduction.includes("NOT_DEPLOYED")

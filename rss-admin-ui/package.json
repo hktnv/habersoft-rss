@@ -15,7 +15,9 @@
     "test:auth-proxy": "node scripts/auth-proxy-harness.mjs",
     "test:proxy-security": "node scripts/proxy-security-harness.mjs",
     "test:fullstack": "node scripts/root-fullstack-acceptance.mjs",
+    "test:production-mode-rc": "node scripts/production-mode-rc.mjs",
     "verify:production-readiness": "node scripts/production-readiness-verify.mjs",
+    "verify:production-activation-package": "node scripts/production-activation-package-verify.mjs",
     "verify:auth-boundary": "node scripts/auth-boundary-verify.mjs"
   },
   "dependencies": {

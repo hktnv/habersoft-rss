@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Authenticated read-only admin status dashboard foundation with same-origin admin auth/session routes | `MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY - NOT_DEPLOYED` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Authenticated read-only admin status dashboard foundation with same-origin admin auth/session routes | `MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY - NOT_DEPLOYED` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -58,7 +58,9 @@ npm run test:auth-session-sentinel
 npm run test:auth-proxy
 npm run test:proxy-security
 npm run test:fullstack
+npm run test:production-mode-rc
 npm run verify:production-readiness
+npm run verify:production-activation-package
 npm run verify:auth-boundary
 npm audit --omit=dev
 ```
@@ -72,6 +74,8 @@ MS-021A adds a frontend-only fail-closed protected admin/business shell foundati
 MS-021B adds a same-origin `GET /admin-auth/session` not_configured sentinel, a fail-closed auth-status client, and `npm run test:auth-session-sentinel`.
 
 MS-022A adds disabled-by-default backend admin auth/session routes, same-origin browser login/session/logout integration, an exact auth proxy activated only by server-only `ADMIN_UI_AUTH_UPSTREAM_ORIGIN`, and local full-stack auth acceptance. The admin UI remains `NOT_DEPLOYED`; production activation, production secrets, CORS changes, edge mutation, tags, releases, and registry publication remain out of scope.
+
+MS-022B adds the secretless production activation package for the still-not-deployed admin UI: backend admin auth hash/session-secret/config helpers, local production-mode RC acceptance with synthetic credentials, production activation package docs, operator handoff docs, and regression verifiers. It does not perform production deployment, production contact, registry publication, no Git tag, GitHub Release, PR, DNS/TLS/edge mutation, or real secret provisioning.
 
 ## Root Docker Workflow
 
@@ -99,6 +103,9 @@ Root Compose wires `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000
 - [Admin UI admin auth/session boundary](rss-admin-ui/.docs/admin-auth-session-boundary.md) - MS-021A protected shell and real-auth blocker contract.
 - [Admin UI admin session static fallback](rss-admin-ui/.docs/admin-session-sentinel.md) - MS-021B/MS-022A same-origin not_configured fallback contract.
 - [Admin UI production activation readiness](rss-admin-ui/.docs/production-activation-readiness.md) - MS-020D no-deploy activation readiness contract and local verifier.
+- [Admin UI production activation package](rss-admin-ui/.docs/production-activation-package.md) - MS-022B secretless no-deploy activation package and local RC acceptance.
+- [Admin UI production operator handoff](rss-admin-ui/.docs/admin-auth-production-operator-handoff.md) - Future operator authority, redacted evidence, and rollback checklist.
+- [Backend admin auth production activation](rss-habersoft-com/.docs/admin-auth-production-activation.md) - Admin auth env variables and secretless provisioning helper contract.
 - [Admin UI read-only dashboard contract](rss-admin-ui/.docs/read-only-status-dashboard.md) - read-only dashboard behavior.
 - [Admin UI same-origin health transport](rss-admin-ui/.docs/same-origin-health-transport.md) - MS-020C health transport contract and local rehearsal.
 - [Backend detailed docs](rss-habersoft-com/.docs/README.md) - backend service and evidence documentation.
@@ -116,7 +123,7 @@ The backend production evidence series remains closed and is not reopened by thi
 | MS-019E | `SUCCESS` |
 | MS-019F | `SUCCESS_GOVERNANCE_ACCEPTED` |
 
-MS-020C adds a local/tested same-origin health transport contract and local full-stack rehearsal for the read-only admin status dashboard. MS-020D packages the production activation readiness contract and local verifier. MS-021A adds the protected admin shell safety boundary. MS-021B adds a same-origin auth-status sentinel only. MS-022A adds the local admin auth/session foundation and exact same-origin proxy activation, still with no production deployment. These milestones do not deploy, restart, pull on, publish an image to, or contact production.
+MS-020C adds a local/tested same-origin health transport contract and local full-stack rehearsal for the read-only admin status dashboard. MS-020D packages the production activation readiness contract and local verifier. MS-021A adds the protected admin shell safety boundary. MS-021B adds a same-origin auth-status sentinel only. MS-022A adds the local admin auth/session foundation and exact same-origin proxy activation, still with no production deployment. MS-022B prepares the secretless production activation package and local production-mode RC harness while keeping the admin UI `NOT_DEPLOYED`. These milestones do not deploy, restart, pull on, publish an image to, create a Git tag for, or contact production.
 
 ## No-Secret Policy
 

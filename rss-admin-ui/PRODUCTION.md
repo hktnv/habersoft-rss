@@ -1,8 +1,8 @@
 # rss-admin-ui Production Guide
 
-Status: `MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY - NOT_DEPLOYED`.
+Status: `MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY - NOT_DEPLOYED`.
 
-This guide owns the frontend delivery contract for `rss-admin-ui`. MS-022A adds a local/tested same-origin admin auth/session foundation on top of the protected shell foundation, but no production deployment is performed.
+This guide owns the frontend delivery contract for `rss-admin-ui`. MS-022A adds a local/tested same-origin admin auth/session foundation on top of the protected shell foundation. MS-022B adds the secretless production activation package, local production-mode RC acceptance, and operator handoff docs for a later authorized milestone, but no production deployment is performed.
 
 Historical note: MS-020B supersedes the MS-020A `FOUNDATION_ONLY` state. `FOUNDATION_ONLY` is not the current frontend status token.
 
@@ -22,11 +22,11 @@ ADMIN_UI_ENVIRONMENT_NAME
 
 The read-only dashboard observes only same-origin `GET /status-api/health/live` and `GET /status-api/health/ready`, mapped by the frontend runtime to backend `/health/live` and `/health/ready`. It uses no `Authorization` header, no cookie credential, no bearer or Tenant token, no Agent key, no browser persistence, and no write method. The full transport contract is [.docs/same-origin-health-transport.md](.docs/same-origin-health-transport.md).
 
-The future production activation data classification, authority record template, edge/server requirements, and post-deploy evidence checklist are [.docs/production-activation-readiness.md](.docs/production-activation-readiness.md). Status tokens remain `PRODUCTION_MUTATION_NOT_PERFORMED` and `ADMIN_UI_NOT_DEPLOYED`.
+The future production activation data classification, authority record template, edge/server requirements, and post-deploy evidence checklist are [.docs/production-activation-readiness.md](.docs/production-activation-readiness.md). The MS-022B production activation package and operator handoff are [.docs/production-activation-package.md](.docs/production-activation-package.md) and [.docs/admin-auth-production-operator-handoff.md](.docs/admin-auth-production-operator-handoff.md). Status tokens remain `PRODUCTION_MUTATION_NOT_PERFORMED` and `ADMIN_UI_NOT_DEPLOYED`.
 
 The protected admin shell unlocks only when the same-origin session endpoint returns `authenticated: true`. The current implementation still exposes no privileged business data and no admin write controls. Business admin features remain blocked until a separate authority-backed milestone defines Tenant/admin identity, role policy, authenticated field classification, and production evidence. The full boundary is [.docs/admin-auth-session-boundary.md](.docs/admin-auth-session-boundary.md).
 
-MS-022A defines `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` as the exact browser auth paths. The static fallback contract is [.docs/admin-session-sentinel.md](.docs/admin-session-sentinel.md).
+MS-022A defines `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` as the exact browser auth paths. MS-022B documents the backend production activation env variables `ADMIN_UI_AUTH_MODE`, `ADMIN_UI_ADMIN_USERNAME`, `ADMIN_UI_ADMIN_PASSWORD_HASH`, `ADMIN_UI_SESSION_SECRET`, and `ADMIN_UI_SESSION_COOKIE_SECURE`, plus frontend server-only `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` and `ADMIN_UI_AUTH_UPSTREAM_ORIGIN`. The static fallback contract is [.docs/admin-session-sentinel.md](.docs/admin-session-sentinel.md).
 
 ## Image Contract
 
@@ -34,14 +34,14 @@ The production template in [`deploy/production/compose.yaml`](deploy/production/
 
 ## Deployment Boundary
 
-MS-022A does not deploy this UI and does not activate `rss-panel.habersoft.com`.
+MS-022A/MS-022B do not deploy this UI and do not activate `rss-panel.habersoft.com`.
 
-MS-022A does not validate production edge/DNS/TLS/OpenLiteSpeed routing from the frontend container. Backend CORS, DNS, TLS, OpenLiteSpeed, and production reverse proxy settings are not changed by this milestone.
+MS-022B validates only a local production-mode release candidate with synthetic credentials. It performs no production deployment, no production contact, no registry publication, no Git tag, no GitHub Release, no PR, no DNS/TLS/OpenLiteSpeed mutation, and no real secret provisioning. Backend CORS, DNS, TLS, OpenLiteSpeed, and production reverse proxy settings are not changed by this milestone.
 
 Before any future deployment:
 
 - decide Tenant/admin browser auth and session handling,
-- provision production admin auth secrets and set `ADMIN_UI_AUTH_MODE` deliberately,
+- provision production admin auth secrets outside Git and set `ADMIN_UI_AUTH_MODE` deliberately,
 - validate production edge routing and container-to-backend health reachability,
 - validate future CORS/cookie/token behavior only for a separately authorized authenticated slice,
 - build and verify an immutable image,
@@ -53,6 +53,8 @@ Local readiness package command:
 
 ```bash
 npm run verify:production-readiness
+npm run verify:production-activation-package
+npm run test:production-mode-rc
 npm run verify:auth-boundary
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
@@ -60,4 +62,4 @@ npm run test:auth-proxy
 
 ## Rollback Boundary
 
-Rollback is image-based once a future deployment exists. There is no active frontend production runtime to roll back in MS-022A.
+Rollback is image-based once a future deployment exists. There is no active frontend production runtime to roll back in MS-022A/MS-022B.

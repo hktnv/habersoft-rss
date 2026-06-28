@@ -28,6 +28,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [service-handbook/agent-servis-kilavuzu.md](service-handbook/agent-servis-kilavuzu.md) | Agent entegrasyon akisi, auth siniri, idempotency ve yapmamasi gerekenler. |
 | [service-handbook/tenant-servis-kilavuzu.md](service-handbook/tenant-servis-kilavuzu.md) | Tenant kimligi, izolasyon, JWT/JWKS ve public API kullanim ozeti. |
 | [local-development.md](local-development.md) | Gercek yerel container gelistirme, calistirma, local JWKS fixture ve dogrulama komutlari. |
+| [admin-auth-production-activation.md](admin-auth-production-activation.md) | MS-022B admin auth secretless provisioning helpers, env contract, local RC boundary and future operator activation checklist. |
 | [database-schema.md](database-schema.md) | MS-002 canonical PostgreSQL business schema, migration ve DB test gercegi. |
 | [tenant-authentication.md](tenant-authentication.md) | MS-003 tenant RS256 JWT/JWKS dogrulama altyapisi, readiness ve sinirlar. |
 | [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md) | MS-004 tenant feed abonelik endpoint'leri, tenant izolasyonu, transaction ve sinirlar. |
@@ -80,29 +81,30 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 7. [production-operational-smoke-and-error-signals.md](production-operational-smoke-and-error-signals.md)
 8. [repository-conventions.md](repository-conventions.md)
 9. [local-development.md](local-development.md)
-10. [tenant-authentication.md](tenant-authentication.md)
-11. [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md)
-12. [tenant-rate-limiting.md](tenant-rate-limiting.md)
-13. [tenant-entry-listing.md](tenant-entry-listing.md)
-14. [tenant-entry-detail.md](tenant-entry-detail.md)
-15. [agent-authentication.md](agent-authentication.md)
-16. [agent-heartbeat.md](agent-heartbeat.md)
-17. [agent-due-feeds.md](agent-due-feeds.md)
-18. [agent-new-guid-filtering.md](agent-new-guid-filtering.md)
-19. [agent-entry-ingestion.md](agent-entry-ingestion.md)
-20. [agent-feed-check-results.md](agent-feed-check-results.md)
-21. [background-job-runner.md](background-job-runner.md)
-22. [cleanup-retention.md](cleanup-retention.md)
-23. [mvp-release-readiness.md](mvp-release-readiness.md)
-24. [production-deployment.md](production-deployment.md)
-25. [release-packaging.md](release-packaging.md)
-26. [backup-and-restore.md](backup-and-restore.md)
-27. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
-28. [staging-host-provisioning.md](staging-host-provisioning.md)
-29. [local-staging-rehearsal.md](local-staging-rehearsal.md)
-30. [production-rollout-runbook.md](production-rollout-runbook.md)
-31. [database-schema.md](database-schema.md)
-32. Repository kok [README.md](../README.md)
+10. [admin-auth-production-activation.md](admin-auth-production-activation.md)
+11. [tenant-authentication.md](tenant-authentication.md)
+12. [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md)
+13. [tenant-rate-limiting.md](tenant-rate-limiting.md)
+14. [tenant-entry-listing.md](tenant-entry-listing.md)
+15. [tenant-entry-detail.md](tenant-entry-detail.md)
+16. [agent-authentication.md](agent-authentication.md)
+17. [agent-heartbeat.md](agent-heartbeat.md)
+18. [agent-due-feeds.md](agent-due-feeds.md)
+19. [agent-new-guid-filtering.md](agent-new-guid-filtering.md)
+20. [agent-entry-ingestion.md](agent-entry-ingestion.md)
+21. [agent-feed-check-results.md](agent-feed-check-results.md)
+22. [background-job-runner.md](background-job-runner.md)
+23. [cleanup-retention.md](cleanup-retention.md)
+24. [mvp-release-readiness.md](mvp-release-readiness.md)
+25. [production-deployment.md](production-deployment.md)
+26. [release-packaging.md](release-packaging.md)
+27. [backup-and-restore.md](backup-and-restore.md)
+28. [staging-deployment-and-rollback.md](staging-deployment-and-rollback.md)
+29. [staging-host-provisioning.md](staging-host-provisioning.md)
+30. [local-staging-rehearsal.md](local-staging-rehearsal.md)
+31. [production-rollout-runbook.md](production-rollout-runbook.md)
+32. [database-schema.md](database-schema.md)
+33. Repository kok [README.md](../README.md)
 
 ## Master/DEV Uyum Kaydi
 

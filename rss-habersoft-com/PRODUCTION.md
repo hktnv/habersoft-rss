@@ -10,7 +10,17 @@ Current main-service production activation status ve operator-confirmed evidence
 
 Current application status: `MVP — Production Aktif`.
 
-MS-022A source contains a disabled-by-default admin auth/session foundation for the not-deployed `rss-admin-ui`. Production backend operation does not enable it by default: `ADMIN_UI_AUTH_MODE=disabled` is the safe baseline, no default admin credential exists, and production secret provisioning for `single_admin` remains separate operator-authorized work. MS-022A does not deploy the admin UI, does not change production CORS or edge routing, and does not bump the active backend package version.
+MS-022A source contains a disabled-by-default admin auth/session foundation for the not-deployed `rss-admin-ui`. Production backend operation does not enable it by default: `ADMIN_UI_AUTH_MODE=disabled` is the safe baseline, no default admin credential exists, and production secret provisioning for `single_admin` remains separate operator-authorized work. MS-022B adds secretless admin auth hash/session-secret/config helpers and local production-mode RC validation for a future operator-authorized activation package. MS-022A/MS-022B do not deploy the admin UI, do not change production CORS or edge routing, do not publish a registry image, do not create a Git tag or GitHub Release, and do not bump the active backend package version. The admin UI remains `MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY - NOT_DEPLOYED`.
+
+Admin auth production activation details are documented in [.docs/admin-auth-production-activation.md](.docs/admin-auth-production-activation.md). The backend helper commands are:
+
+```bash
+npm run admin-auth:hash
+npm run admin-auth:secret
+npm run admin-auth:verify-config
+```
+
+Real production password hashes and session secrets are operator-owned secret material and must not be committed to Git.
 
 Production source delivery icin tek gecerli akış:
 

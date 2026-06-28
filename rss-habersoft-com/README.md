@@ -14,7 +14,17 @@ Application version: `0.1.0-ms-017`.
 Application status: `MVP — Production Aktif`.
 Master baseline: `rss-habersoft-master-v12`.
 
-MS-022A repository-local source adds disabled-by-default admin auth/session routes for the not-deployed `rss-admin-ui` local full-stack rehearsal: `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout`. Backend admin auth defaults to `ADMIN_UI_AUTH_MODE=disabled`, has no default credential, and requires explicit `single_admin` configuration with a PBKDF2 password hash, session secret, Redis-backed server-side sessions, and an HttpOnly `SameSite=Lax` cookie. The backend package version remains `0.1.0-ms-017` because these routes are feature-gated, locally rehearsed only, and not production-activated by MS-022A.
+MS-022A repository-local source adds disabled-by-default admin auth/session routes for the not-deployed `rss-admin-ui` local full-stack rehearsal: `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout`. Backend admin auth defaults to `ADMIN_UI_AUTH_MODE=disabled`, has no default credential, and requires explicit `single_admin` configuration with a PBKDF2 password hash, session secret, Redis-backed server-side sessions, and an HttpOnly `SameSite=Lax` cookie. MS-022B adds secretless provisioning helpers and production activation validation docs for a future operator-authorized deployment, while the admin UI remains `MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY - NOT_DEPLOYED`. The backend package version remains `0.1.0-ms-017` because these routes are feature-gated, locally rehearsed only, and not production-activated by MS-022A/MS-022B.
+
+Admin auth provisioning helpers:
+
+```bash
+npm run admin-auth:hash
+npm run admin-auth:secret
+npm run admin-auth:verify-config
+```
+
+The helpers use the current PBKDF2 admin password hash contract, generate/validate session secrets, validate production-like admin auth config, and redact sensitive values by default. Real production secrets must remain outside Git and outside Codex control. See [.docs/admin-auth-production-activation.md](.docs/admin-auth-production-activation.md).
 
 MS-018C operator-confirmed evidence'e gore `main-service` backend production'da aktiftir: internal/public live ve ready checks HTTP `200`, PostgreSQL/Redis/tenantAuth readiness `up`, API loopback upstream `127.0.0.1:3200`.
 

@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY - NOT_DEPLOYED`.
+Status: `MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY - NOT_DEPLOYED`.
 
 ## Scope
 
-Included through MS-022A:
+Included through MS-022B:
 
 - application shell,
 - root route,
@@ -32,7 +32,11 @@ Included through MS-022A:
 - frontend auth/session boundary verifier,
 - auth-session sentinel runtime harness,
 - auth proxy runtime harness,
-- local full-stack auth acceptance harness.
+- local full-stack auth acceptance harness,
+- secretless admin auth production activation package,
+- local production-mode RC acceptance harness,
+- production activation package verifier,
+- operator handoff docs for a future no-secret production activation milestone.
 
 Not included:
 
@@ -57,7 +61,9 @@ npm run test:auth-session-sentinel
 npm run test:auth-proxy
 npm run test:proxy-security
 npm run test:fullstack
+npm run test:production-mode-rc
 npm run verify:production-readiness
+npm run verify:production-activation-package
 npm run verify:auth-boundary
 npm audit --omit=dev
 ```
@@ -91,6 +97,8 @@ The frontend runtime maps those routes to `/health/live` and `/health/ready` on 
 
 MS-022A adds a local/tested admin auth/session foundation. Backend auth defaults to `ADMIN_UI_AUTH_MODE=disabled`, has no default credential, and requires explicit synthetic/local or future production-provisioned values before `single_admin` mode can run. Sessions are server-side and use an HttpOnly `SameSite=Lax` cookie scoped to `/admin-auth`. No Agent key, Tenant bearer token, JWT, refresh token, cookie secret, private key, or privileged business data belongs in the browser. Future business admin features and production activation require separate authority.
 
+MS-022B prepares the activation package without activating production. Backend helpers generate or validate PBKDF2 admin password hashes, generate or validate session secrets, and verify production-like admin auth env without printing secret values. The local RC harness uses only synthetic credentials and actual local Docker runtime components.
+
 ## Docker
 
 Local image build:
@@ -107,15 +115,17 @@ Container health endpoint:
 
 Local root Compose publishes the UI on loopback port `8081`.
 
-MS-022A local rehearsal commands:
+MS-022B local rehearsal commands:
 
 ```bash
-docker build -t rss-admin-ui:ms022a-local .
+docker build -t rss-admin-ui:ms022b-local .
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
 npm run test:proxy-security
 npm run test:fullstack
+npm run test:production-mode-rc
 npm run verify:production-readiness
+npm run verify:production-activation-package
 npm run verify:auth-boundary
 ```
 
@@ -126,5 +136,7 @@ npm run verify:auth-boundary
 - [Admin auth/session boundary](.docs/admin-auth-session-boundary.md)
 - [Admin session sentinel](.docs/admin-session-sentinel.md)
 - [Production activation readiness contract](.docs/production-activation-readiness.md)
+- [Production activation package](.docs/production-activation-package.md)
+- [Admin auth production operator handoff](.docs/admin-auth-production-operator-handoff.md)
 - [Read-only status dashboard contract](.docs/read-only-status-dashboard.md)
 - [Same-origin health transport contract](.docs/same-origin-health-transport.md)
