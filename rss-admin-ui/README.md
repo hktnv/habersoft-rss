@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-020D_PRODUCTION_READINESS_PACKAGED_NO_DEPLOY - NOT_DEPLOYED`.
+Status: `MS-021A_ADMIN_AUTH_BOUNDARY_FOUNDATION - NOT_DEPLOYED`.
 
 ## Scope
 
-Included through MS-020D:
+Included through MS-021A:
 
 - application shell,
 - root route,
@@ -23,12 +23,15 @@ Included through MS-020D:
 - static Docker runtime,
 - production deployment template,
 - production activation readiness contract,
-- local production readiness verifier.
+- local production readiness verifier,
+- fail-closed protected admin/business shell foundation,
+- frontend auth/session boundary verifier.
 
 Not included:
 
 - business pages,
 - login/session implementation,
+- real credential exchange,
 - Agent authentication,
 - backend writes,
 - automatic polling or monitoring history,
@@ -44,6 +47,7 @@ npm run typecheck
 npm test
 npm run build
 npm run verify:production-readiness
+npm run verify:auth-boundary
 npm audit --omit=dev
 ```
 
@@ -69,6 +73,10 @@ GET /status-api/health/ready
 
 The frontend runtime maps those routes to `/health/live` and `/health/ready` on `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`. Requests use `credentials: "omit"`, `cache: "no-store"`, `Accept: application/json`, and no auth, cookie, bearer, Tenant, or Agent credential. It stores no browser history in localStorage, sessionStorage, IndexedDB, or cookies.
 
+## Admin Auth Boundary
+
+The protected admin/business shell is present but blocked and unconfigured. `REAL_AUTH_NOT_IMPLEMENTED` and `AUTHORITY_REQUIRED_BEFORE_BUSINESS_ADMIN_FEATURES` remain active. No Agent key, Tenant bearer token, password, JWT, refresh token, cookie secret, private key, or privileged business data belongs in the browser. Future business admin features require a separate authority-backed real auth/session milestone.
+
 ## Docker
 
 Local image build:
@@ -92,12 +100,14 @@ docker build -t rss-admin-ui:ms020d-local .
 npm run test:proxy-security
 npm run test:fullstack
 npm run verify:production-readiness
+npm run verify:auth-boundary
 ```
 
 ## Docs
 
 - [Production guide](PRODUCTION.md)
 - [API/auth contract](.docs/api-auth-contract.md)
+- [Admin auth/session boundary](.docs/admin-auth-session-boundary.md)
 - [Production activation readiness contract](.docs/production-activation-readiness.md)
 - [Read-only status dashboard contract](.docs/read-only-status-dashboard.md)
 - [Same-origin health transport contract](.docs/same-origin-health-transport.md)

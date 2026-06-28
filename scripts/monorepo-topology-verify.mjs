@@ -37,6 +37,7 @@ const requiredFrontendFiles = [
   "README.md",
   "PRODUCTION.md",
   ".docs/api-auth-contract.md",
+  ".docs/admin-auth-session-boundary.md",
   "package.json",
   "package-lock.json",
   "Dockerfile",
@@ -46,10 +47,15 @@ const requiredFrontendFiles = [
   ".docs/same-origin-health-transport.md",
   ".docs/production-activation-readiness.md",
   "src/App.tsx",
+  "src/auth/adminSessionBoundary.ts",
+  "src/auth/ProtectedAdminShell.tsx",
   "src/status/healthClient.ts",
   "src/status/StatusDashboard.tsx",
+  "scripts/auth-boundary-verify.mjs",
   "scripts/production-readiness-verify.mjs",
   "tests/app-shell.test.tsx",
+  "tests/admin-session-boundary.test.ts",
+  "tests/protected-admin-shell.test.tsx",
   "tests/production-readiness-doc.test.ts"
 ];
 const protectedBackendPaths = [
@@ -154,10 +160,10 @@ function assertRootDocs() {
     failures.push("backend production guide lost accepted evidence history");
   }
   if (
-    !frontendProduction.includes("MS-020D_PRODUCTION_READINESS_PACKAGED_NO_DEPLOY") ||
+    !frontendProduction.includes("MS-021A_ADMIN_AUTH_BOUNDARY_FOUNDATION") ||
     !frontendProduction.includes("NOT_DEPLOYED")
   ) {
-    failures.push("frontend production guide must state MS-020D readiness packaged and not deployed");
+    failures.push("frontend production guide must state MS-021A auth boundary foundation and not deployed");
   }
   if (/byte-identical mirror/iu.test(rootProduction) || /operator mirror PRODUCTION\.md SHA-256/iu.test(rootProduction)) {
     failures.push("root production guide still claims old mirror contract");

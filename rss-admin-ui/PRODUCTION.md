@@ -1,8 +1,8 @@
 # rss-admin-ui Production Guide
 
-Status: `MS-020D_PRODUCTION_READINESS_PACKAGED_NO_DEPLOY - NOT_DEPLOYED`.
+Status: `MS-021A_ADMIN_AUTH_BOUNDARY_FOUNDATION - NOT_DEPLOYED`.
 
-This guide owns the frontend delivery contract for `rss-admin-ui`. MS-020D packages the production activation readiness contract and a local verifier for the read-only status dashboard, but no production deployment is performed.
+This guide owns the frontend delivery contract for `rss-admin-ui`. MS-021A adds a fail-closed protected admin/business shell foundation and auth/session safety verifier, but no real auth/session and no production deployment are performed.
 
 Historical note: MS-020B supersedes the MS-020A `FOUNDATION_ONLY` state. `FOUNDATION_ONLY` is not the current frontend status token.
 
@@ -21,15 +21,17 @@ The read-only dashboard observes only same-origin `GET /status-api/health/live` 
 
 The future production activation data classification, authority record template, edge/server requirements, and post-deploy evidence checklist are [.docs/production-activation-readiness.md](.docs/production-activation-readiness.md). Status tokens remain `PRODUCTION_MUTATION_NOT_PERFORMED`, `ADMIN_UI_NOT_DEPLOYED`, and `AUTH_SESSION_DEFERRED`.
 
+The protected admin/business shell is blocked and unconfigured by default. `REAL_AUTH_NOT_IMPLEMENTED` and `AUTHORITY_REQUIRED_BEFORE_BUSINESS_ADMIN_FEATURES` remain active until a separate authority-backed milestone defines browser session authority, credential transport/storage, CSRF/XSS stance, Tenant/admin identity, role policy, backend route inventory, and production evidence. The full boundary is [.docs/admin-auth-session-boundary.md](.docs/admin-auth-session-boundary.md).
+
 ## Image Contract
 
 The production template in [`deploy/production/compose.yaml`](deploy/production/compose.yaml) expects an immutable `RSS_ADMIN_UI_IMAGE` value, a server-only `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`, a non-secret `ADMIN_UI_ENVIRONMENT_NAME`, and loopback-only host port `8081`.
 
 ## Deployment Boundary
 
-MS-020D does not deploy this UI and does not activate `rss-panel.habersoft.com`.
+MS-021A does not deploy this UI and does not activate `rss-panel.habersoft.com`.
 
-MS-020D does not validate production edge/DNS/TLS/OpenLiteSpeed routing or backend reachability from the frontend container. Backend CORS, backend routes, DNS, TLS, OpenLiteSpeed, and production reverse proxy settings are not changed by this milestone.
+MS-021A does not validate production edge/DNS/TLS/OpenLiteSpeed routing or backend reachability from the frontend container. Backend CORS, backend routes, DNS, TLS, OpenLiteSpeed, and production reverse proxy settings are not changed by this milestone.
 
 Before any future deployment:
 
@@ -45,8 +47,9 @@ Local readiness package command:
 
 ```bash
 npm run verify:production-readiness
+npm run verify:auth-boundary
 ```
 
 ## Rollback Boundary
 
-Rollback is image-based once a future deployment exists. There is no active frontend production runtime to roll back in MS-020D.
+Rollback is image-based once a future deployment exists. There is no active frontend production runtime to roll back in MS-021A.

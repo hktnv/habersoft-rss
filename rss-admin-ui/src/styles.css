@@ -246,10 +246,42 @@ button:disabled {
   padding-left: 18px;
 }
 
+.protected-admin-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 20px;
+  margin: 0 32px 32px;
+  border-top: 1px solid #d9e0e7;
+  border-bottom: 1px solid #d9e0e7;
+  padding: 24px 0;
+}
+
+.protected-admin-shell h2 {
+  margin-bottom: 8px;
+  font-size: 1rem;
+}
+
+.protected-admin-status {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.protected-admin-status div {
+  min-height: 76px;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
 @media (max-width: 900px) {
   .workspace-band,
   .panel-grid,
-  .summary-row {
+  .summary-row,
+  .protected-admin-shell,
+  .protected-admin-status {
     grid-template-columns: 1fr;
   }
 
@@ -270,6 +302,10 @@ button:disabled {
 @media (max-width: 560px) {
   .app-shell {
     padding: 20px;
+  }
+
+  .protected-admin-shell {
+    margin: 0 20px 20px;
   }
 
   h1 {

@@ -18,6 +18,8 @@ describe("admin UI read-only status shell", () => {
     expect(screen.getByText("READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED")).toBeInTheDocument();
     expect(screen.getByText("NOT_DEPLOYED")).toBeInTheDocument();
     expect(screen.getByText("OUT_OF_SCOPE")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Admin access is not configured yet" })).toBeInTheDocument();
+    expect(screen.getByText("not_configured")).toBeInTheDocument();
   });
 
   it("uses same-origin health routes without rendering an upstream URL", async () => {

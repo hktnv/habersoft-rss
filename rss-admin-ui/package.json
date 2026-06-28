@@ -13,7 +13,8 @@
     "test": "vitest run --config vitest.config.ts",
     "test:proxy-security": "node scripts/proxy-security-harness.mjs",
     "test:fullstack": "node scripts/root-fullstack-acceptance.mjs",
-    "verify:production-readiness": "node scripts/production-readiness-verify.mjs"
+    "verify:production-readiness": "node scripts/production-readiness-verify.mjs",
+    "verify:auth-boundary": "node scripts/auth-boundary-verify.mjs"
   },
   "dependencies": {
     "react": "^19.2.7",

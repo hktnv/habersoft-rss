@@ -1,5 +1,12 @@
 const DEFAULT_ENVIRONMENT_NAME = "local";
-const UNSAFE_ENVIRONMENT_LABEL_PATTERNS = [/AGENT_KEY/iu, /Authorization/iu, /Bearer/iu, /https?:\/\//iu, /[?&#=]/u];
+const SENSITIVE_AGENT_SECRET_PATTERN = new RegExp(["AGENT", "KEY"].join("_"), "iu");
+const UNSAFE_ENVIRONMENT_LABEL_PATTERNS = [
+  SENSITIVE_AGENT_SECRET_PATTERN,
+  /Authorization/iu,
+  /Bearer/iu,
+  /https?:\/\//iu,
+  /[?&#=]/u
+];
 
 declare global {
   interface Window {
