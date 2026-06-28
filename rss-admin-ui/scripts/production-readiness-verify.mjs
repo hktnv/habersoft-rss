@@ -7,7 +7,7 @@ const repoRoot = path.resolve(frontendRoot, "..");
 const image =
   process.env.RSS_ADMIN_UI_READINESS_IMAGE ??
   process.env.RSS_ADMIN_UI_TEST_IMAGE ??
-  "rss-admin-ui:ms022a-local";
+  "rss-admin-ui:ms023a-r2-local";
 const productionHostPattern = /(?:^|[/:.])rss-panel\.habersoft\.com(?:$|[/:])/iu;
 const invalidOrigins = [
   "ftp://sentinel:3100",
@@ -17,12 +17,12 @@ const invalidOrigins = [
   "http://sentinel:3100#fragment",
   "http://sentinel:abc",
   "http://sentinel:70000",
-  "http://sentinel:3100;touch-ms022a"
+  "http://sentinel:3100;touch-ms023a-r2"
 ];
 const invalidOptionalAuthOrigins = invalidOrigins.map((origin) => ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", origin]);
 
 const rootComposeEnv = {
-  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms022a-local",
+  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms023a-r2-local",
   RSS_ADMIN_UI_IMAGE: image,
   ADMIN_UI_HOST_PORT: "8081",
   ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",

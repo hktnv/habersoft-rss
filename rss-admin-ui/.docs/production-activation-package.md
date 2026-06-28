@@ -1,8 +1,10 @@
 # Production Activation Package
 
-Status: `MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY - NOT_DEPLOYED`.
+Status: `MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY - NOT_DEPLOYED`.
 
-MS-022B prepares a no-secret, no-deploy activation package for the admin UI. It validates the local production-mode release candidate with synthetic credentials only. It does not contact production, does not mutate production, performs no production deployment, does no registry publication, creates no Git tag, creates no GitHub Release, and creates no PR.
+MS-023A-R2 prepares a no-secret, no-deploy, operator-managed production package for the admin UI. It validates the local production-mode release candidate and package templates with synthetic credentials only. It does not contact production, does not mutate production, does not capture rollback baseline, performs no production deployment, does no registry publication, creates no Git tag, creates no GitHub Release, and creates no PR.
+
+Rollback baseline is operator-managed. Server deployment/configuration is operator-managed. Codex-owned repository work is limited to templates, same-origin proxy configuration, local validation, and runbook guidance.
 
 ## Same-Origin Production Model
 
@@ -30,6 +32,8 @@ Unknown `/status-api/**` and `/admin-auth/**` paths reject safely. Unsupported m
 
 Backend admin auth variables are documented in `../rss-habersoft-com/.docs/admin-auth-production-activation.md` from the repository root. They include `ADMIN_UI_AUTH_MODE`, `ADMIN_UI_ADMIN_USERNAME`, `ADMIN_UI_ADMIN_PASSWORD_HASH`, `ADMIN_UI_SESSION_SECRET`, `ADMIN_UI_SESSION_COOKIE_SECURE`, and related session controls.
 
+The secretless operator template is `deploy/production/operator-managed.env.template`. It includes both frontend runtime placeholders and backend admin-auth placeholders so operators can assemble untracked runtime env files without copying values into Git.
+
 ## Local RC Acceptance
 
 Run from `rss-admin-ui`:
@@ -37,6 +41,7 @@ Run from `rss-admin-ui`:
 ```bash
 npm run test:production-mode-rc
 npm run verify:production-activation-package
+npm run verify:operator-managed-production-package
 ```
 
 The RC harness builds local backend/frontend images, starts PostgreSQL, Redis, the backend API, the local JWKS fixture, and the frontend container in isolated Docker Compose projects. It proves:
@@ -52,7 +57,7 @@ The RC harness builds local backend/frontend images, starts PostgreSQL, Redis, t
 - browser static assets and runtime config do not contain upstream origins, password, password hash, session secret, Agent key, Tenant bearer token, or browser auth persistence calls;
 - harness containers, networks, and volumes are removed after validation.
 
-This local RC does not prove production activation. It is a release-candidate acceptance package for a later operator-authorized deployment.
+This local RC does not prove production activation. It is a release-candidate acceptance package for a later operator-authorized, operator-managed deployment.
 
 ## Browser Safety Boundary
 
@@ -72,3 +77,9 @@ A later production activation receipt must include redacted evidence for:
 - no Agent/Tenant credential exposure;
 - rollback image/env identity;
 - no raw logs, raw secrets, raw production response bodies, or production credential collection in Git.
+
+## Operator-Managed Deployment Boundary
+
+Before any server mutation, the operator must capture rollback baseline and current-state evidence according to the backend/frontend runbooks. MS-023A-R2 does not capture or infer that baseline.
+
+The operator later applies the package by selecting a Git SHA/image identity, placing real backend admin-auth values in the backend runtime env, placing frontend runtime values in the admin UI runtime env, keeping the admin UI bound to loopback, and configuring the external edge separately. These instructions are human/operator-managed and are not executed by Codex in MS-023A-R2.

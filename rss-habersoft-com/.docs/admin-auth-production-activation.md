@@ -1,8 +1,8 @@
 # Admin Auth Production Activation Package
 
-Status: `MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY - NOT_DEPLOYED`.
+Status: `MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY - NOT_DEPLOYED`.
 
-MS-022B prepares the backend admin auth/session activation package for a later operator-authorized production deployment milestone. It does not deploy the admin UI, mutate production, publish an image, create a Git tag, or request real production secrets.
+MS-023A-R2 prepares the backend admin auth/session configuration contract for a later operator-authorized, operator-managed production deployment milestone. It does not deploy the admin UI, mutate production, capture rollback baseline, publish an image, create a Git tag, or request real production secrets.
 
 ## Runtime Contract
 
@@ -65,4 +65,4 @@ A future production activation milestone must be operator-authorized and must pr
 - no Agent key, Tenant bearer token, password, password hash, session secret, Redis session key, raw log, or raw body disclosure;
 - rollback path and exact image/env identity used for rollback.
 
-MS-022B local RC validation is not production evidence. It uses synthetic credentials, loopback/Docker networking, local PostgreSQL, local Redis, local JWKS fixture, same-origin frontend paths, and no production deployment.
+MS-023A-R2 local RC validation is not production evidence. It uses synthetic credentials, loopback/Docker networking, local PostgreSQL, local Redis, local JWKS fixture, same-origin frontend paths, and no production deployment. Rollback baseline and server-side deployment/configuration remain operator-managed.

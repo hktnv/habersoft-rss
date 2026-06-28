@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY - NOT_DEPLOYED`.
+Status: `MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY - NOT_DEPLOYED`.
 
 ## Scope
 
-Included through MS-022B:
+Included through MS-023A-R2:
 
 - application shell,
 - root route,
@@ -36,6 +36,8 @@ Included through MS-022B:
 - secretless admin auth production activation package,
 - local production-mode RC acceptance harness,
 - production activation package verifier,
+- operator-managed production package verifier,
+- secretless operator env template,
 - operator handoff docs for a future no-secret production activation milestone.
 
 Not included:
@@ -64,6 +66,7 @@ npm run test:fullstack
 npm run test:production-mode-rc
 npm run verify:production-readiness
 npm run verify:production-activation-package
+npm run verify:operator-managed-production-package
 npm run verify:auth-boundary
 npm audit --omit=dev
 ```
@@ -99,6 +102,8 @@ MS-022A adds a local/tested admin auth/session foundation. Backend auth defaults
 
 MS-022B prepares the activation package without activating production. Backend helpers generate or validate PBKDF2 admin password hashes, generate or validate session secrets, and verify production-like admin auth env without printing secret values. The local RC harness uses only synthetic credentials and actual local Docker runtime components.
 
+MS-023A-R2 keeps production activation out of scope and makes the production package explicitly operator-managed. Rollback baseline is operator-managed, server deployment/configuration is operator-managed, and this repository package is validated locally with synthetic credentials only.
+
 ## Docker
 
 Local image build:
@@ -115,10 +120,10 @@ Container health endpoint:
 
 Local root Compose publishes the UI on loopback port `8081`.
 
-MS-022B local rehearsal commands:
+MS-023A-R2 local rehearsal commands:
 
 ```bash
-docker build -t rss-admin-ui:ms022b-local .
+docker build -t rss-admin-ui:ms023a-r2-local .
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
 npm run test:proxy-security
@@ -126,6 +131,7 @@ npm run test:fullstack
 npm run test:production-mode-rc
 npm run verify:production-readiness
 npm run verify:production-activation-package
+npm run verify:operator-managed-production-package
 npm run verify:auth-boundary
 ```
 

@@ -1,8 +1,8 @@
 # Admin Auth Production Operator Handoff
 
-Status: `MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY - NOT_DEPLOYED`.
+Status: `MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY - NOT_DEPLOYED`.
 
-This handoff is for a future operator-authorized production activation milestone. MS-022B does not deploy the admin UI, does not activate production admin auth, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, and does not collect real production credentials.
+This handoff is for a future operator-authorized production activation milestone. MS-023A-R2 does not deploy the admin UI, does not activate production admin auth, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, does not capture rollback baseline, and does not collect real production credentials.
 
 ## Authority Checklist
 
@@ -15,6 +15,7 @@ Before production activation, the operator must explicitly authorize:
 - edge/TLS/OpenLiteSpeed/DNS changes;
 - redacted evidence capture boundaries;
 - rollback target and rollback authority.
+- operator-managed rollback baseline capture before mutation.
 
 Without that authority, `rss-admin-ui` remains `NOT_DEPLOYED`.
 
@@ -65,6 +66,8 @@ Future acceptance evidence should prove, with redaction:
 ## Rollback Boundary
 
 Rollback must be operator-controlled. It may disable `ADMIN_UI_AUTH_MODE`, remove the admin UI edge route, or roll back to a previous immutable image, depending on the authorized production plan. MS-022B does not execute rollback and does not mutate production.
+
+MS-023A-R2 keeps rollback-baseline capture operator-managed. Codex does not capture, infer, or assert a production rollback baseline in this package milestone.
 
 ## Residuals
 

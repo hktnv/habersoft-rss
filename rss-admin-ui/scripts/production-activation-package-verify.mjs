@@ -13,8 +13,10 @@ const requiredFiles = [
   "PRODUCTION.md",
   ".docs/production-activation-package.md",
   ".docs/admin-auth-production-operator-handoff.md",
+  "deploy/production/operator-managed.env.template",
   "scripts/production-mode-rc.mjs",
   "scripts/production-activation-package-verify.mjs",
+  "scripts/operator-managed-production-package-verify.mjs",
   "../rss-habersoft-com/scripts/admin-auth-provisioning.mjs",
   "../rss-habersoft-com/.docs/admin-auth-production-activation.md"
 ];
@@ -35,9 +37,10 @@ console.log(
   JSON.stringify(
     {
       status: "production-activation-package-verify-ok",
-      admin_ui_state: "MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY - NOT_DEPLOYED",
+      admin_ui_state: "MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY - NOT_DEPLOYED",
       provisioning_helpers: "present",
       local_rc_harness: "present",
+      operator_managed_package: "present",
       production_contact: false,
       registry_publication: false
     },
@@ -53,6 +56,7 @@ function assertPackageScripts() {
   const backendScripts = backendPackage.scripts ?? {};
   const requiredFrontend = {
     "verify:production-activation-package": "node scripts/production-activation-package-verify.mjs",
+    "verify:operator-managed-production-package": "node scripts/operator-managed-production-package-verify.mjs",
     "test:production-mode-rc": "node scripts/production-mode-rc.mjs"
   };
   const requiredBackend = {
@@ -83,8 +87,10 @@ function assertDocsBoundary() {
   ].join("\n");
 
   const required = [
-    "MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY",
+    "MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY",
     "NOT_DEPLOYED",
+    "rollback baseline is operator-managed",
+    "server deployment/configuration is operator-managed",
     "ADMIN_UI_AUTH_MODE",
     "ADMIN_UI_ADMIN_USERNAME",
     "ADMIN_UI_ADMIN_PASSWORD_HASH",
@@ -101,7 +107,8 @@ function assertDocsBoundary() {
     "no production deployment",
     "no registry",
     "no Git tag",
-    "operator-authorized"
+    "operator-authorized",
+    "operator-managed.env.template"
   ];
   for (const fragment of required) {
     if (!docs.includes(fragment)) failures.push(`docs missing ${fragment}`);
@@ -124,7 +131,7 @@ function assertBackendProvisioningScripts() {
     cwd: backendRoot
   });
   if (synthetic.status !== 0) failures.push("backend synthetic admin auth config verifier failed");
-  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
+  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
     failures.push("backend config verifier printed synthetic secret material");
   }
 }
@@ -144,8 +151,8 @@ function assertBrowserSurface() {
     { label: "browser auth persistence", pattern: /\b(localStorage|sessionStorage|indexedDB|cookieStore)\b|document\.cookie/u },
     { label: "server upstream origin env", pattern: /ADMIN_UI_(?:HEALTH|AUTH)_UPSTREAM_ORIGIN/u },
     { label: "local compose upstream", pattern: /main-service-api:3000/u },
-    { label: "synthetic password", pattern: /synthetic-ms022b-admin-password/u },
-    { label: "synthetic session secret", pattern: /synthetic_ms022b_admin_session_secret/u },
+    { label: "synthetic password", pattern: /synthetic-ms022b-admin-password|synthetic-ms023a-r2-admin-password/u },
+    { label: "synthetic session secret", pattern: /synthetic_ms022b_admin_session_secret|synthetic_ms023a_r2_admin_session_secret/u },
     { label: "private key", pattern: /BEGIN (?:RSA )?PRIVATE KEY/u }
   ];
 
@@ -191,6 +198,10 @@ function run(command, args, options = {}) {
 function resolveCommand(command, args) {
   if (command === "npm" && process.env.npm_execpath !== undefined) {
     return { executable: process.execPath, args: [process.env.npm_execpath, ...args] };
+  }
+  if (command === "npm" && process.platform === "win32") {
+    const npmCli = path.join(process.env.ProgramFiles ?? "C:\\Program Files", "nodejs", "node_modules", "npm", "bin", "npm-cli.js");
+    if (existsSync(npmCli)) return { executable: process.execPath, args: [npmCli, ...args] };
   }
   return { executable: command, args };
 }

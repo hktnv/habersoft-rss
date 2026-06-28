@@ -18,6 +18,7 @@
     "test:production-mode-rc": "node scripts/production-mode-rc.mjs",
     "verify:production-readiness": "node scripts/production-readiness-verify.mjs",
     "verify:production-activation-package": "node scripts/production-activation-package-verify.mjs",
+    "verify:operator-managed-production-package": "node scripts/operator-managed-production-package-verify.mjs",
     "verify:auth-boundary": "node scripts/auth-boundary-verify.mjs"
   },
   "dependencies": {
