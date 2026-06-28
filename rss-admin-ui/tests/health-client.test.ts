@@ -6,15 +6,13 @@ import {
   type FetchLike
 } from "../src/status/healthClient";
 
-const apiBaseUrl = "http://api.example.test/root";
-
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
 describe("read-only health client", () => {
-  it("constructs live and ready URLs relative to the configured API base", async () => {
+  it("uses exact same-origin live and ready status paths", async () => {
     const fetchImpl = vi
       .fn<FetchLike>()
       .mockResolvedValueOnce(jsonResponse({ status: "live" }))
@@ -25,21 +23,21 @@ describe("read-only health client", () => {
         })
       );
 
-    const observation = await observeBackendHealth(apiBaseUrl, {
+    const observation = await observeBackendHealth({
       fetchImpl,
       now: () => new Date("2026-06-20T00:00:00.000Z")
     });
 
-    expect(buildHealthUrl(apiBaseUrl, "/health/live")).toBe("http://api.example.test/root/health/live");
-    expect(buildHealthUrl(`${apiBaseUrl}/`, "/health/ready")).toBe("http://api.example.test/root/health/ready");
+    expect(buildHealthUrl("live")).toBe("/status-api/health/live");
+    expect(buildHealthUrl("ready")).toBe("/status-api/health/ready");
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
-      "http://api.example.test/root/health/live",
+      "/status-api/health/live",
       expect.objectContaining({ method: "GET" })
     );
     expect(fetchImpl).toHaveBeenNthCalledWith(
       2,
-      "http://api.example.test/root/health/ready",
+      "/status-api/health/ready",
       expect.objectContaining({ method: "GET" })
     );
     expect(observation.overall).toBe("healthy");
@@ -57,7 +55,7 @@ describe("read-only health client", () => {
         })
       );
 
-    await observeBackendHealth(apiBaseUrl, { fetchImpl });
+    await observeBackendHealth({ fetchImpl });
 
     for (const [, init] of fetchImpl.mock.calls) {
       expect(init?.method).toBe("GET");
@@ -73,12 +71,17 @@ describe("read-only health client", () => {
       cache: "no-store",
       authorizationHeader: false,
       agentKeyHeader: false,
-      writes: false
+      writes: false,
+      endpoints: ["/status-api/health/live", "/status-api/health/ready"],
+      upstreamMappings: {
+        "/status-api/health/live": "/health/live",
+        "/status-api/health/ready": "/health/ready"
+      }
     });
   });
 
   it("validates live, ready, and documented dependency payloads", async () => {
-    const observation = await observeBackendHealth(apiBaseUrl, {
+    const observation = await observeBackendHealth({
       fetchImpl: vi
         .fn<FetchLike>()
         .mockResolvedValueOnce(jsonResponse({ status: "live" }))
@@ -102,7 +105,7 @@ describe("read-only health client", () => {
   });
 
   it("normalizes malformed JSON without leaking raw response body text", async () => {
-    const observation = await observeBackendHealth(apiBaseUrl, {
+    const observation = await observeBackendHealth({
       fetchImpl: vi
         .fn<FetchLike>()
         .mockResolvedValueOnce(new Response("{not json", { status: 200 }))
@@ -123,7 +126,7 @@ describe("read-only health client", () => {
   });
 
   it("rejects structurally invalid JSON", async () => {
-    const observation = await observeBackendHealth(apiBaseUrl, {
+    const observation = await observeBackendHealth({
       fetchImpl: vi
         .fn<FetchLike>()
         .mockResolvedValueOnce(jsonResponse({ status: "ok" }))
@@ -143,7 +146,7 @@ describe("read-only health client", () => {
   });
 
   it("treats non-accepted liveness HTTP status as unavailable without raw body leakage", async () => {
-    const observation = await observeBackendHealth(apiBaseUrl, {
+    const observation = await observeBackendHealth({
       fetchImpl: vi
         .fn<FetchLike>()
         .mockResolvedValueOnce(new Response("raw backend body", { status: 500 }))
@@ -164,7 +167,7 @@ describe("read-only health client", () => {
   });
 
   it("accepts documented readiness failure responses as degraded observations", async () => {
-    const observation = await observeBackendHealth(apiBaseUrl, {
+    const observation = await observeBackendHealth({
       fetchImpl: vi
         .fn<FetchLike>()
         .mockResolvedValueOnce(jsonResponse({ status: "live" }))
@@ -190,7 +193,7 @@ describe("read-only health client", () => {
     vi.useFakeTimers();
     const fetchImpl = vi.fn<FetchLike>((_input, init) => rejectWhenAborted(init?.signal));
 
-    const pending = observeBackendHealth(apiBaseUrl, { fetchImpl, timeoutMs: 10 });
+    const pending = observeBackendHealth({ fetchImpl, timeoutMs: 10 });
     await vi.advanceTimersByTimeAsync(10);
     const observation = await pending;
 
@@ -205,7 +208,7 @@ describe("read-only health client", () => {
     const controller = new AbortController();
     const fetchImpl = vi.fn<FetchLike>((_input, init) => rejectWhenAborted(init?.signal));
 
-    const pending = observeBackendHealth(apiBaseUrl, { fetchImpl, signal: controller.signal });
+    const pending = observeBackendHealth({ fetchImpl, signal: controller.signal });
     controller.abort();
     const observation = await pending;
 

@@ -1,8 +1,8 @@
 # Read-only Status Dashboard Contract
 
-Status: `READ_ONLY_STATUS_DASHBOARD_IMPLEMENTED - NOT_DEPLOYED`.
+Status: `READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED - NOT_DEPLOYED`.
 
-This document is the as-built MS-020B contract for the first `rss-admin-ui` product slice. It describes the local, tested frontend behavior only. It is not production deployment evidence and does not activate `rss-panel.habersoft.com`.
+This document is the as-built dashboard contract for the first `rss-admin-ui` product slice. MS-020C keeps the dashboard read-only and moves health access to a local/tested same-origin transport. It is not production deployment evidence and does not activate `rss-panel.habersoft.com`.
 
 ## Persona
 
@@ -14,8 +14,8 @@ This persona does not imply that an authenticated admin account, login route, br
 
 The dashboard uses only the existing public backend health routes:
 
-- `GET <configured-api-base>/health/live`
-- `GET <configured-api-base>/health/ready`
+- browser `GET /status-api/health/live` mapped to backend `GET /health/live`
+- browser `GET /status-api/health/ready` mapped to backend `GET /health/ready`
 
 The current backend contract is:
 
@@ -60,16 +60,18 @@ This slice is anonymous only for public health observation. It does not implemen
 
 The health client uses `GET`, `Accept: application/json`, `credentials: "omit"`, and `cache: "no-store"`. Agent authentication remains forbidden in the browser. Tenant/admin business pages still require a future bounded auth/session contract.
 
-## CORS and Transport Finding
+## CORS and Transport Contract
 
-Read-only inspection of the backend source found no backend browser CORS enablement in the API bootstrap. Health routes are public and unauthenticated, but MS-020B does not validate a production browser transport path.
+Read-only inspection of the backend source found no backend browser CORS enablement in the API bootstrap. MS-020C does not change backend CORS. The browser sees same-origin health routes owned by the frontend runtime:
 
-Future production deployment must provide one of:
+```text
+GET /status-api/health/live
+GET /status-api/health/ready
+```
 
-- same-origin reverse proxying for the admin UI and backend health routes, or
-- an explicit, narrow, non-credentialed browser CORS allowlist.
+The frontend runtime proxies only those two exact routes to the configured server-only `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`. Unknown `/status-api/**` paths are rejected locally; write methods are rejected locally; request bodies and client headers are not forwarded.
 
-MS-020B does not add wildcard production CORS, credentialed CORS, backend CORS mutation, DNS/TLS/reverse-proxy mutation, or a frontend generic proxy.
+MS-020C does not add wildcard production CORS, credentialed CORS, backend CORS mutation, DNS/TLS/reverse-proxy mutation, or a frontend generic API proxy. The detailed contract is [same-origin-health-transport.md](same-origin-health-transport.md).
 
 ## UI State Semantics
 
@@ -87,11 +89,12 @@ Older observations are not allowed to overwrite newer observations. A failed ref
 
 The frontend contract is covered by focused Vitest tests for:
 
-- URL construction for `/health/live` and `/health/ready`,
+- exact same-origin URL construction for `/status-api/health/live` and `/status-api/health/ready`,
 - GET-only fetch options,
 - omitted credentials and no auth/cookie/Agent key headers,
 - valid, malformed, invalid, non-2xx, readiness failure, timeout, and abort cases,
+- server-only upstream-origin validation,
 - safe error normalization,
 - loading, healthy, degraded, unavailable, partial, manual refresh, busy state, stale result suppression, last checked behavior, no browser persistence, accessible labels, and neutral environment labels.
 
-Production deployment remains out of scope for this milestone.
+MS-020C also adds executable local proxy-security and root full-stack acceptance harnesses. Production deployment remains out of scope for this milestone.

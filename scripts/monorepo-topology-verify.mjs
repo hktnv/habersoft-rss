@@ -41,6 +41,7 @@ const requiredFrontendFiles = [
   ".dockerignore",
   "deploy/production/compose.yaml",
   ".docs/read-only-status-dashboard.md",
+  ".docs/same-origin-health-transport.md",
   "src/App.tsx",
   "src/status/healthClient.ts",
   "src/status/StatusDashboard.tsx",
@@ -145,10 +146,10 @@ function assertRootDocs() {
     failures.push("backend production guide lost accepted evidence history");
   }
   if (
-    !frontendProduction.includes("READ_ONLY_STATUS_DASHBOARD_IMPLEMENTED") ||
+    !frontendProduction.includes("READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED") ||
     !frontendProduction.includes("NOT_DEPLOYED")
   ) {
-    failures.push("frontend production guide must state read-only dashboard implemented and not deployed");
+    failures.push("frontend production guide must state same-origin read-only dashboard rehearsed and not deployed");
   }
   if (/byte-identical mirror/iu.test(rootProduction) || /operator mirror PRODUCTION\.md SHA-256/iu.test(rootProduction)) {
     failures.push("root production guide still claims old mirror contract");

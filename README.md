@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard | `READ_ONLY_STATUS_DASHBOARD_IMPLEMENTED - NOT_DEPLOYED` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard | `READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED - NOT_DEPLOYED` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -55,7 +55,7 @@ npm run build
 npm audit --omit=dev
 ```
 
-The admin UI reads a non-secret API base URL and environment label from build-time Vite config or runtime `env-config.js`. Its first product slice observes only public backend `/health/live` and `/health/ready` routes with no credentials, no browser persistence, no automatic polling, and no backend writes. It remains not deployed.
+The admin UI uses fixed same-origin browser routes `/status-api/health/live` and `/status-api/health/ready`. Its frontend runtime maps only those routes to the configured server-only `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` `/health/live` and `/health/ready` routes with no credentials, no browser persistence, no automatic polling, no generic proxy, and no backend writes. It remains not deployed.
 
 ## Root Docker Workflow
 
@@ -71,7 +71,7 @@ DATABASE_URL=postgresql://main_service:main_service_local_password@postgres:5432
 docker compose config
 ```
 
-The root admin UI port is `8081`, selected to avoid the backend API port (`3000` container, commonly `3200` on production loopback), PostgreSQL, Redis, and the existing auth admin UI port. No root Compose command deploys production.
+Root Compose wires `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000` for local-only same-origin health rehearsal. The root admin UI port is `8081`, selected to avoid the backend API port (`3000` container, commonly `3200` on production loopback), PostgreSQL, Redis, and the existing auth admin UI port. No root Compose command deploys production.
 
 ## Documentation Map
 
@@ -79,7 +79,8 @@ The root admin UI port is `8081`, selected to avoid the backend API port (`3000`
 - [Backend production guide](rss-habersoft-com/PRODUCTION.md) - backend canonical production operations and evidence history.
 - [Admin UI production guide](rss-admin-ui/PRODUCTION.md) - frontend read-only status dashboard delivery contract.
 - [Admin UI API/auth contract](rss-admin-ui/.docs/api-auth-contract.md) - deferred Tenant/admin authentication boundary.
-- [Admin UI read-only dashboard contract](rss-admin-ui/.docs/read-only-status-dashboard.md) - MS-020B health observation contract.
+- [Admin UI read-only dashboard contract](rss-admin-ui/.docs/read-only-status-dashboard.md) - read-only dashboard behavior.
+- [Admin UI same-origin health transport](rss-admin-ui/.docs/same-origin-health-transport.md) - MS-020C health transport contract and local rehearsal.
 - [Backend detailed docs](rss-habersoft-com/.docs/README.md) - backend service and evidence documentation.
 
 ## Production Evidence Status
@@ -95,7 +96,7 @@ The backend production evidence series remains closed and is not reopened by thi
 | MS-019E | `SUCCESS` |
 | MS-019F | `SUCCESS_GOVERNANCE_ACCEPTED` |
 
-MS-020B adds a local/tested read-only admin status dashboard contract and frontend slice. It does not deploy, restart, pull on, or contact production.
+MS-020C adds a local/tested same-origin health transport contract and local full-stack rehearsal for the read-only admin status dashboard. It does not deploy, restart, pull on, or contact production.
 
 ## No-Secret Policy
 

@@ -1,24 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   adminUiConfigContract,
-  normalizeApiBaseUrl,
   normalizeEnvironmentName,
   resolveAdminUiConfig
 } from "../src/config/adminUiConfig";
 
 describe("admin UI config adapter", () => {
-  it("resolves a safe local API base by default", () => {
+  it("resolves only a non-secret local environment label by default", () => {
     delete window.__RSS_ADMIN_UI_CONFIG__;
 
-    expect(resolveAdminUiConfig().apiBaseUrl).toBe("http://localhost:3000");
-  });
-
-  it("normalizes absolute HTTP(S) URLs", () => {
-    expect(normalizeApiBaseUrl("https://api.example.test/api/")).toBe("https://api.example.test/api");
-  });
-
-  it("rejects unsupported schemes", () => {
-    expect(() => normalizeApiBaseUrl("file:///tmp/config")).toThrow(/HTTP/);
+    expect(resolveAdminUiConfig()).toEqual({ environmentName: "test" });
   });
 
   it("keeps environment labels bounded and non-secret", () => {
@@ -30,6 +21,8 @@ describe("admin UI config adapter", () => {
 
   it("keeps auth, persistence, and write behaviors out of scope", () => {
     expect(adminUiConfigContract.readOnlyHealthDashboardImplemented).toBe(true);
+    expect(adminUiConfigContract.sameOriginHealthTransport).toBe(true);
+    expect(adminUiConfigContract.clientVisibleApiBaseUrl).toBe(false);
     expect(adminUiConfigContract.publicHealthObservationOnly).toBe(true);
     expect(adminUiConfigContract.agentKeyAllowed).toBe(false);
     expect(adminUiConfigContract.writesImplemented).toBe(false);

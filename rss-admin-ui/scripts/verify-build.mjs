@@ -12,7 +12,15 @@ const assets = collectFiles(dist);
 if (!assets.some((file) => file.endsWith(".js"))) failures.push("production build has no JavaScript asset");
 if (!assets.some((file) => file.endsWith(".css"))) failures.push("production build has no CSS asset");
 
-const forbidden = [/AGENT_KEY\s*=/u, /X-Agent-Key/iu, /C:\\Users\\EVO-MRDM/iu, /habersoft-auth\\rss-habersoft-com/iu, /PRIVATE_KEY/iu];
+const forbidden = [
+  /AGENT_KEY\s*=/u,
+  /X-Agent-Key/iu,
+  /ADMIN_UI_HEALTH_UPSTREAM_ORIGIN/iu,
+  /main-service-api:3000/iu,
+  /C:\\Users\\EVO-MRDM/iu,
+  /habersoft-auth\\rss-habersoft-com/iu,
+  /PRIVATE_KEY/iu
+];
 for (const file of assets) {
   if (!/\.(html|js|css|json)$/iu.test(file)) continue;
   const text = readFileSync(file, "utf8");

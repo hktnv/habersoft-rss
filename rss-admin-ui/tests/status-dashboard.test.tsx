@@ -6,12 +6,10 @@ import { StatusDashboard } from "../src/status/StatusDashboard";
 import type { HealthObservation, ObserveBackendHealthOptions } from "../src/status/healthClient";
 
 type ObserveHealthMock = (
-  apiBaseUrl: string,
   options?: ObserveBackendHealthOptions
 ) => Promise<HealthObservation>;
 
 const config: AdminUiConfig = {
-  apiBaseUrl: "http://api.example.test",
   environmentName: "operator-local"
 };
 
@@ -37,7 +35,7 @@ describe("read-only status dashboard", () => {
 
     render(
       <StatusDashboard
-        config={{ apiBaseUrl: "http://api.example.test", environmentName: "production" }}
+        config={{ environmentName: "production" }}
         observeHealth={observeHealth}
       />
     );
@@ -119,12 +117,13 @@ describe("read-only status dashboard", () => {
   it("prevents an older observation from overwriting a newer one", async () => {
     const first = deferred<HealthObservation>();
     const second = deferred<HealthObservation>();
-    const observeHealth = vi.fn<ObserveHealthMock>().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-    const firstConfig = { apiBaseUrl: "http://first.example.test", environmentName: "first" };
-    const secondConfig = { apiBaseUrl: "http://second.example.test", environmentName: "second" };
+    const observeHealth = vi.fn<ObserveHealthMock>().mockReturnValueOnce(first.promise);
+    const nextObserveHealth = vi.fn<ObserveHealthMock>().mockReturnValueOnce(second.promise);
+    const firstConfig = { environmentName: "first" };
+    const secondConfig = { environmentName: "second" };
 
     const { rerender } = render(<StatusDashboard config={firstConfig} observeHealth={observeHealth} />);
-    rerender(<StatusDashboard config={secondConfig} observeHealth={observeHealth} />);
+    rerender(<StatusDashboard config={secondConfig} observeHealth={nextObserveHealth} />);
 
     second.resolve(healthyObservation("2026-06-20T00:10:00.000Z"));
     expect(await screen.findByText("Healthy")).toBeInTheDocument();

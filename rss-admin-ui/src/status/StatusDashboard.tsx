@@ -11,7 +11,6 @@ import type {
 import { observeBackendHealth } from "./healthClient";
 
 type ObserveHealth = (
-  apiBaseUrl: string,
   options?: ObserveBackendHealthOptions
 ) => Promise<HealthObservation>;
 
@@ -66,12 +65,12 @@ export function StatusDashboard({
       const controller = new AbortController();
       abortRef.current = controller;
 
-      void observeHealth(config.apiBaseUrl, { signal: controller.signal }).then((observation) => {
+      void observeHealth({ signal: controller.signal }).then((observation) => {
         if (requestIdRef.current !== requestId) return;
         setState({ phase: "complete", observation });
       });
     },
-    [config.apiBaseUrl, observeHealth]
+    [observeHealth]
   );
 
   const runObservation = useCallback(
@@ -104,14 +103,14 @@ export function StatusDashboard({
           <p className="eyebrow">Habersoft RSS</p>
           <h1 id="page-title">Read-only Status Dashboard</h1>
           <p className="lede">
-            Current browser observation of the configured public health surface. This view does not perform
+            Current browser observation of the same-origin public health surface. This view does not perform
             authenticated admin actions or production evidence collection.
           </p>
         </div>
         <dl className="status-grid" aria-label="Dashboard status">
           <div>
             <dt>UI status</dt>
-            <dd>READ_ONLY_STATUS_DASHBOARD_IMPLEMENTED</dd>
+            <dd>READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED</dd>
           </div>
           <div>
             <dt>Deployment</dt>
@@ -130,7 +129,7 @@ export function StatusDashboard({
           <p>
             Environment label: <strong>{config.environmentName}</strong> <span>(configuration label only)</span>
           </p>
-          <p>Source: configured public backend health endpoints</p>
+          <p>Source: same-origin public health status routes</p>
         </div>
         <button type="button" onClick={refresh} disabled={isBusy} aria-busy={isBusy}>
           {isBusy ? "Checking..." : "Refresh"}

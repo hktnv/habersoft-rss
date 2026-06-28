@@ -62,18 +62,23 @@ export type ObserveBackendHealthOptions = {
 
 const HEALTH_CLIENT_TIMEOUT_MS = 5000;
 
-export function buildHealthUrl(apiBaseUrl: string, path: "/health/live" | "/health/ready"): string {
-  const base = apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`;
-  return new URL(path.replace(/^\/+/u, ""), base).toString();
+const healthRoutes = {
+  live: "/status-api/health/live",
+  ready: "/status-api/health/ready"
+} as const;
+
+type HealthRoute = (typeof healthRoutes)[HealthEndpointName];
+
+export function buildHealthUrl(endpoint: HealthEndpointName): HealthRoute {
+  return healthRoutes[endpoint];
 }
 
 export async function observeBackendHealth(
-  apiBaseUrl: string,
   options: ObserveBackendHealthOptions = {}
 ): Promise<HealthObservation> {
   const [live, ready] = await Promise.all([
-    requestLiveHealth(apiBaseUrl, options),
-    requestReadyHealth(apiBaseUrl, options)
+    requestLiveHealth(options),
+    requestReadyHealth(options)
   ]);
 
   return {
@@ -85,7 +90,11 @@ export async function observeBackendHealth(
 }
 
 export const healthClientContract = {
-  endpoints: ["/health/live", "/health/ready"],
+  endpoints: [healthRoutes.live, healthRoutes.ready],
+  upstreamMappings: {
+    [healthRoutes.live]: "/health/live",
+    [healthRoutes.ready]: "/health/ready"
+  },
   method: "GET",
   credentials: "omit",
   cache: "no-store",
@@ -96,13 +105,11 @@ export const healthClientContract = {
 } as const;
 
 async function requestLiveHealth(
-  apiBaseUrl: string,
   options: ObserveBackendHealthOptions
 ): Promise<HealthEndpointObservation<LiveHealthPayload>> {
   return requestJsonEndpoint({
-    apiBaseUrl,
     endpoint: "live",
-    path: "/health/live",
+    path: buildHealthUrl("live"),
     acceptsHttpStatus: (status) => status === 200,
     validatePayload: parseLiveHealthPayload,
     options
@@ -110,13 +117,11 @@ async function requestLiveHealth(
 }
 
 async function requestReadyHealth(
-  apiBaseUrl: string,
   options: ObserveBackendHealthOptions
 ): Promise<HealthEndpointObservation<ReadyHealthPayload>> {
   const result = await requestJsonEndpoint({
-    apiBaseUrl,
     endpoint: "ready",
-    path: "/health/ready",
+    path: buildHealthUrl("ready"),
     acceptsHttpStatus: (status) => status === 200 || status === 503,
     validatePayload: parseReadyHealthPayload,
     options
@@ -144,16 +149,14 @@ async function requestReadyHealth(
 }
 
 type RequestJsonEndpointInput<TPayload> = {
-  readonly apiBaseUrl: string;
   readonly endpoint: HealthEndpointName;
-  readonly path: "/health/live" | "/health/ready";
+  readonly path: HealthRoute;
   readonly acceptsHttpStatus: (status: number) => boolean;
   readonly validatePayload: (value: unknown) => TPayload | undefined;
   readonly options: ObserveBackendHealthOptions;
 };
 
 async function requestJsonEndpoint<TPayload>({
-  apiBaseUrl,
   endpoint,
   path,
   acceptsHttpStatus,
@@ -164,7 +167,7 @@ async function requestJsonEndpoint<TPayload>({
   const abort = createRequestAbort(options);
 
   try {
-    const response = await fetchImpl(buildHealthUrl(apiBaseUrl, path), {
+    const response = await fetchImpl(path, {
       method: "GET",
       headers: {
         Accept: "application/json"

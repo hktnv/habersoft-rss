@@ -141,10 +141,8 @@ services:
     build:
       context: ./rss-admin-ui
       dockerfile: Dockerfile
-      args:
-        VITE_API_BASE_URL: ${ADMIN_UI_BUILD_API_BASE_URL:-http://localhost:3000}
     environment:
-      ADMIN_UI_API_BASE_URL: ${ADMIN_UI_API_BASE_URL:-http://localhost:3000}
+      ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: http://main-service-api:3000
       ADMIN_UI_ENVIRONMENT_NAME: ${ADMIN_UI_ENVIRONMENT_NAME:-local}
     ports:
       - "127.0.0.1:${ADMIN_UI_HOST_PORT:-8081}:8080"

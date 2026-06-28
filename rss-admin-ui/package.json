@@ -10,7 +10,9 @@
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "vitest run --config vitest.config.ts",
+    "test:proxy-security": "node scripts/proxy-security-harness.mjs",
+    "test:fullstack": "node scripts/root-fullstack-acceptance.mjs"
   },
   "dependencies": {
     "react": "^19.2.7",

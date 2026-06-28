@@ -15,23 +15,22 @@ describe("admin UI read-only status shell", () => {
 
     expect(screen.getByRole("heading", { name: "Read-only Status Dashboard" })).toBeInTheDocument();
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
-    expect(screen.getByText("READ_ONLY_STATUS_DASHBOARD_IMPLEMENTED")).toBeInTheDocument();
+    expect(screen.getByText("READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED")).toBeInTheDocument();
     expect(screen.getByText("NOT_DEPLOYED")).toBeInTheDocument();
     expect(screen.getByText("OUT_OF_SCOPE")).toBeInTheDocument();
   });
 
-  it("uses runtime API configuration without rendering the full API URL", async () => {
+  it("uses same-origin health routes without rendering an upstream URL", async () => {
     const fetch = healthyFetch();
     vi.stubGlobal("fetch", fetch);
     window.__RSS_ADMIN_UI_CONFIG__ = {
-      apiBaseUrl: "http://localhost:3200/",
       environmentName: "local"
     };
 
     render(<App />);
 
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith("http://localhost:3200/health/live", expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith("/status-api/health/live", expect.any(Object));
     expect(screen.queryByText("http://localhost:3200")).not.toBeInTheDocument();
   });
 });
