@@ -18,8 +18,9 @@ describe("admin UI read-only status shell", () => {
     expect(screen.getByText("READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED")).toBeInTheDocument();
     expect(screen.getByText("NOT_DEPLOYED")).toBeInTheDocument();
     expect(screen.getByText("OUT_OF_SCOPE")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Admin access is not configured yet" })).toBeInTheDocument();
-    expect(screen.getByText("not_configured")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Admin authentication is not configured yet" }))
+      .toBeInTheDocument();
+    expect(screen.getAllByText("not_configured").length).toBeGreaterThanOrEqual(1);
   });
 
   it("uses same-origin health routes without rendering an upstream URL", async () => {
@@ -33,6 +34,7 @@ describe("admin UI read-only status shell", () => {
 
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/status-api/health/live", expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith("/admin-auth/session", expect.any(Object));
     expect(screen.queryByText("http://localhost:3200")).not.toBeInTheDocument();
   });
 });
@@ -46,6 +48,16 @@ function healthyFetch() {
         status: "ready",
         dependencies: { postgres: "up", redis: "up", tenantAuth: "up" }
       })
+    )
+    .mockResolvedValueOnce(
+      jsonResponse(
+        {
+          status: "not_configured",
+          authenticated: false,
+          message: "Admin authentication is not configured."
+        },
+        501
+      )
     );
 }
 

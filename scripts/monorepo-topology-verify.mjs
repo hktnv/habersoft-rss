@@ -38,6 +38,7 @@ const requiredFrontendFiles = [
   "PRODUCTION.md",
   ".docs/api-auth-contract.md",
   ".docs/admin-auth-session-boundary.md",
+  ".docs/admin-session-sentinel.md",
   "package.json",
   "package-lock.json",
   "Dockerfile",
@@ -48,13 +49,17 @@ const requiredFrontendFiles = [
   ".docs/production-activation-readiness.md",
   "src/App.tsx",
   "src/auth/adminSessionBoundary.ts",
+  "src/auth/adminSessionClient.ts",
   "src/auth/ProtectedAdminShell.tsx",
+  "src/auth/useAdminSessionStatus.ts",
   "src/status/healthClient.ts",
   "src/status/StatusDashboard.tsx",
   "scripts/auth-boundary-verify.mjs",
+  "scripts/auth-session-sentinel-harness.mjs",
   "scripts/production-readiness-verify.mjs",
   "tests/app-shell.test.tsx",
   "tests/admin-session-boundary.test.ts",
+  "tests/admin-session-client.test.ts",
   "tests/protected-admin-shell.test.tsx",
   "tests/production-readiness-doc.test.ts"
 ];
@@ -160,10 +165,11 @@ function assertRootDocs() {
     failures.push("backend production guide lost accepted evidence history");
   }
   if (
-    !frontendProduction.includes("MS-021A_ADMIN_AUTH_BOUNDARY_FOUNDATION") ||
+    !frontendProduction.includes("MS-021B_SAME_ORIGIN_AUTH_SENTINEL_ONLY") ||
+    !frontendProduction.includes("/admin-auth/session") ||
     !frontendProduction.includes("NOT_DEPLOYED")
   ) {
-    failures.push("frontend production guide must state MS-021A auth boundary foundation and not deployed");
+    failures.push("frontend production guide must state MS-021B auth sentinel and not deployed");
   }
   if (/byte-identical mirror/iu.test(rootProduction) || /operator mirror PRODUCTION\.md SHA-256/iu.test(rootProduction)) {
     failures.push("root production guide still claims old mirror contract");

@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard plus blocked admin boundary foundation | `MS-021A_ADMIN_AUTH_BOUNDARY_FOUNDATION - NOT_DEPLOYED` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard plus blocked admin boundary and same-origin auth sentinel | `MS-021B_SAME_ORIGIN_AUTH_SENTINEL_ONLY - NOT_DEPLOYED` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -54,6 +54,7 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run test:auth-session-sentinel
 npm run verify:production-readiness
 npm run verify:auth-boundary
 npm audit --omit=dev
@@ -64,6 +65,8 @@ The admin UI uses fixed same-origin browser routes `/status-api/health/live` and
 MS-020D adds the local-only production activation readiness package. It includes a public-data classification for the current status-only fields, an operator authority record template, a future post-deploy evidence checklist, and `npm run verify:production-readiness`. It does not authorize production mutation.
 
 MS-021A adds a frontend-only fail-closed protected admin/business shell foundation and `npm run verify:auth-boundary`. It does not implement real auth/session, business admin features, backend routes, or production activation.
+
+MS-021B adds a same-origin `GET /admin-auth/session` not_configured sentinel, a fail-closed auth-status client, and `npm run test:auth-session-sentinel`. It still does not implement real auth/session, backend routes, CORS changes, or production activation.
 
 ## Root Docker Workflow
 
@@ -89,6 +92,7 @@ Root Compose wires `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000
 - [Admin UI production guide](rss-admin-ui/PRODUCTION.md) - frontend read-only status dashboard delivery contract.
 - [Admin UI API/auth contract](rss-admin-ui/.docs/api-auth-contract.md) - deferred Tenant/admin authentication boundary.
 - [Admin UI admin auth/session boundary](rss-admin-ui/.docs/admin-auth-session-boundary.md) - MS-021A protected shell and real-auth blocker contract.
+- [Admin UI admin session sentinel](rss-admin-ui/.docs/admin-session-sentinel.md) - MS-021B same-origin not_configured sentinel contract.
 - [Admin UI production activation readiness](rss-admin-ui/.docs/production-activation-readiness.md) - MS-020D no-deploy activation readiness contract and local verifier.
 - [Admin UI read-only dashboard contract](rss-admin-ui/.docs/read-only-status-dashboard.md) - read-only dashboard behavior.
 - [Admin UI same-origin health transport](rss-admin-ui/.docs/same-origin-health-transport.md) - MS-020C health transport contract and local rehearsal.
@@ -107,7 +111,7 @@ The backend production evidence series remains closed and is not reopened by thi
 | MS-019E | `SUCCESS` |
 | MS-019F | `SUCCESS_GOVERNANCE_ACCEPTED` |
 
-MS-020C adds a local/tested same-origin health transport contract and local full-stack rehearsal for the read-only admin status dashboard. MS-020D packages the production activation readiness contract and local verifier. MS-021A adds the protected admin shell safety boundary. These milestones do not deploy, restart, pull on, publish an image to, or contact production.
+MS-020C adds a local/tested same-origin health transport contract and local full-stack rehearsal for the read-only admin status dashboard. MS-020D packages the production activation readiness contract and local verifier. MS-021A adds the protected admin shell safety boundary. MS-021B adds a same-origin auth-status sentinel only. These milestones do not deploy, restart, pull on, publish an image to, or contact production.
 
 ## No-Secret Policy
 

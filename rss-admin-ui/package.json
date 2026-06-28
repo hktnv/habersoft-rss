@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run --config vitest.config.ts",
+    "test:auth-session-sentinel": "node scripts/auth-session-sentinel-harness.mjs",
     "test:proxy-security": "node scripts/proxy-security-harness.mjs",
     "test:fullstack": "node scripts/root-fullstack-acceptance.mjs",
     "verify:production-readiness": "node scripts/production-readiness-verify.mjs",

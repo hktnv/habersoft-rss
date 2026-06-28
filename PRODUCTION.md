@@ -14,9 +14,9 @@ Codex workspace hygiene is governed by [`CODEX_WORKSPACE_POLICY.md`](CODEX_WORKS
 | Project | Production status | Deployment status |
 |---|---|---|
 | `rss-habersoft-com` | `MVP - Production Active` | Existing backend runtime remains untouched |
-| `rss-admin-ui` | `MS-021A_ADMIN_AUTH_BOUNDARY_FOUNDATION - NOT_DEPLOYED` | Not deployed |
+| `rss-admin-ui` | `MS-021B_SAME_ORIGIN_AUTH_SENTINEL_ONLY - NOT_DEPLOYED` | Not deployed |
 
-MS-020A performed repository topology migration and local workspace cutover only. MS-020B added a local/tested read-only admin status dashboard contract and frontend slice. MS-020C adds a local/tested same-origin health transport and local full-stack rehearsal for that dashboard. MS-020D packages the production activation readiness contract, operator authority template, future evidence checklist, and local readiness verifier. MS-021A adds a frontend-only fail-closed protected admin/business shell foundation without real auth/session. These milestones do not SSH to production, run production `git pull`, restart containers, rebuild a production image, publish an image, or mutate production environment files.
+MS-020A performed repository topology migration and local workspace cutover only. MS-020B added a local/tested read-only admin status dashboard contract and frontend slice. MS-020C adds a local/tested same-origin health transport and local full-stack rehearsal for that dashboard. MS-020D packages the production activation readiness contract, operator authority template, future evidence checklist, and local readiness verifier. MS-021A adds a frontend-only fail-closed protected admin/business shell foundation without real auth/session. MS-021B adds only a same-origin admin session sentinel and fail-closed auth-status client. These milestones do not SSH to production, run production `git pull`, restart containers, rebuild a production image, publish an image, or mutate production environment files.
 
 Explicit path migration status:
 
@@ -54,7 +54,7 @@ The E: Codex workplace root is for Codex-created temporary task artifacts only. 
 
 Local root Compose project name: `habersoft-rss-local`.
 
-Backend production Compose project name remains backend-owned and unchanged. Admin UI production image naming is frontend-owned and remains template-only in MS-021A.
+Backend production Compose project name remains backend-owned and unchanged. Admin UI production image naming is frontend-owned and remains template-only in MS-021B.
 
 ## Version Boundary
 
@@ -63,7 +63,7 @@ Backend production Compose project name remains backend-owned and unchanged. Adm
 | Backend `main-service` | `0.1.0-ms-017` |
 | Frontend `rss-admin-ui` | `0.1.0` |
 
-There is no shared product version bump, Git tag, GitHub Release, registry publication, or production image publication in MS-021A.
+There is no shared product version bump, Git tag, GitHub Release, registry publication, or production image publication in MS-021B.
 
 ## Evidence Ownership
 

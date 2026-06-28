@@ -50,6 +50,8 @@ export const defaultAdminAuthBoundaryState: AdminAuthBoundaryState = {
 export const adminAuthBoundaryContract = {
   statusDashboardPublic: true,
   protectedAdminShellPresent: true,
+  sameOriginAdminSessionSentinelPath: "/admin-auth/session",
+  sameOriginAdminSessionSentinelOnly: true,
   realAuthImplemented: false,
   defaultAllowsProtectedContent: false,
   browserCredentialExchangeImplemented: false,

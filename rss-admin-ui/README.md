@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-021A_ADMIN_AUTH_BOUNDARY_FOUNDATION - NOT_DEPLOYED`.
+Status: `MS-021B_SAME_ORIGIN_AUTH_SENTINEL_ONLY - NOT_DEPLOYED`.
 
 ## Scope
 
-Included through MS-021A:
+Included through MS-021B:
 
 - application shell,
 - root route,
@@ -25,7 +25,10 @@ Included through MS-021A:
 - production activation readiness contract,
 - local production readiness verifier,
 - fail-closed protected admin/business shell foundation,
-- frontend auth/session boundary verifier.
+- same-origin admin session sentinel at `/admin-auth/session`,
+- fail-closed auth-status client,
+- frontend auth/session boundary verifier,
+- auth-session sentinel runtime harness.
 
 Not included:
 
@@ -46,6 +49,7 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run test:auth-session-sentinel
 npm run verify:production-readiness
 npm run verify:auth-boundary
 npm audit --omit=dev
@@ -75,7 +79,7 @@ The frontend runtime maps those routes to `/health/live` and `/health/ready` on 
 
 ## Admin Auth Boundary
 
-The protected admin/business shell is present but blocked and unconfigured. `REAL_AUTH_NOT_IMPLEMENTED` and `AUTHORITY_REQUIRED_BEFORE_BUSINESS_ADMIN_FEATURES` remain active. No Agent key, Tenant bearer token, password, JWT, refresh token, cookie secret, private key, or privileged business data belongs in the browser. Future business admin features require a separate authority-backed real auth/session milestone.
+The protected admin/business shell is present but blocked and unconfigured. MS-021B adds only `GET /admin-auth/session` as a same-origin not_configured sentinel. `REAL_AUTH_NOT_IMPLEMENTED`, `SAME_ORIGIN_AUTH_SENTINEL_ONLY`, and `AUTHORITY_REQUIRED_BEFORE_BUSINESS_ADMIN_FEATURES` remain active. No Agent key, Tenant bearer token, password, JWT, refresh token, cookie secret, private key, or privileged business data belongs in the browser. Future business admin features require a separate authority-backed real auth/session milestone.
 
 ## Docker
 
@@ -93,10 +97,11 @@ Container health endpoint:
 
 Local root Compose publishes the UI on loopback port `8081`.
 
-MS-020D local rehearsal commands:
+MS-021B local rehearsal commands:
 
 ```bash
-docker build -t rss-admin-ui:ms020d-local .
+docker build -t rss-admin-ui:ms021b-local .
+npm run test:auth-session-sentinel
 npm run test:proxy-security
 npm run test:fullstack
 npm run verify:production-readiness
@@ -108,6 +113,7 @@ npm run verify:auth-boundary
 - [Production guide](PRODUCTION.md)
 - [API/auth contract](.docs/api-auth-contract.md)
 - [Admin auth/session boundary](.docs/admin-auth-session-boundary.md)
+- [Admin session sentinel](.docs/admin-session-sentinel.md)
 - [Production activation readiness contract](.docs/production-activation-readiness.md)
 - [Read-only status dashboard contract](.docs/read-only-status-dashboard.md)
 - [Same-origin health transport contract](.docs/same-origin-health-transport.md)
