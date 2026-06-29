@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Authenticated read-only admin status dashboard foundation with same-origin admin auth/session routes | `MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Authenticated read-only admin status dashboard foundation with same-origin admin auth/session routes | `MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -58,6 +58,7 @@ npm run test:auth-session-sentinel
 npm run test:auth-proxy
 npm run test:proxy-security
 npm run test:status-api-upstream-remediation
+npm run test:status-api-production-networking
 npm run test:fullstack
 npm run test:production-mode-rc
 npm run verify:production-readiness
@@ -82,7 +83,7 @@ MS-022B adds the secretless production activation package for the still-not-depl
 
 MS-023A-R2 promotes those safe repository-side pieces into an operator-managed production package while keeping `rss-admin-ui` `NOT_DEPLOYED`. Rollback baseline is operator-managed, server deployment/configuration is operator-managed, and Codex validation remains local-only with synthetic credentials. The package adds a secretless operator env template, a local operator-managed package verifier, and updated runbook guidance; it does not contact production, read real secrets, capture rollback baseline, deploy, restart, publish a registry image, tag, release, or create a PR.
 
-MS-023B remediates the operator-reported `/status-api/health/ready` blocker as a repository package. Operator-reported evidence says `/healthz` works but status-api readiness is blocked when `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` points at the public backend edge `https://rss.habersoft.com`. The admin UI upstream contract now rejects public Habersoft edge origins, documents internal backend origin choices by topology, adds `npm run verify:production-upstream-contract`, and adds `npm run test:status-api-upstream-remediation`. Production mutation remains operator-managed and Admin UI full production acceptance remains pending.
+MS-023B remediates the operator-reported `/status-api/health/ready` public-edge blocker as a repository package. MS-023C remediates the next operator-reported blocker: `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://127.0.0.1:3200` inside the admin UI production Docker bridge container is a container-loopback upstream misconfiguration. The admin UI upstream contract now rejects public Habersoft edge origins and Docker bridge loopback/unspecified origins, documents backend-network service DNS as the preferred production mode, keeps host-gateway mode conditional on container-side reachability proof, adds `npm run test:status-api-production-networking`, and keeps `npm run verify:production-upstream-contract`. Production mutation remains operator-managed and Admin UI full production acceptance remains pending.
 
 ## Root Docker Workflow
 
@@ -110,8 +111,8 @@ Root Compose wires `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000
 - [Admin UI admin auth/session boundary](rss-admin-ui/.docs/admin-auth-session-boundary.md) - MS-021A protected shell and real-auth blocker contract.
 - [Admin UI admin session static fallback](rss-admin-ui/.docs/admin-session-sentinel.md) - MS-021B/MS-022A same-origin not_configured fallback contract.
 - [Admin UI production activation readiness](rss-admin-ui/.docs/production-activation-readiness.md) - MS-020D no-deploy activation readiness contract and local verifier.
-- [Admin UI production activation package](rss-admin-ui/.docs/production-activation-package.md) - MS-023B operator-managed, secretless, no-deploy production package and local RC acceptance.
-- [Admin UI status-api upstream remediation](rss-admin-ui/.docs/status-api-upstream-remediation.md) - MS-023B current blocker runbook, internal upstream contract, and local 403 remediation harness.
+- [Admin UI production activation package](rss-admin-ui/.docs/production-activation-package.md) - MS-023C operator-managed, secretless, no-deploy production package and local RC acceptance.
+- [Admin UI status-api upstream remediation](rss-admin-ui/.docs/status-api-upstream-remediation.md) - MS-023C current blocker runbook, production networking contract, and local networking harness.
 - [Admin UI production operator handoff](rss-admin-ui/.docs/admin-auth-production-operator-handoff.md) - Future operator authority, redacted evidence, and rollback checklist.
 - [Backend admin auth production activation](rss-habersoft-com/.docs/admin-auth-production-activation.md) - Admin auth env variables and secretless provisioning helper contract.
 - [Admin UI read-only dashboard contract](rss-admin-ui/.docs/read-only-status-dashboard.md) - read-only dashboard behavior.
@@ -131,7 +132,7 @@ The backend production evidence series remains closed and is not reopened by thi
 | MS-019E | `SUCCESS` |
 | MS-019F | `SUCCESS_GOVERNANCE_ACCEPTED` |
 
-MS-020C adds a local/tested same-origin health transport contract and local full-stack rehearsal for the read-only admin status dashboard. MS-020D packages the production activation readiness contract and local verifier. MS-021A adds the protected admin shell safety boundary. MS-021B adds a same-origin auth-status sentinel only. MS-022A adds the local admin auth/session foundation and exact same-origin proxy activation, still with no production deployment. MS-022B prepares the secretless production activation package and local production-mode RC harness while keeping the admin UI `NOT_DEPLOYED`. MS-023A-R2 prepares the operator-managed production package and runbook updates while still keeping the admin UI `NOT_DEPLOYED`. MS-023B prepares the public-edge upstream remediation package while requiring an operator-managed env fix before live status-api acceptance. These milestones do not deploy, restart, pull on, publish an image to, create a Git tag for, contact production, or capture rollback baseline on behalf of the operator.
+MS-020C adds a local/tested same-origin health transport contract and local full-stack rehearsal for the read-only admin status dashboard. MS-020D packages the production activation readiness contract and local verifier. MS-021A adds the protected admin shell safety boundary. MS-021B adds a same-origin auth-status sentinel only. MS-022A adds the local admin auth/session foundation and exact same-origin proxy activation, still with no production deployment. MS-022B prepares the secretless production activation package and local production-mode RC harness while keeping the admin UI `NOT_DEPLOYED`. MS-023A-R2 prepares the operator-managed production package and runbook updates while still keeping the admin UI `NOT_DEPLOYED`. MS-023B prepares the public-edge upstream remediation package. MS-023C prepares the production Docker bridge networking remediation package while requiring an operator-managed backend-network or proven host-gateway fix before live status-api acceptance. These milestones do not deploy, restart, pull on, publish an image to, create a Git tag for, contact production, or capture rollback baseline on behalf of the operator.
 
 ## No-Secret Policy
 

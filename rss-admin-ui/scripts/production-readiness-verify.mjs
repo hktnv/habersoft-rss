@@ -7,7 +7,7 @@ const repoRoot = path.resolve(frontendRoot, "..");
 const image =
   process.env.RSS_ADMIN_UI_READINESS_IMAGE ??
   process.env.RSS_ADMIN_UI_TEST_IMAGE ??
-  "rss-admin-ui:ms023b-local";
+  "rss-admin-ui:ms023c-local";
 const productionHostPattern = /(?:^|[/:.])rss(?:-panel)?\.habersoft\.com(?:$|[/:])/iu;
 const invalidOrigins = [
   "ftp://sentinel:3100",
@@ -17,14 +17,18 @@ const invalidOrigins = [
   "http://sentinel:3100#fragment",
   "http://sentinel:abc",
   "http://sentinel:70000",
-  "http://sentinel:3100;touch-ms023b",
+  "http://sentinel:3100;touch-ms023c",
   "https://rss.habersoft.com",
-  "https://rss-panel.habersoft.com"
+  "https://rss-panel.habersoft.com",
+  "http://127.0.0.1:3200",
+  "http://localhost:3200",
+  "http://[::1]:3200",
+  "http://0.0.0.0:3200"
 ];
 const invalidOptionalAuthOrigins = invalidOrigins.map((origin) => ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", origin]);
 
 const rootComposeEnv = {
-  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms023b-local",
+  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms023c-local",
   RSS_ADMIN_UI_IMAGE: image,
   ADMIN_UI_HOST_PORT: "8081",
   ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
@@ -38,7 +42,7 @@ const rootComposeEnv = {
 };
 const productionComposeEnv = {
   RSS_ADMIN_UI_IMAGE: "rss-admin-ui@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://127.0.0.1:3200",
+  ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
   ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "",
   ADMIN_UI_ENVIRONMENT_NAME: "production-readiness-local",
   ADMIN_UI_HOST_PORT: "8081"
@@ -76,8 +80,30 @@ run("docker", ["compose", "config", "--quiet"], {
 run("docker", ["compose", "-f", path.join("deploy", "production", "compose.yaml"), "config", "--quiet"], {
   env: productionComposeEnv
 });
+run(
+  "docker",
+  [
+    "compose",
+    "-f",
+    path.join("deploy", "production", "compose.yaml"),
+    "-f",
+    path.join("deploy", "production", "compose.backend-network.yaml"),
+    "config",
+    "--quiet"
+  ],
+  {
+    env: {
+      ...productionComposeEnv,
+      ADMIN_UI_BACKEND_DOCKER_NETWORK: "main-service-production_default"
+    }
+  }
+);
 
 run("npm", ["run", "test:proxy-security"], {
+  env: { RSS_ADMIN_UI_TEST_IMAGE: image },
+  timeoutMs: 600000
+});
+run("npm", ["run", "test:status-api-production-networking"], {
   env: { RSS_ADMIN_UI_TEST_IMAGE: image },
   timeoutMs: 600000
 });
@@ -104,10 +130,12 @@ console.log(
         "healthz and static app served",
         "browser config excludes upstream origin and API base",
         "exact health route proxy security passes",
+        "status-api production networking harness passes",
         "same-origin admin session sentinel fails closed",
         "same-origin admin auth proxy exact-route security passes",
         "root compose config passes with synthetic values",
         "frontend production compose config passes with synthetic values",
+        "frontend backend-network production compose overlay passes with synthetic values",
         "no production hostname used by verifier command environments"
       ]
     },

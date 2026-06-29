@@ -4,14 +4,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultImage = "rss-admin-ui:ms023b-local";
+const defaultImage = "rss-admin-ui:ms023c-local";
 const image = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? defaultImage;
 const suffix = randomUUID().slice(0, 8);
-const network = `rss-admin-ui-ms023b-upstream-${suffix}`;
-const publicEdgeName = `rss-admin-ui-ms023b-public-edge-${suffix}`;
-const internalBackendName = `rss-admin-ui-ms023b-internal-backend-${suffix}`;
-const publicFrontendName = `rss-admin-ui-ms023b-public-runtime-${suffix}`;
-const internalFrontendName = `rss-admin-ui-ms023b-internal-runtime-${suffix}`;
+const network = `rss-admin-ui-ms023c-networking-${suffix}`;
+const publicEdgeName = `rss-admin-ui-ms023c-public-edge-${suffix}`;
+const internalBackendName = `rss-admin-ui-ms023c-internal-backend-${suffix}`;
+const publicFrontendName = `rss-admin-ui-ms023c-public-runtime-${suffix}`;
+const unreachableFrontendName = `rss-admin-ui-ms023c-unreachable-runtime-${suffix}`;
+const internalFrontendName = `rss-admin-ui-ms023c-internal-runtime-${suffix}`;
 const sensitiveHeaders = {
   authorization: false,
   cookie: false,
@@ -28,17 +29,21 @@ try {
   await waitForContainerHttp(internalBackendName, "http://127.0.0.1:3100/__records");
 
   assertKnownPublicEdgeHostnamesRejected();
+  assertLoopbackHostnamesRejected();
   const publicEdge = await runPublicEdgeScenario();
+  const unreachable = await runUnreachableScenario();
   const internal = await runInternalScenario();
 
   console.log(
     JSON.stringify(
       {
-        status: "status-api-upstream-remediation-harness-ok",
+        status: "status-api-production-networking-harness-ok",
         image,
         network,
         known_public_edge_startup_rejected: true,
+        loopback_startup_rejected: true,
         public_edge_scenario: publicEdge,
+        unreachable_upstream_scenario: unreachable,
         internal_upstream_scenario: internal,
         production_contact: false,
         output: "redacted"
@@ -49,6 +54,7 @@ try {
   );
 } finally {
   docker(["rm", "-f", publicFrontendName], { allowFailure: true });
+  docker(["rm", "-f", unreachableFrontendName], { allowFailure: true });
   docker(["rm", "-f", internalFrontendName], { allowFailure: true });
   docker(["rm", "-f", publicEdgeName], { allowFailure: true });
   docker(["rm", "-f", internalBackendName], { allowFailure: true });
@@ -87,6 +93,26 @@ function assertKnownPublicEdgeHostnamesRejected() {
     });
     assert(result.status !== 0, `${name} public edge hostname was not rejected at startup`);
     assert(/internal backend origin/iu.test(result.stderr), `${name} rejection did not explain internal upstream requirement`);
+  }
+}
+
+function assertLoopbackHostnamesRejected() {
+  for (const [name, value, extraEnv] of [
+    ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "http://127.0.0.1:3200", []],
+    ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", "http://127.0.0.1:3200", ["-e", "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3100"]],
+    ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "http://localhost:3200", []],
+    ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", "http://localhost:3200", ["-e", "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3100"]],
+    ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "http://[::1]:3200", []],
+    ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", "http://[::1]:3200", ["-e", "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3100"]],
+    ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "http://0.0.0.0:3200", []],
+    ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", "http://0.0.0.0:3200", ["-e", "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3100"]]
+  ]) {
+    const result = docker(["run", "--rm", "--network", network, ...extraEnv, "-e", `${name}=${value}`, image], {
+      allowFailure: true,
+      timeoutMs: 120000
+    });
+    assert(result.status !== 0, `${name} loopback/container-local hostname was not rejected at startup`);
+    assert(/container-local|loopback|backend-network service DNS/iu.test(result.stderr), `${name} rejection did not explain production Docker bridge loopback requirement`);
   }
 }
 
@@ -138,6 +164,50 @@ async function runPublicEdgeScenario() {
       ready: results.ready.status
     },
     upstream_records: records.length
+  };
+}
+
+async function runUnreachableScenario() {
+  docker([
+    "run",
+    "-d",
+    "--name",
+    unreachableFrontendName,
+    "--network",
+    network,
+    "--network-alias",
+    "frontend",
+    "-e",
+    "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3999",
+    "-e",
+    "ADMIN_UI_ENVIRONMENT_NAME=status-api-upstream-unreachable",
+    image
+  ]);
+  await waitForFrontend();
+  docker(["exec", unreachableFrontendName, "nginx", "-t"]);
+
+  const results = runFrontendRequests();
+  assert(results.healthz.status === 200 && results.healthz.body.trim() === "ok", "unreachable scenario /healthz failed");
+  assert(results.env.status === 200, "unreachable scenario env-config.js failed");
+  assert(!results.env.body.includes("internal-backend:3999"), "unreachable upstream leaked into env-config.js");
+  assert(results.live.status === 502, "unreachable live response was not converted to a bounded failure");
+  assert(results.ready.status === 502, "unreachable ready response was not converted to a bounded failure");
+  assert(results.query.status === 502, "unreachable query response was not converted to a bounded failure");
+  for (const result of [results.live, results.ready, results.query]) {
+    assert(result.body.includes('"reason":"upstream_unavailable"'), "bounded unreachable failure reason missing");
+    assert(!/Bad Gateway|connect\(\)|internal-backend|3999|nginx/iu.test(result.body), "raw unreachable upstream diagnostic leaked");
+    assert(result.headers.setCookie === null, "unreachable Set-Cookie leaked");
+    assert(result.headers.wwwAuthenticate === null, "unreachable WWW-Authenticate leaked");
+    assert(/no-store/iu.test(result.headers.cacheControl ?? ""), "unreachable status response is cacheable");
+  }
+
+  docker(["rm", "-f", unreachableFrontendName], { allowFailure: true });
+  return {
+    upstream_unreachable_reproduced_as_safe_failure: true,
+    browser_statuses: {
+      live: results.live.status,
+      ready: results.ready.status
+    }
   };
 }
 

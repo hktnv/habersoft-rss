@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const backendRoot = path.join(repoRoot, "rss-habersoft-com");
-const packageStatus = "MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED";
+const packageStatus = "MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED";
 const failures = [];
 
 assertRequiredFiles();
@@ -46,6 +46,7 @@ function assertRequiredFiles() {
     ".docs/production-activation-package.md",
     ".docs/admin-auth-production-operator-handoff.md",
     "deploy/production/compose.yaml",
+    "deploy/production/compose.backend-network.yaml",
     "deploy/production/operator-managed.env.template",
     "nginx.conf",
     "docker-entrypoint.sh",
@@ -71,6 +72,9 @@ function assertPackageScript() {
   }
   if (pkg.scripts?.["test:status-api-upstream-remediation"] !== "node scripts/status-api-upstream-remediation-harness.mjs") {
     failures.push("package.json missing test:status-api-upstream-remediation");
+  }
+  if (pkg.scripts?.["test:status-api-production-networking"] !== "node scripts/status-api-upstream-remediation-harness.mjs") {
+    failures.push("package.json missing test:status-api-production-networking");
   }
 }
 
@@ -112,6 +116,11 @@ function assertDocs() {
     "https://rss.habersoft.com",
     "http://host.docker.internal:3200",
     "http://main-service-api:3000",
+    "container-loopback upstream misconfiguration",
+    "Do not use 127.0.0.1",
+    "ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>",
+    "compose.backend-network.yaml",
+    "test:status-api-production-networking",
     "OPERATOR_DEPLOYED_HEALTHZ_VERIFIED_STATUS_API_BLOCKED"
   ]) {
     if (!docs.includes(fragment)) failures.push(`docs missing ${fragment}`);
@@ -132,11 +141,13 @@ function assertSecretlessTemplate() {
   for (const fragment of [
     "RSS_ADMIN_UI_IMAGE=<immutable-admin-ui-image-identity>",
     "ADMIN_UI_HOST_PORT=8081",
-    "Host-namespace example",
-    "Container-to-host gateway example",
-    "Same-Docker-network service DNS example",
+    "ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>",
+    "Preferred backend-network service DNS mode",
+    "Host-gateway mode is allowed only after the operator proves reachability",
     "Do not set ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=https://rss.habersoft.com",
     "Do not set ADMIN_UI_AUTH_UPSTREAM_ORIGIN=https://rss.habersoft.com",
+    "Do not set ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://127.0.0.1:3200",
+    "Do not set ADMIN_UI_AUTH_UPSTREAM_ORIGIN=http://127.0.0.1:3200",
     "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000",
     "ADMIN_UI_AUTH_UPSTREAM_ORIGIN=http://main-service-api:3000",
     "ADMIN_UI_ENVIRONMENT_NAME=production",
@@ -202,11 +213,36 @@ function assertComposeTemplates() {
   });
   if (frontendCompose.status !== 0) failures.push("frontend production compose template failed with synthetic env");
 
+  const backendNetworkCompose = run(
+    "docker",
+    [
+      "compose",
+      "-f",
+      path.join("deploy", "production", "compose.yaml"),
+      "-f",
+      path.join("deploy", "production", "compose.backend-network.yaml"),
+      "config",
+      "--quiet"
+    ],
+    {
+      cwd: frontendRoot,
+      env: {
+        RSS_ADMIN_UI_IMAGE: "rss-admin-ui@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
+        ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
+        ADMIN_UI_ENVIRONMENT_NAME: "production-package-local",
+        ADMIN_UI_HOST_PORT: "8081",
+        ADMIN_UI_BACKEND_DOCKER_NETWORK: "main-service-production_default"
+      }
+    }
+  );
+  if (backendNetworkCompose.status !== 0) failures.push("frontend backend-network compose overlay failed with synthetic env");
+
   const rootCompose = run("docker", ["compose", "config", "--quiet"], {
     cwd: repoRoot,
     env: {
-      RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023b-local",
-      RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023b-local",
+      RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023c-local",
+      RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023c-local",
       POSTGRES_USER: "main_service",
       POSTGRES_PASSWORD: "main_service_local_password",
       POSTGRES_DB: "main_service",
@@ -215,11 +251,11 @@ function assertComposeTemplates() {
       ADMIN_UI_AUTH_MODE: "single_admin",
       ADMIN_UI_ADMIN_USERNAME: "synthetic",
       ADMIN_UI_ADMIN_PASSWORD_HASH: "pbkdf2-sha256$120000$bXMwMjNhLXIyLXBhY2thZ2Utc2FsdC0wMA$kIDFpLaX3lmgcOPk3F7v4BA4CvFutkhDEQ199HSlZlQ",
-      ADMIN_UI_SESSION_SECRET: "synthetic_ms023b_operator_package_secret_48_bytes_minimum",
+      ADMIN_UI_SESSION_SECRET: "synthetic_ms023c_operator_package_secret_48_bytes_minimum",
       ADMIN_UI_SESSION_TTL_SECONDS: "900",
       ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
       ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-      ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023b",
+      ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023c",
       ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
       ADMIN_UI_ENVIRONMENT_NAME: "operator-package-local",
       ADMIN_UI_HOST_PORT: "8081"
@@ -233,7 +269,7 @@ function assertBackendSyntheticConfig() {
     cwd: backendRoot
   });
   if (synthetic.status !== 0) failures.push("backend synthetic admin auth config verifier failed");
-  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret|synthetic-ms023b-admin-password|synthetic_ms023b_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
+  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret|synthetic-ms023b-admin-password|synthetic_ms023b_admin_session_secret|synthetic-ms023c-admin-password|synthetic_ms023c_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
     failures.push("backend synthetic config verifier printed sensitive material");
   }
 

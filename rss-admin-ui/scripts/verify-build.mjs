@@ -19,6 +19,7 @@ const forbidden = [
   /ADMIN_UI_AUTH_UPSTREAM_ORIGIN/iu,
   /ADMIN_UI_API_BASE_URL/iu,
   /main-service-api:3000/iu,
+  /127\.0\.0\.1:3200|localhost:3200|\[::1\]:3200|0\.0\.0\.0:3200/iu,
   /rss\.habersoft\.com/iu,
   /rss-panel\.habersoft\.com/iu,
   /C:\\Users\\EVO-MRDM/iu,

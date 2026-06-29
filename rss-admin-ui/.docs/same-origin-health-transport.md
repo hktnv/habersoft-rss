@@ -26,21 +26,27 @@ Only these mappings exist:
 /status-api/health/ready ->  <ADMIN_UI_HEALTH_UPSTREAM_ORIGIN>/health/ready
 ```
 
-`ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` is server-only runtime config. It must be an absolute `http://` or `https://` internal backend origin with a non-empty host, optional numeric port, and no userinfo, path, query, fragment, whitespace, shell metacharacters, or production default. A missing, invalid, or known public Habersoft edge value fails container startup before Nginx serves traffic.
+`ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` is server-only runtime config. It must be an absolute `http://` or `https://` internal backend origin with a non-empty host, optional numeric port, and no userinfo, path, query, fragment, whitespace, shell metacharacters, or production default. A missing, invalid, known public Habersoft edge, or production Docker bridge loopback/unspecified value fails container startup before Nginx serves traffic.
 
-Production upstreams must be selected by runtime topology:
+Production upstreams for the admin UI Docker bridge package must be selected by runtime topology:
 
 ```text
-host namespace loopback:        http://127.0.0.1:3200
-container-to-host gateway:      http://host.docker.internal:3200
-same Docker network service:    http://main-service-api:3000
+preferred backend network:       http://<backend_service_or_alias>:3000
+repository backend service DNS:  http://main-service-api:3000
+proven host-gateway only:        http://host.docker.internal:3200
 ```
 
-Do not configure the admin UI health upstream with the public backend edge:
+Do not configure the admin UI health upstream with public edge or container-local origins:
 
 ```text
 ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=https://rss.habersoft.com
+ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://127.0.0.1:3200
+ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://localhost:3200
+ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://[::1]:3200
+ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://0.0.0.0:3200
 ```
+
+`127.0.0.1` is valid for operator host-side smoke checks such as `curl http://127.0.0.1:3200/health/ready`, but it is not valid as the upstream origin inside the admin UI production Docker bridge container.
 
 The upstream origin is not emitted to `env-config.js`, the JavaScript bundle, HTML, response bodies, or dashboard UI. `ADMIN_UI_API_BASE_URL` is not used by this health slice after MS-020C; future authenticated business APIs require a separate contract.
 
@@ -57,6 +63,7 @@ For the two health routes:
 - client request headers are not forwarded; only controlled `Host` and `Accept: application/json` are set,
 - upstream `Set-Cookie` and `WWW-Authenticate` are hidden,
 - upstream `401`/`403` from a public-edge-style misroute is converted to a bounded `502` with no raw diagnostic body,
+- upstream connection failure, timeout, or default gateway errors are converted to bounded JSON `502` with `reason=upstream_unavailable`,
 - proxy connect/send/read timeouts are bounded,
 - caching is disabled with `no-store`.
 
@@ -93,6 +100,7 @@ Runtime and local rehearsal checks:
 docker build -t rss-admin-ui:ms020c-local .
 npm run test:proxy-security
 npm run test:status-api-upstream-remediation
+npm run test:status-api-production-networking
 npm run test:fullstack
 npm run verify:production-upstream-contract
 ```

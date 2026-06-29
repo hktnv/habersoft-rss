@@ -179,7 +179,8 @@ function assertRootDocs() {
     (!frontendProduction.includes("MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY") &&
       !frontendProduction.includes("MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY") &&
       !frontendProduction.includes("MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY") &&
-      !frontendProduction.includes("MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED")) ||
+      !frontendProduction.includes("MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED") &&
+      !frontendProduction.includes("MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED")) ||
     !frontendProduction.includes("/admin-auth/session") ||
     !frontendProduction.includes("/admin-auth/login") ||
     !frontendProduction.includes("NOT_DEPLOYED")

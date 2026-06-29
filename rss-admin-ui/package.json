@@ -15,6 +15,7 @@
     "test:auth-proxy": "node scripts/auth-proxy-harness.mjs",
     "test:proxy-security": "node scripts/proxy-security-harness.mjs",
     "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs",
+    "test:status-api-production-networking": "node scripts/status-api-upstream-remediation-harness.mjs",
     "test:fullstack": "node scripts/root-fullstack-acceptance.mjs",
     "test:production-mode-rc": "node scripts/production-mode-rc.mjs",
     "verify:production-readiness": "node scripts/production-readiness-verify.mjs",

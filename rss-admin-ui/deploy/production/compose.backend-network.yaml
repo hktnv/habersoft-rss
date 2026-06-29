@@ -1,0 +1,10 @@
+services:
+  rss-admin-ui:
+    networks:
+      - default
+      - backend
+
+networks:
+  backend:
+    name: ${ADMIN_UI_BACKEND_DOCKER_NETWORK:?ADMIN_UI_BACKEND_DOCKER_NETWORK is required for backend-network mode}
+    external: true

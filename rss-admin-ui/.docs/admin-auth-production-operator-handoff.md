@@ -1,8 +1,8 @@
 # Admin Auth Production Operator Handoff
 
-Status: `MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED`.
+Status: `MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED`.
 
-This handoff is for a future operator-authorized production activation milestone. MS-023B does not deploy the admin UI, does not activate production admin auth, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, does not capture rollback baseline, and does not collect real production credentials.
+This handoff is for a future operator-authorized production activation milestone. MS-023C does not deploy the admin UI, does not activate production admin auth, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, does not capture rollback baseline, and does not collect real production credentials.
 
 ## Authority Checklist
 
@@ -34,9 +34,10 @@ ADMIN_UI_SESSION_COOKIE_SECURE=true
 ADMIN_UI_SESSION_REDIS_PREFIX=admin_auth:production
 ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=<INTERNAL_BACKEND_ORIGIN_REACHABLE_FROM_ADMIN_UI_RUNTIME>
 ADMIN_UI_AUTH_UPSTREAM_ORIGIN=<INTERNAL_BACKEND_ORIGIN_REACHABLE_FROM_ADMIN_UI_RUNTIME>
+ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>
 ```
 
-Do not set either upstream to public edge origins such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. Choose the internal origin by topology: `http://127.0.0.1:3200`, `http://host.docker.internal:3200`, or `http://main-service-api:3000`.
+Do not set either upstream to public edge origins such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. In the admin UI production Docker bridge package, do not set either upstream to `127.0.0.1`, `localhost`, `::1`, `[::1]`, or `0.0.0.0`; that is a container-loopback upstream misconfiguration. Prefer backend-network service DNS with `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>` and `http://<backend_service_or_alias>:3000`, for example `http://main-service-api:3000`. Use `http://host.docker.internal:3200` only after an operator-run container-side reachability check proves host-gateway access.
 
 Use backend helpers from `rss-habersoft-com`:
 
@@ -60,7 +61,7 @@ Future acceptance evidence should prove, with redaction:
 - valid login creates an HttpOnly, `SameSite=Lax`, `Secure`, `/admin-auth` cookie;
 - session after login returns safe authenticated state only;
 - status dashboard health paths work through `/status-api/health/live` and `/status-api/health/ready`;
-- status-api upstream origin is internal and not the public backend edge;
+- status-api upstream origin is backend-network service DNS or proven host-gateway, not public edge and not container loopback;
 - protected shell is locked before login, unlocked after session, and locked after logout;
 - logout invalidates the server-side Redis session;
 - no Agent key, Tenant bearer token, JWT, password, password hash, session secret, raw Redis key, raw logs, or raw production response body is copied into Git;
@@ -70,7 +71,7 @@ Future acceptance evidence should prove, with redaction:
 
 Rollback must be operator-controlled. It may disable `ADMIN_UI_AUTH_MODE`, remove the admin UI edge route, or roll back to a previous immutable image, depending on the authorized production plan. MS-022B does not execute rollback and does not mutate production.
 
-MS-023B keeps rollback-baseline capture operator-managed. Codex does not capture, infer, or assert a production rollback baseline in this package milestone.
+MS-023C keeps rollback-baseline capture operator-managed. Codex does not capture, infer, or assert a production rollback baseline in this package milestone.
 
 ## Residuals
 

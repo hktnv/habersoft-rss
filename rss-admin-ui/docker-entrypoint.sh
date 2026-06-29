@@ -75,9 +75,23 @@ validate_origin() {
   fi
 
   upstream_host_lc="$(printf '%s' "$upstream_host" | tr '[:upper:]' '[:lower:]')"
-  case "$upstream_host_lc" in
+  upstream_host_check="$upstream_host_lc"
+  case "$upstream_host_check" in
+    \[*\])
+      upstream_host_check="${upstream_host_check#\[}"
+      upstream_host_check="${upstream_host_check%\]}"
+      ;;
+  esac
+
+  case "$upstream_host_check" in
     rss.habersoft.com|rss.habersoft.com.|rss-panel.habersoft.com|rss-panel.habersoft.com.)
       fail "$name must be an internal backend origin reachable from the admin UI proxy runtime, not a public Habersoft edge hostname"
+      ;;
+  esac
+
+  case "$upstream_host_check" in
+    localhost|localhost.|127.*|0.0.0.0|0.0.0.0.|0|::|::1|0:0:0:0:0:0:0:0|0:0:0:0:0:0:0:1)
+      fail "$name must not use a container-local or unspecified loopback host in the admin UI production Docker bridge runtime; use backend-network service DNS or proven host-gateway reachability"
       ;;
   esac
 

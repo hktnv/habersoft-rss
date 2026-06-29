@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED`.
+Status: `MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED`.
 
 ## Scope
 
-Included through MS-023B:
+Included through MS-023C:
 
 - application shell,
 - root route,
@@ -39,7 +39,9 @@ Included through MS-023B:
 - operator-managed production package verifier,
 - production upstream contract verifier,
 - status-api upstream remediation harness,
+- status-api production networking harness,
 - secretless operator env template,
+- backend-network production Compose overlay,
 - operator handoff docs for a future no-secret production activation milestone.
 
 Not included:
@@ -65,6 +67,7 @@ npm run test:auth-session-sentinel
 npm run test:auth-proxy
 npm run test:proxy-security
 npm run test:status-api-upstream-remediation
+npm run test:status-api-production-networking
 npm run test:fullstack
 npm run test:production-mode-rc
 npm run verify:production-readiness
@@ -85,7 +88,7 @@ ADMIN_UI_AUTH_UPSTREAM_ORIGIN
 ADMIN_UI_ENVIRONMENT_NAME
 ```
 
-`ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` is server-only and must be an absolute HTTP(S) internal backend origin without userinfo, path, query, or fragment. It must be reachable from the admin UI proxy runtime and must not be a public edge hostname such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. No secret belongs in the frontend bundle or runtime config. The dashboard does not render the upstream origin; it shows only the non-secret environment label and current browser-observed health state.
+`ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` is server-only and must be an absolute HTTP(S) internal backend origin without userinfo, path, query, or fragment. It must be reachable from inside the admin UI proxy runtime and must not be a public edge hostname such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. In the production Docker bridge package it must also not use `127.0.0.1`, `localhost`, `::1`, `[::1]`, or `0.0.0.0`; those names refer to the admin UI container or an unspecified local address, not the backend host loopback. No secret belongs in the frontend bundle or runtime config. The dashboard does not render the upstream origin; it shows only the non-secret environment label and current browser-observed health state.
 
 `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is also server-only and optional. When absent, `/admin-auth/**` stays in static fail-closed mode. When present, only `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` are proxied upstream. When enabled in production it must use the same internal backend origin class as health, not the public backend edge.
 
@@ -108,7 +111,7 @@ MS-022B prepares the activation package without activating production. Backend h
 
 MS-023A-R2 keeps production activation out of scope and makes the production package explicitly operator-managed. Rollback baseline is operator-managed, server deployment/configuration is operator-managed, and this repository package is validated locally with synthetic credentials only.
 
-MS-023B keeps production mutation out of scope and remediates the operator-reported status-api blocker. The bad configuration was `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=https://rss.habersoft.com`; that public backend edge must not be used as the admin UI proxy upstream. Use an internal origin selected by topology: `http://127.0.0.1:3200` for host namespace, `http://host.docker.internal:3200` for container-to-host gateway, or `http://main-service-api:3000` for same-Docker-network service DNS. Admin UI full production acceptance remains pending until the operator applies the env fix and verifies `/status-api/health/ready`.
+MS-023B keeps production mutation out of scope and remediates the operator-reported public-edge status-api blocker. MS-023C keeps production mutation out of scope and remediates the operator-reported container-loopback upstream misconfiguration. In the production Docker bridge package, do not use `http://127.0.0.1:3200`, `localhost`, `::1`, `[::1]`, or `0.0.0.0` for admin UI upstream origins. Prefer backend-network mode with `compose.backend-network.yaml`, `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`, and `http://<backend_service_or_alias>:3000`. The repository backend production Compose service is `main-service-api` and its container port is `3000`. Use `http://host.docker.internal:3200` only after an operator-run container-side reachability check proves that the backend port is reachable through host-gateway. Admin UI full production acceptance remains pending until the operator applies the network fix and verifies `/status-api/health/ready`.
 
 ## Docker
 
@@ -126,14 +129,15 @@ Container health endpoint:
 
 Local root Compose publishes the UI on loopback port `8081`.
 
-MS-023B local rehearsal commands:
+MS-023C local rehearsal commands:
 
 ```bash
-docker build -t rss-admin-ui:ms023b-local .
+docker build -t rss-admin-ui:ms023c-local .
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
 npm run test:proxy-security
 npm run test:status-api-upstream-remediation
+npm run test:status-api-production-networking
 npm run test:fullstack
 npm run test:production-mode-rc
 npm run verify:production-readiness

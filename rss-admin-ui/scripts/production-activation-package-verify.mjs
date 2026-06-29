@@ -14,6 +14,7 @@ const requiredFiles = [
   ".docs/production-activation-package.md",
   ".docs/admin-auth-production-operator-handoff.md",
   "deploy/production/operator-managed.env.template",
+  "deploy/production/compose.backend-network.yaml",
   "scripts/production-mode-rc.mjs",
   "scripts/production-activation-package-verify.mjs",
   "scripts/operator-managed-production-package-verify.mjs",
@@ -40,7 +41,7 @@ console.log(
   JSON.stringify(
     {
       status: "production-activation-package-verify-ok",
-      admin_ui_state: "MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED",
+      admin_ui_state: "MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED",
       provisioning_helpers: "present",
       local_rc_harness: "present",
       operator_managed_package: "present",
@@ -63,6 +64,7 @@ function assertPackageScripts() {
     "verify:operator-managed-production-package": "node scripts/operator-managed-production-package-verify.mjs",
     "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs",
     "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs",
+    "test:status-api-production-networking": "node scripts/status-api-upstream-remediation-harness.mjs",
     "test:production-mode-rc": "node scripts/production-mode-rc.mjs"
   };
   const requiredBackend = {
@@ -94,13 +96,17 @@ function assertDocsBoundary() {
   ].join("\n");
 
   const required = [
-    "MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED",
+    "MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED",
     "NOT_DEPLOYED",
     "OPERATOR_DEPLOYED_HEALTHZ_VERIFIED_STATUS_API_BLOCKED",
     "rollback baseline is operator-managed",
     "server deployment/configuration is operator-managed",
     "internal backend origin",
     "https://rss.habersoft.com",
+    "container-loopback upstream misconfiguration",
+    "Do not use 127.0.0.1",
+    "ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>",
+    "compose.backend-network.yaml",
     "http://host.docker.internal:3200",
     "http://main-service-api:3000",
     "ADMIN_UI_AUTH_MODE",
@@ -122,6 +128,7 @@ function assertDocsBoundary() {
     "operator-authorized",
     "operator-managed.env.template",
     "verify:production-upstream-contract",
+    "test:status-api-production-networking",
     "test:status-api-upstream-remediation"
   ];
   for (const fragment of required) {
@@ -145,7 +152,7 @@ function assertBackendProvisioningScripts() {
     cwd: backendRoot
   });
   if (synthetic.status !== 0) failures.push("backend synthetic admin auth config verifier failed");
-  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret|synthetic-ms023b-admin-password|synthetic_ms023b_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
+  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret|synthetic-ms023b-admin-password|synthetic_ms023b_admin_session_secret|synthetic-ms023c-admin-password|synthetic_ms023c_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
     failures.push("backend config verifier printed synthetic secret material");
   }
 }
@@ -165,8 +172,8 @@ function assertBrowserSurface() {
     { label: "browser auth persistence", pattern: /\b(localStorage|sessionStorage|indexedDB|cookieStore)\b|document\.cookie/u },
     { label: "server upstream origin env", pattern: /ADMIN_UI_(?:HEALTH|AUTH)_UPSTREAM_ORIGIN/u },
     { label: "local compose upstream", pattern: /main-service-api:3000/u },
-    { label: "synthetic password", pattern: /synthetic-ms022b-admin-password|synthetic-ms023a-r2-admin-password|synthetic-ms023b-admin-password/u },
-    { label: "synthetic session secret", pattern: /synthetic_ms022b_admin_session_secret|synthetic_ms023a_r2_admin_session_secret|synthetic_ms023b_admin_session_secret/u },
+    { label: "synthetic password", pattern: /synthetic-ms022b-admin-password|synthetic-ms023a-r2-admin-password|synthetic-ms023b-admin-password|synthetic-ms023c-admin-password/u },
+    { label: "synthetic session secret", pattern: /synthetic_ms022b_admin_session_secret|synthetic_ms023a_r2_admin_session_secret|synthetic_ms023b_admin_session_secret|synthetic_ms023c_admin_session_secret/u },
     { label: "private key", pattern: /BEGIN (?:RSA )?PRIVATE KEY/u }
   ];
 
@@ -195,6 +202,27 @@ function assertProductionComposeTemplates() {
     env
   });
   if (result.status !== 0) failures.push("frontend production compose template did not render with synthetic env");
+
+  const overlay = run(
+    "docker",
+    [
+      "compose",
+      "-f",
+      path.join("deploy", "production", "compose.yaml"),
+      "-f",
+      path.join("deploy", "production", "compose.backend-network.yaml"),
+      "config",
+      "--quiet"
+    ],
+    {
+      cwd: frontendRoot,
+      env: {
+        ...env,
+        ADMIN_UI_BACKEND_DOCKER_NETWORK: "main-service-production_default"
+      }
+    }
+  );
+  if (overlay.status !== 0) failures.push("frontend backend-network production compose overlay did not render with synthetic env");
 }
 
 function run(command, args, options = {}) {

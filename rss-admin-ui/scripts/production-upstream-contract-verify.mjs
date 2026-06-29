@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
-const packageStatus = "MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED";
+const packageStatus = "MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED";
 const upstreamNames = ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "ADMIN_UI_AUTH_UPSTREAM_ORIGIN"];
 const publicEdgeOrigins = [
   "https://rss.habersoft.com",
@@ -13,8 +13,13 @@ const publicEdgeOrigins = [
   "https://rss-panel.habersoft.com",
   "http://rss-panel.habersoft.com"
 ];
-const safeInternalExamples = [
+const loopbackOrigins = [
   "http://127.0.0.1:3200",
+  "http://localhost:3200",
+  "http://[::1]:3200",
+  "http://0.0.0.0:3200"
+];
+const safeInternalExamples = [
   "http://host.docker.internal:3200",
   "http://main-service-api:3000"
 ];
@@ -39,6 +44,7 @@ console.log(
       status: "production-upstream-contract-verify-ok",
       admin_ui_state: packageStatus,
       public_edge_upstreams_rejected: publicEdgeOrigins.length,
+      loopback_upstreams_rejected: loopbackOrigins.length,
       internal_examples_accepted: safeInternalExamples.length,
       browser_upstream_leak: false,
       production_contact: false,
@@ -54,7 +60,8 @@ function assertPackageScripts() {
   const scripts = pkg.scripts ?? {};
   const required = {
     "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs",
-    "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs"
+    "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs",
+    "test:status-api-production-networking": "node scripts/status-api-upstream-remediation-harness.mjs"
   };
   for (const [name, command] of Object.entries(required)) {
     if (scripts[name] !== command) failures.push(`package.json missing ${name}`);
@@ -66,15 +73,17 @@ function assertTemplateContract() {
   const productionTemplate = readFrontend("deploy/production/production.env.template");
 
   for (const fragment of [
-    "Host-namespace example",
-    "Container-to-host gateway example",
-    "Same-Docker-network service DNS example",
+    "Preferred backend-network service DNS mode",
+    "ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>",
+    "Host-gateway mode is allowed only after the operator proves reachability",
     "Do not set ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=https://rss.habersoft.com",
     "Do not set ADMIN_UI_AUTH_UPSTREAM_ORIGIN=https://rss.habersoft.com",
+    "Do not set ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://127.0.0.1:3200",
+    "Do not set ADMIN_UI_AUTH_UPSTREAM_ORIGIN=http://127.0.0.1:3200",
+    "localhost, ::1, [::1], or 0.0.0.0",
     "https://rss-panel.habersoft.com",
     "host.docker.internal:3200",
-    "main-service-api:3000",
-    "127.0.0.1:3200"
+    "main-service-api:3000"
   ]) {
     if (!operatorTemplate.includes(fragment)) failures.push(`operator template missing ${fragment}`);
   }
@@ -95,6 +104,9 @@ function assertOriginValidator() {
   for (const origin of publicEdgeOrigins) {
     assertRejectedPublicEdgeOrigin(origin, "known public edge anti-pattern");
   }
+  for (const origin of loopbackOrigins) {
+    assertRejectedLoopbackOrigin(origin, "known Docker bridge loopback anti-pattern");
+  }
 
   for (const invalid of [
     "ftp://main-service-api:3000",
@@ -113,6 +125,8 @@ function assertEntrypointContract() {
     "rss.habersoft.com",
     "rss-panel.habersoft.com",
     "must be an internal backend origin",
+    "container-local or unspecified loopback host",
+    "backend-network service DNS",
     "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN",
     "ADMIN_UI_AUTH_UPSTREAM_ORIGIN"
   ]) {
@@ -123,8 +137,11 @@ function assertEntrypointContract() {
   for (const fragment of [
     "proxy_intercept_errors on;",
     "error_page 401 403 = @status_api_upstream_forbidden;",
+    "error_page 500 502 504 = @status_api_upstream_unavailable;",
     "location @status_api_upstream_forbidden",
+    "location @status_api_upstream_unavailable",
     "\"reason\":\"upstream_forbidden\"",
+    "\"reason\":\"upstream_unavailable\"",
     "proxy_pass_request_headers off;",
     "proxy_pass_request_body off;",
     "proxy_hide_header Set-Cookie;",
@@ -146,8 +163,8 @@ function assertComposeExamples() {
   const rootCompose = run("docker", ["compose", "config", "--quiet"], {
     cwd: repoRoot,
     env: {
-      RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023b-local",
-      RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023b-local",
+      RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023c-local",
+      RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023c-local",
       POSTGRES_USER: "main_service",
       POSTGRES_PASSWORD: "main_service_local_password",
       POSTGRES_DB: "main_service",
@@ -156,17 +173,38 @@ function assertComposeExamples() {
       ADMIN_UI_AUTH_MODE: "single_admin",
       ADMIN_UI_ADMIN_USERNAME: "synthetic",
       ADMIN_UI_ADMIN_PASSWORD_HASH: "pbkdf2-sha256$120000$bXMwMjNiLXVwc3RyZWFtLTAw$Lv9lJTd4qyEV0qIYDy5Za3XfcVN58bDSEJI5EIovXVk",
-      ADMIN_UI_SESSION_SECRET: "synthetic_ms023b_upstream_contract_secret_48_bytes_minimum",
+      ADMIN_UI_SESSION_SECRET: "synthetic_ms023c_upstream_contract_secret_48_bytes_minimum",
       ADMIN_UI_SESSION_TTL_SECONDS: "900",
       ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
       ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-      ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023b",
+      ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023c",
       ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
       ADMIN_UI_ENVIRONMENT_NAME: "upstream-contract-local",
       ADMIN_UI_HOST_PORT: "8081"
     }
   });
   if (rootCompose.status !== 0) failures.push("root compose did not render with synthetic internal upstream env");
+
+  const overlayCompose = run(
+    "docker",
+    [
+      "compose",
+      "-f",
+      path.join("deploy", "production", "compose.yaml"),
+      "-f",
+      path.join("deploy", "production", "compose.backend-network.yaml"),
+      "config",
+      "--quiet"
+    ],
+    {
+      cwd: frontendRoot,
+      env: {
+        ...productionComposeEnv("http://main-service-api:3000"),
+        ADMIN_UI_BACKEND_DOCKER_NETWORK: "main-service-production_default"
+      }
+    }
+  );
+  if (overlayCompose.status !== 0) failures.push("backend-network production compose overlay did not render with synthetic env");
 }
 
 function assertDocsContract() {
@@ -185,13 +223,18 @@ function assertDocsContract() {
     packageStatus,
     "OPERATOR_DEPLOYED_HEALTHZ_VERIFIED_STATUS_API_BLOCKED",
     "operator-reported",
-    "public `https://rss-panel.habersoft.com/status-api/health/ready` fails while `/healthz` works",
+    "public `https://rss-panel.habersoft.com/status-api/health/ready` still returns `502`",
+    "container-loopback upstream misconfiguration",
     "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=https://rss.habersoft.com",
     "ADMIN_UI_AUTH_UPSTREAM_ORIGIN=https://rss.habersoft.com",
+    "Do not use 127.0.0.1",
+    "ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>",
+    "compose.backend-network.yaml",
     "http://127.0.0.1:3200",
     "http://host.docker.internal:3200",
     "http://main-service-api:3000",
     "npm run verify:production-upstream-contract",
+    "npm run test:status-api-production-networking",
     "npm run test:status-api-upstream-remediation",
     "Admin UI full production acceptance remains pending"
   ]) {
@@ -263,6 +306,11 @@ function assertRejectedPublicEdgeOrigin(origin, label) {
   if (result.ok || !result.publicEdge) failures.push(`${label} was not rejected as public edge`);
 }
 
+function assertRejectedLoopbackOrigin(origin, label) {
+  const result = classifyOrigin(origin);
+  if (result.ok || !result.loopback) failures.push(`${label} was not rejected as Docker bridge loopback`);
+}
+
 function assertRejectedInvalidOrigin(origin, label) {
   const result = classifyOrigin(origin);
   if (result.ok) failures.push(`${label} was accepted unexpectedly: ${redactedOriginKind(origin)}`);
@@ -281,11 +329,14 @@ function classifyOrigin(origin) {
   if (parsed.pathname !== "/" || parsed.search !== "" || parsed.hash !== "") return { ok: false, publicEdge: false };
   if (parsed.hostname === "") return { ok: false, publicEdge: false };
 
-  const hostname = parsed.hostname.replace(/\.$/u, "").toLowerCase();
+  let hostname = parsed.hostname.replace(/\.$/u, "").toLowerCase();
+  if (hostname.startsWith("[") && hostname.endsWith("]")) hostname = hostname.slice(1, -1);
   const publicEdge = hostname === "rss.habersoft.com" || hostname === "rss-panel.habersoft.com";
-  if (publicEdge) return { ok: false, publicEdge: true };
+  if (publicEdge) return { ok: false, publicEdge: true, loopback: false };
+  const loopback = hostname === "localhost" || hostname === "::1" || hostname === "0.0.0.0" || hostname.startsWith("127.");
+  if (loopback) return { ok: false, publicEdge: false, loopback: true };
 
-  return { ok: true, publicEdge: false };
+  return { ok: true, publicEdge: false, loopback: false };
 }
 
 function redactedOriginKind(origin) {
