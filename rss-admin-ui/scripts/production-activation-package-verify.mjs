@@ -17,6 +17,9 @@ const requiredFiles = [
   "scripts/production-mode-rc.mjs",
   "scripts/production-activation-package-verify.mjs",
   "scripts/operator-managed-production-package-verify.mjs",
+  "scripts/production-upstream-contract-verify.mjs",
+  "scripts/status-api-upstream-remediation-harness.mjs",
+  ".docs/status-api-upstream-remediation.md",
   "../rss-habersoft-com/scripts/admin-auth-provisioning.mjs",
   "../rss-habersoft-com/.docs/admin-auth-production-activation.md"
 ];
@@ -37,10 +40,11 @@ console.log(
   JSON.stringify(
     {
       status: "production-activation-package-verify-ok",
-      admin_ui_state: "MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY - NOT_DEPLOYED",
+      admin_ui_state: "MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED",
       provisioning_helpers: "present",
       local_rc_harness: "present",
       operator_managed_package: "present",
+      upstream_remediation_package: "present",
       production_contact: false,
       registry_publication: false
     },
@@ -57,6 +61,8 @@ function assertPackageScripts() {
   const requiredFrontend = {
     "verify:production-activation-package": "node scripts/production-activation-package-verify.mjs",
     "verify:operator-managed-production-package": "node scripts/operator-managed-production-package-verify.mjs",
+    "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs",
+    "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs",
     "test:production-mode-rc": "node scripts/production-mode-rc.mjs"
   };
   const requiredBackend = {
@@ -80,6 +86,7 @@ function assertDocsBoundary() {
     readFrontend("README.md"),
     readFrontend("PRODUCTION.md"),
     readFrontend(".docs/production-activation-package.md"),
+    readFrontend(".docs/status-api-upstream-remediation.md"),
     readFrontend(".docs/admin-auth-production-operator-handoff.md"),
     readBackend("README.md"),
     readBackend("PRODUCTION.md"),
@@ -87,10 +94,15 @@ function assertDocsBoundary() {
   ].join("\n");
 
   const required = [
-    "MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY",
+    "MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED",
     "NOT_DEPLOYED",
+    "OPERATOR_DEPLOYED_HEALTHZ_VERIFIED_STATUS_API_BLOCKED",
     "rollback baseline is operator-managed",
     "server deployment/configuration is operator-managed",
+    "internal backend origin",
+    "https://rss.habersoft.com",
+    "http://host.docker.internal:3200",
+    "http://main-service-api:3000",
     "ADMIN_UI_AUTH_MODE",
     "ADMIN_UI_ADMIN_USERNAME",
     "ADMIN_UI_ADMIN_PASSWORD_HASH",
@@ -108,7 +120,9 @@ function assertDocsBoundary() {
     "no registry",
     "no Git tag",
     "operator-authorized",
-    "operator-managed.env.template"
+    "operator-managed.env.template",
+    "verify:production-upstream-contract",
+    "test:status-api-upstream-remediation"
   ];
   for (const fragment of required) {
     if (!docs.includes(fragment)) failures.push(`docs missing ${fragment}`);
@@ -131,7 +145,7 @@ function assertBackendProvisioningScripts() {
     cwd: backendRoot
   });
   if (synthetic.status !== 0) failures.push("backend synthetic admin auth config verifier failed");
-  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
+  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret|synthetic-ms023b-admin-password|synthetic_ms023b_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
     failures.push("backend config verifier printed synthetic secret material");
   }
 }
@@ -151,8 +165,8 @@ function assertBrowserSurface() {
     { label: "browser auth persistence", pattern: /\b(localStorage|sessionStorage|indexedDB|cookieStore)\b|document\.cookie/u },
     { label: "server upstream origin env", pattern: /ADMIN_UI_(?:HEALTH|AUTH)_UPSTREAM_ORIGIN/u },
     { label: "local compose upstream", pattern: /main-service-api:3000/u },
-    { label: "synthetic password", pattern: /synthetic-ms022b-admin-password|synthetic-ms023a-r2-admin-password/u },
-    { label: "synthetic session secret", pattern: /synthetic_ms022b_admin_session_secret|synthetic_ms023a_r2_admin_session_secret/u },
+    { label: "synthetic password", pattern: /synthetic-ms022b-admin-password|synthetic-ms023a-r2-admin-password|synthetic-ms023b-admin-password/u },
+    { label: "synthetic session secret", pattern: /synthetic_ms022b_admin_session_secret|synthetic_ms023a_r2_admin_session_secret|synthetic_ms023b_admin_session_secret/u },
     { label: "private key", pattern: /BEGIN (?:RSA )?PRIVATE KEY/u }
   ];
 
@@ -171,8 +185,8 @@ function assertBrowserSurface() {
 function assertProductionComposeTemplates() {
   const env = {
     RSS_ADMIN_UI_IMAGE: "rss-admin-ui@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://127.0.0.1:3200",
-    ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://127.0.0.1:3200",
+    ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
+    ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
     ADMIN_UI_ENVIRONMENT_NAME: "production-activation-package-local",
     ADMIN_UI_HOST_PORT: "8081"
   };

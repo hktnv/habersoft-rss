@@ -14,11 +14,13 @@
     "test:auth-session-sentinel": "node scripts/auth-session-sentinel-harness.mjs",
     "test:auth-proxy": "node scripts/auth-proxy-harness.mjs",
     "test:proxy-security": "node scripts/proxy-security-harness.mjs",
+    "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs",
     "test:fullstack": "node scripts/root-fullstack-acceptance.mjs",
     "test:production-mode-rc": "node scripts/production-mode-rc.mjs",
     "verify:production-readiness": "node scripts/production-readiness-verify.mjs",
     "verify:production-activation-package": "node scripts/production-activation-package-verify.mjs",
     "verify:operator-managed-production-package": "node scripts/operator-managed-production-package-verify.mjs",
+    "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs",
     "verify:auth-boundary": "node scripts/auth-boundary-verify.mjs"
   },
   "dependencies": {

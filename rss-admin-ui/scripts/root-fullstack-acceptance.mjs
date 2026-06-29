@@ -6,18 +6,18 @@ import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
-const projectName = `habersoft-rss-ms023a-r2-${Date.now()}`;
+const projectName = `habersoft-rss-ms023b-${Date.now()}`;
 const uiPort = await freePort();
 const apiPort = await freePort();
 const adminUsername = "admin";
-const adminPassword = "test-only-ms023a-r2-admin-password";
-const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms023a-r2-local-salt", "utf8"));
-const adminSessionSecret = "test_only_ms023a_r2_admin_session_secret_at_least_32_bytes";
+const adminPassword = "test-only-ms023b-admin-password";
+const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms023b-local-salt-00", "utf8"));
+const adminSessionSecret = "test_only_ms023b_admin_session_secret_at_least_32_bytes";
 
 const composeEnv = {
   ...process.env,
-  RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023a-r2-fullstack-local",
-  RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023a-r2-local",
+  RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023b-fullstack-local",
+  RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023b-local",
   POSTGRES_USER: "main_service",
   POSTGRES_PASSWORD: "main_service_local_password",
   POSTGRES_DB: "main_service",
@@ -31,7 +31,7 @@ const composeEnv = {
   ADMIN_UI_SESSION_TTL_SECONDS: "900",
   ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
   ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-  ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023a_r2",
+  ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023b",
   ADMIN_UI_ENVIRONMENT_NAME: "local-fullstack-auth-rehearsal",
   ADMIN_UI_HOST_PORT: String(uiPort),
   API_HOST_PORT: String(apiPort)

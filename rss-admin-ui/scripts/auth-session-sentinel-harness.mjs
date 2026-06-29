@@ -4,12 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultImage = "rss-admin-ui:ms023a-r2-local";
+const defaultImage = "rss-admin-ui:ms023b-local";
 const image = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? defaultImage;
 const suffix = randomUUID().slice(0, 8);
-const network = `rss-admin-ui-ms023a-r2-sentinel-${suffix}`;
-const recorderName = `rss-admin-ui-ms023a-r2-recorder-${suffix}`;
-const frontendName = `rss-admin-ui-ms023a-r2-runtime-${suffix}`;
+const network = `rss-admin-ui-ms023b-sentinel-${suffix}`;
+const recorderName = `rss-admin-ui-ms023b-recorder-${suffix}`;
+const frontendName = `rss-admin-ui-ms023b-runtime-${suffix}`;
 
 try {
   ensureImage();

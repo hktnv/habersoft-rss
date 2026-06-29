@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const backendRoot = path.join(repoRoot, "rss-habersoft-com");
-const packageStatus = "MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY - NOT_DEPLOYED";
+const packageStatus = "MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED";
 const failures = [];
 
 assertRequiredFiles();
@@ -50,7 +50,10 @@ function assertRequiredFiles() {
     "nginx.conf",
     "docker-entrypoint.sh",
     "scripts/operator-managed-production-package-verify.mjs",
+    "scripts/production-upstream-contract-verify.mjs",
+    "scripts/status-api-upstream-remediation-harness.mjs",
     "scripts/production-mode-rc.mjs",
+    ".docs/status-api-upstream-remediation.md",
     "../rss-habersoft-com/.docs/admin-auth-production-activation.md",
     "../rss-habersoft-com/scripts/admin-auth-provisioning.mjs"
   ]) {
@@ -63,6 +66,12 @@ function assertPackageScript() {
   if (pkg.scripts?.["verify:operator-managed-production-package"] !== "node scripts/operator-managed-production-package-verify.mjs") {
     failures.push("package.json missing verify:operator-managed-production-package");
   }
+  if (pkg.scripts?.["verify:production-upstream-contract"] !== "node scripts/production-upstream-contract-verify.mjs") {
+    failures.push("package.json missing verify:production-upstream-contract");
+  }
+  if (pkg.scripts?.["test:status-api-upstream-remediation"] !== "node scripts/status-api-upstream-remediation-harness.mjs") {
+    failures.push("package.json missing test:status-api-upstream-remediation");
+  }
 }
 
 function assertDocs() {
@@ -72,6 +81,7 @@ function assertDocs() {
     readFrontend("README.md"),
     readFrontend("PRODUCTION.md"),
     readFrontend(".docs/production-activation-package.md"),
+    readFrontend(".docs/status-api-upstream-remediation.md"),
     readFrontend(".docs/admin-auth-production-operator-handoff.md"),
     readBackend(".docs/admin-auth-production-activation.md")
   ].join("\n");
@@ -97,7 +107,12 @@ function assertDocs() {
     "/admin-auth/session",
     "/admin-auth/login",
     "/admin-auth/logout",
-    "operator-managed.env.template"
+    "operator-managed.env.template",
+    "internal backend origin",
+    "https://rss.habersoft.com",
+    "http://host.docker.internal:3200",
+    "http://main-service-api:3000",
+    "OPERATOR_DEPLOYED_HEALTHZ_VERIFIED_STATUS_API_BLOCKED"
   ]) {
     if (!docs.includes(fragment)) failures.push(`docs missing ${fragment}`);
   }
@@ -117,8 +132,13 @@ function assertSecretlessTemplate() {
   for (const fragment of [
     "RSS_ADMIN_UI_IMAGE=<immutable-admin-ui-image-identity>",
     "ADMIN_UI_HOST_PORT=8081",
-    "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://127.0.0.1:3200",
-    "ADMIN_UI_AUTH_UPSTREAM_ORIGIN=http://127.0.0.1:3200",
+    "Host-namespace example",
+    "Container-to-host gateway example",
+    "Same-Docker-network service DNS example",
+    "Do not set ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=https://rss.habersoft.com",
+    "Do not set ADMIN_UI_AUTH_UPSTREAM_ORIGIN=https://rss.habersoft.com",
+    "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000",
+    "ADMIN_UI_AUTH_UPSTREAM_ORIGIN=http://main-service-api:3000",
     "ADMIN_UI_ENVIRONMENT_NAME=production",
     "ADMIN_UI_AUTH_MODE=single_admin",
     "ADMIN_UI_ADMIN_USERNAME=<operator-provided-admin-username>",
@@ -174,8 +194,8 @@ function assertComposeTemplates() {
     cwd: frontendRoot,
     env: {
       RSS_ADMIN_UI_IMAGE: "rss-admin-ui@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://127.0.0.1:3200",
-      ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://127.0.0.1:3200",
+      ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
+      ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
       ADMIN_UI_ENVIRONMENT_NAME: "production-package-local",
       ADMIN_UI_HOST_PORT: "8081"
     }
@@ -185,8 +205,8 @@ function assertComposeTemplates() {
   const rootCompose = run("docker", ["compose", "config", "--quiet"], {
     cwd: repoRoot,
     env: {
-      RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023a-r2-local",
-      RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023a-r2-local",
+      RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023b-local",
+      RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023b-local",
       POSTGRES_USER: "main_service",
       POSTGRES_PASSWORD: "main_service_local_password",
       POSTGRES_DB: "main_service",
@@ -195,11 +215,11 @@ function assertComposeTemplates() {
       ADMIN_UI_AUTH_MODE: "single_admin",
       ADMIN_UI_ADMIN_USERNAME: "synthetic",
       ADMIN_UI_ADMIN_PASSWORD_HASH: "pbkdf2-sha256$120000$bXMwMjNhLXIyLXBhY2thZ2Utc2FsdC0wMA$kIDFpLaX3lmgcOPk3F7v4BA4CvFutkhDEQ199HSlZlQ",
-      ADMIN_UI_SESSION_SECRET: "synthetic_ms023a_r2_operator_package_secret_48_bytes_minimum",
+      ADMIN_UI_SESSION_SECRET: "synthetic_ms023b_operator_package_secret_48_bytes_minimum",
       ADMIN_UI_SESSION_TTL_SECONDS: "900",
       ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
       ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-      ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023a_r2",
+      ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023b",
       ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
       ADMIN_UI_ENVIRONMENT_NAME: "operator-package-local",
       ADMIN_UI_HOST_PORT: "8081"
@@ -213,20 +233,27 @@ function assertBackendSyntheticConfig() {
     cwd: backendRoot
   });
   if (synthetic.status !== 0) failures.push("backend synthetic admin auth config verifier failed");
-  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
+  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret|synthetic-ms023b-admin-password|synthetic_ms023b_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
     failures.push("backend synthetic config verifier printed sensitive material");
   }
+
+  const upstreamContract = run("npm", ["run", "verify:production-upstream-contract"], {
+    cwd: frontendRoot
+  });
+  if (upstreamContract.status !== 0) failures.push("production upstream contract verifier failed");
 }
 
 function assertNoProductionContactInLocalPackage() {
   const files = [
     "scripts/production-mode-rc.mjs",
     "scripts/production-activation-package-verify.mjs",
+    "scripts/production-upstream-contract-verify.mjs",
+    "scripts/status-api-upstream-remediation-harness.mjs",
     "scripts/auth-proxy-harness.mjs",
     "scripts/proxy-security-harness.mjs",
     "scripts/auth-session-sentinel-harness.mjs"
   ];
-  const forbiddenCommand = /\b(ssh|scp|sftp|rsync)\b|curl\s+https:\/\/rss|Invoke-WebRequest\s+.*rss|https:\/\/rss\.habersoft\.com/iu;
+  const forbiddenCommand = /\b(ssh|scp|sftp|rsync)\b|curl\s+https:\/\/rss|Invoke-WebRequest\s+.*https:\/\/rss|fetch\s*\(\s*["']https:\/\/rss/iu;
   for (const file of files) {
     const text = readFrontend(file);
     if (forbiddenCommand.test(text)) failures.push(`local package verifier/harness contains production contact command: ${file}`);

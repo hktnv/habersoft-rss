@@ -7,12 +7,12 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const stamp = Date.now();
-const frontendImage = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? "rss-admin-ui:ms023a-r2-local";
-const backendImage = process.env.RSS_HABERSOFT_COM_TEST_IMAGE ?? "main-service-app:ms023a-r2-rc-local";
+const frontendImage = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? "rss-admin-ui:ms023b-local";
+const backendImage = process.env.RSS_HABERSOFT_COM_TEST_IMAGE ?? "main-service-app:ms023b-rc-local";
 const adminUsername = "admin";
-const adminPassword = "synthetic-ms023a-r2-admin-password";
-const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms023a-r2-rc-salt-00", "utf8"));
-const adminSessionSecret = "synthetic_ms023a_r2_admin_session_secret_48_bytes_minimum";
+const adminPassword = "synthetic-ms023b-admin-password";
+const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms023b-rc-salt-00", "utf8"));
+const adminSessionSecret = "synthetic_ms023b_admin_session_secret_48_bytes_minimum";
 const scenarioResults = [];
 
 await runDisabledScenario();
@@ -35,7 +35,7 @@ console.log(
 );
 
 async function runDisabledScenario() {
-  const projectName = `habersoft-rss-ms023a-r2-disabled-${stamp}`;
+  const projectName = `habersoft-rss-ms023b-disabled-${stamp}`;
   const uiPort = await freePort();
   const apiPort = await freePort();
   const env = composeEnv({
@@ -80,7 +80,7 @@ async function runDisabledScenario() {
 }
 
 async function runEnabledScenario() {
-  const projectName = `habersoft-rss-ms023a-r2-enabled-${stamp}`;
+  const projectName = `habersoft-rss-ms023b-enabled-${stamp}`;
   const uiPort = await freePort();
   const apiPort = await freePort();
   const env = composeEnv({
@@ -223,7 +223,7 @@ function composeEnv({ uiPort, apiPort, authMode, authValues }) {
     ADMIN_UI_SESSION_TTL_SECONDS: "900",
     ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
     ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-    ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023a_r2",
+    ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023b",
     ADMIN_UI_ENVIRONMENT_NAME: "local-production-mode-rc",
     ADMIN_UI_HOST_PORT: String(uiPort),
     API_HOST_PORT: String(apiPort),
@@ -274,7 +274,7 @@ function inspectProjectLeftovers(projectName) {
 }
 
 function assertNoGlobalLeftovers() {
-  const pattern = "ms023a-r2";
+  const pattern = "ms023b";
   const containers = run(["ps", "-a", "--format", "{{.Names}}"], { allowFailure: true });
   const networks = run(["network", "ls", "--format", "{{.Name}}"], { allowFailure: true });
   const volumes = run(["volume", "ls", "--format", "{{.Name}}"], { allowFailure: true });
@@ -282,7 +282,7 @@ function assertNoGlobalLeftovers() {
     .join("\n")
     .split(/\r?\n/u)
     .filter((line) => line.includes(pattern));
-  assert(leftovers.length === 0, `MS-023A-R2 Docker leftovers remained: ${leftovers.join(", ")}`);
+  assert(leftovers.length === 0, `MS-023B Docker leftovers remained: ${leftovers.join(", ")}`);
 }
 
 async function waitForReady(url) {

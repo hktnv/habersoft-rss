@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY - NOT_DEPLOYED`.
+Status: `MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED`.
 
 ## Scope
 
-Included through MS-023A-R2:
+Included through MS-023B:
 
 - application shell,
 - root route,
@@ -37,6 +37,8 @@ Included through MS-023A-R2:
 - local production-mode RC acceptance harness,
 - production activation package verifier,
 - operator-managed production package verifier,
+- production upstream contract verifier,
+- status-api upstream remediation harness,
 - secretless operator env template,
 - operator handoff docs for a future no-secret production activation milestone.
 
@@ -62,11 +64,13 @@ npm run build
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
 npm run test:proxy-security
+npm run test:status-api-upstream-remediation
 npm run test:fullstack
 npm run test:production-mode-rc
 npm run verify:production-readiness
 npm run verify:production-activation-package
 npm run verify:operator-managed-production-package
+npm run verify:production-upstream-contract
 npm run verify:auth-boundary
 npm audit --omit=dev
 ```
@@ -81,9 +85,9 @@ ADMIN_UI_AUTH_UPSTREAM_ORIGIN
 ADMIN_UI_ENVIRONMENT_NAME
 ```
 
-`ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` is server-only and must be an absolute HTTP(S) origin without userinfo, path, query, or fragment. No secret belongs in the frontend bundle or runtime config. The dashboard does not render the upstream origin; it shows only the non-secret environment label and current browser-observed health state.
+`ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` is server-only and must be an absolute HTTP(S) internal backend origin without userinfo, path, query, or fragment. It must be reachable from the admin UI proxy runtime and must not be a public edge hostname such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. No secret belongs in the frontend bundle or runtime config. The dashboard does not render the upstream origin; it shows only the non-secret environment label and current browser-observed health state.
 
-`ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is also server-only and optional. When absent, `/admin-auth/**` stays in static fail-closed mode. When present, only `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` are proxied upstream.
+`ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is also server-only and optional. When absent, `/admin-auth/**` stays in static fail-closed mode. When present, only `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` are proxied upstream. When enabled in production it must use the same internal backend origin class as health, not the public backend edge.
 
 ## Health Dashboard
 
@@ -104,6 +108,8 @@ MS-022B prepares the activation package without activating production. Backend h
 
 MS-023A-R2 keeps production activation out of scope and makes the production package explicitly operator-managed. Rollback baseline is operator-managed, server deployment/configuration is operator-managed, and this repository package is validated locally with synthetic credentials only.
 
+MS-023B keeps production mutation out of scope and remediates the operator-reported status-api blocker. The bad configuration was `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=https://rss.habersoft.com`; that public backend edge must not be used as the admin UI proxy upstream. Use an internal origin selected by topology: `http://127.0.0.1:3200` for host namespace, `http://host.docker.internal:3200` for container-to-host gateway, or `http://main-service-api:3000` for same-Docker-network service DNS. Admin UI full production acceptance remains pending until the operator applies the env fix and verifies `/status-api/health/ready`.
+
 ## Docker
 
 Local image build:
@@ -120,18 +126,20 @@ Container health endpoint:
 
 Local root Compose publishes the UI on loopback port `8081`.
 
-MS-023A-R2 local rehearsal commands:
+MS-023B local rehearsal commands:
 
 ```bash
-docker build -t rss-admin-ui:ms023a-r2-local .
+docker build -t rss-admin-ui:ms023b-local .
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
 npm run test:proxy-security
+npm run test:status-api-upstream-remediation
 npm run test:fullstack
 npm run test:production-mode-rc
 npm run verify:production-readiness
 npm run verify:production-activation-package
 npm run verify:operator-managed-production-package
+npm run verify:production-upstream-contract
 npm run verify:auth-boundary
 ```
 
@@ -143,6 +151,7 @@ npm run verify:auth-boundary
 - [Admin session sentinel](.docs/admin-session-sentinel.md)
 - [Production activation readiness contract](.docs/production-activation-readiness.md)
 - [Production activation package](.docs/production-activation-package.md)
+- [Status-api upstream remediation](.docs/status-api-upstream-remediation.md)
 - [Admin auth production operator handoff](.docs/admin-auth-production-operator-handoff.md)
 - [Read-only status dashboard contract](.docs/read-only-status-dashboard.md)
 - [Same-origin health transport contract](.docs/same-origin-health-transport.md)

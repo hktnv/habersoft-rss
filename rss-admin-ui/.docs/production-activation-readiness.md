@@ -68,7 +68,7 @@ All items in this section are `OPERATOR_AUTHORIZED_FUTURE_TASK_ONLY`; none are a
 - `rss-panel.habersoft.com` remains planned, not active.
 - The edge should terminate TLS and route only to the admin UI loopback frontend port.
 - The admin UI container should bind only to loopback on the host-facing side.
-- The frontend container should reach the backend only through server-only `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`, expected to be a loopback or private server-side origin selected by the operator.
+- The frontend container should reach the backend only through server-only `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`, expected to be an internal loopback, host-gateway, or same-network service origin selected by the operator. Public edge origins such as `https://rss.habersoft.com` are not valid admin UI proxy upstreams.
 - The backend must not be changed to add CORS for the health dashboard.
 - TLS certificates, HTTP-to-HTTPS redirect, HSTS, access logging, error logging, firewall rules, and operational monitoring are future operator tasks.
 - Future activation must use an immutable image identity or an explicitly recorded local build identity policy accepted by the operator.
@@ -115,6 +115,7 @@ Label every item `OPERATOR_AUTHORIZED_FUTURE_TASK_ONLY` and capture timestamps, 
 - Confirm the page renders the static app and non-secret environment label.
 - Confirm `/healthz` is served by the frontend runtime.
 - Confirm `/status-api/health/live` and `/status-api/health/ready` return bounded status-only payloads.
+- Confirm `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` and `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` use an internal backend origin, not `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`.
 - Confirm unknown `/status-api/**`, suffix, duplicate-slash, encoded traversal, and non-GET requests are rejected locally.
 - Confirm query strings, request bodies, browser credentials, cookies, bearer tokens, Tenant tokens, Agent keys, and arbitrary client headers are not sent upstream.
 - Confirm upstream `Set-Cookie` and `WWW-Authenticate` are not relayed.

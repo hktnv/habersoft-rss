@@ -74,6 +74,13 @@ validate_origin() {
     fail "$name must include a host"
   fi
 
+  upstream_host_lc="$(printf '%s' "$upstream_host" | tr '[:upper:]' '[:lower:]')"
+  case "$upstream_host_lc" in
+    rss.habersoft.com|rss.habersoft.com.|rss-panel.habersoft.com|rss-panel.habersoft.com.)
+      fail "$name must be an internal backend origin reachable from the admin UI proxy runtime, not a public Habersoft edge hostname"
+      ;;
+  esac
+
   printf '%s' "${upstream_scheme}${upstream_rest}"
 }
 
