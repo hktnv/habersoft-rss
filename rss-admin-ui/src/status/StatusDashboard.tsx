@@ -110,11 +110,11 @@ export function StatusDashboard({
         <dl className="status-grid" aria-label="Dashboard status">
           <div>
             <dt>UI status</dt>
-            <dd>READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED</dd>
+            <dd>READ_ONLY_STATUS_DASHBOARD_PRODUCTION_TRANSPORT_ACTIVE</dd>
           </div>
           <div>
             <dt>Deployment</dt>
-            <dd>NOT_DEPLOYED</dd>
+            <dd>AUTH_NOT_CONFIGURED_RESIDUAL</dd>
           </div>
           <div>
             <dt>API writes</dt>

@@ -1,8 +1,8 @@
 # Production Activation Package
 
-Status: `MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED`.
+Status: `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`.
 
-MS-023C prepares a no-secret, no-deploy, operator-managed production package for the admin UI and remediates the operator-reported status-api production networking blocker. It validates the local production-mode release candidate, package templates, upstream contract, backend-network overlay, and networking harness with synthetic/local fixtures only. It does not contact production, does not mutate production, does not capture rollback baseline, performs no production deployment, does no registry publication, creates no Git tag, creates no GitHub Release, and creates no PR.
+MS-023D records read-only production status-dashboard transport acceptance for the already operator-managed live admin UI surface. It preserves the no-secret, operator-managed production package, validates local production-mode release candidates with synthetic/local fixtures only, and adds a focused `AUTH_NOT_CONFIGURED_RESIDUAL` remediation contract. It does not mutate production, capture rollback baseline, perform production deployment, publish a registry image, create a Git tag, create a GitHub Release, or create a PR.
 
 Rollback baseline is operator-managed. Server deployment/configuration is operator-managed. Codex-owned repository work is limited to templates, same-origin proxy configuration, local validation, and runbook guidance.
 
@@ -30,21 +30,24 @@ Unknown `/status-api/**` and `/admin-auth/**` paths reject safely. Unsupported m
 | `ADMIN_UI_ENVIRONMENT_NAME` | generated `env-config.js` | yes | no | Browser-visible label only. |
 | `ADMIN_UI_HOST_PORT` | Docker Compose | yes | no | Loopback host port for future edge handoff. |
 
-Backend admin auth variables are documented in `../rss-habersoft-com/.docs/admin-auth-production-activation.md` from the repository root. They include `ADMIN_UI_AUTH_MODE`, `ADMIN_UI_ADMIN_USERNAME`, `ADMIN_UI_ADMIN_PASSWORD_HASH`, `ADMIN_UI_SESSION_SECRET`, `ADMIN_UI_SESSION_COOKIE_SECURE`, and related session controls.
+Backend admin auth variables are documented in `../rss-habersoft-com/.docs/admin-auth-production-activation.md` from the repository root and mirrored as a frontend handoff checklist in `deploy/production/backend-admin-auth.env.template`. They include `ADMIN_UI_AUTH_MODE`, `ADMIN_UI_ADMIN_USERNAME`, `ADMIN_UI_ADMIN_PASSWORD_HASH`, `ADMIN_UI_SESSION_SECRET`, `ADMIN_UI_SESSION_COOKIE_SECURE`, and related session controls. They must be applied to the backend API runtime; passing backend-only auth variables only to the frontend/admin UI Compose command does not enable backend auth.
 
 Both upstream origins must be internal backend origins reachable from inside the admin UI proxy runtime. They must not be public Habersoft edge origins such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. In the production Docker bridge package they must also not use container-local or unspecified hosts such as `127.0.0.1`, `localhost`, `::1`, `[::1]`, or `0.0.0.0`.
 
-The secretless operator template is `deploy/production/operator-managed.env.template`. It includes both frontend runtime placeholders and backend admin-auth placeholders so operators can assemble untracked runtime env files without copying values into Git. Preferred backend-network mode uses `deploy/production/compose.backend-network.yaml`, `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`, and service DNS such as `http://main-service-api:3000`. Host-gateway mode with `http://host.docker.internal:3200` is allowed only after an operator-run container-side reachability check proves that the backend port is reachable through host-gateway.
+The secretless frontend operator template is `deploy/production/operator-managed.env.template`. The backend-only auth checklist is `deploy/production/backend-admin-auth.env.template`. Keep filled copies operator-owned and untracked. Preferred backend-network mode uses `deploy/production/compose.backend-network.yaml`, `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`, and service DNS such as `http://main-service-api:3000`. Host-gateway mode with `http://host.docker.internal:3200` is allowed only after an operator-run container-side reachability check proves that the backend port is reachable through host-gateway.
 
-## Current Status-API Blocker
+## MS-023D Live Acceptance
 
-Bounded status: `OPERATOR_DEPLOYED_HEALTHZ_VERIFIED_STATUS_API_BLOCKED`.
+Bounded status: `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`.
 
-Operator-reported symptom: public `https://rss-panel.habersoft.com/status-api/health/ready` fails while `/healthz` works.
+Operator-reported and Codex public read-only verified result:
 
-Cause: MS-023B corrected the public-edge anti-pattern, but the operator then reported `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://127.0.0.1:3200` and `ADMIN_UI_AUTH_UPSTREAM_ORIGIN=http://127.0.0.1:3200` still produced public status-api `502`. In the admin UI production Docker bridge container, this is a container-loopback upstream misconfiguration.
+- `/healthz` returns `200 ok`;
+- `/status-api/health/live` returns `200` with `status=live`;
+- `/status-api/health/ready` returns `200` with `status=ready`, `postgres=up`, `redis=up`, and `tenantAuth=up`;
+- `/admin-auth/session` returns HTTP `501` with `status=not_configured`.
 
-Fix: prefer backend-network mode with `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>` and `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://<backend_service_or_alias>:3000`; use host-gateway only after container-side reachability proof. Do not use 127.0.0.1 in the admin UI production Docker bridge package. See [.docs/status-api-upstream-remediation.md](status-api-upstream-remediation.md).
+The `501 not_configured` admin-auth result is `AUTH_NOT_CONFIGURED_RESIDUAL`. It is not a blocker for read-only status-dashboard closure; it is a blocker for authenticated admin-shell production acceptance. Do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` for this residual. Verify backend runtime admin-auth env placement, verify `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` remains an internal backend origin, and restart/recreate the backend API under the operator rollback plan after correcting backend env placement. See [live-status-dashboard-acceptance.md](live-status-dashboard-acceptance.md) and [status-api-upstream-remediation.md](status-api-upstream-remediation.md).
 
 ## Local RC Acceptance
 
@@ -55,6 +58,8 @@ npm run test:production-mode-rc
 npm run verify:production-activation-package
 npm run verify:operator-managed-production-package
 npm run verify:production-upstream-contract
+npm run verify:live-evidence-intake
+npm run verify:admin-auth-not-configured-remediation
 npm run test:status-api-production-networking
 npm run test:status-api-upstream-remediation
 ```
@@ -72,6 +77,8 @@ The RC harness builds local backend/frontend images, starts PostgreSQL, Redis, t
 - Docker bridge loopback/container-local upstreams fail closed at container startup;
 - unreachable upstream connection failures return bounded browser-safe JSON `502` with no raw Nginx diagnostic body;
 - internal upstream live/ready remediation succeeds with synthetic local fixtures;
+- live-evidence intake docs classify `AUTH_NOT_CONFIGURED_RESIDUAL` without claiming authenticated admin acceptance;
+- frontend runtime and backend admin-auth env templates remain separated;
 - unknown auth/status paths and wrong methods reject safely;
 - browser static assets and runtime config do not contain upstream origins, password, password hash, session secret, Agent key, Tenant bearer token, or browser auth persistence calls;
 - harness containers, networks, and volumes are removed after validation.
@@ -90,6 +97,7 @@ A later production activation receipt must include redacted evidence for:
 - remote Git SHA;
 - environment variable presence, with secret values redacted;
 - fail-closed session before login;
+- `AUTH_NOT_CONFIGURED_RESIDUAL` if `/admin-auth/session` is still `501 not_configured`;
 - login/session/logout smoke;
 - `/status-api/health/live` and `/status-api/health/ready` through the panel path;
 - protected shell locked, unlocked, and locked-after-logout behavior;
@@ -101,6 +109,6 @@ A later production activation receipt must include redacted evidence for:
 
 Before any server mutation, the operator must capture rollback baseline and current-state evidence according to the backend/frontend runbooks. MS-023A-R2 does not capture or infer that baseline.
 
-The operator later applies the package by selecting a Git SHA/image identity, placing real backend admin-auth values in the backend runtime env, placing frontend runtime values in the admin UI runtime env, selecting backend-network service DNS or proven host-gateway for the admin UI proxy, keeping the admin UI bound to loopback, and configuring the external edge separately. These instructions are human/operator-managed and are not executed by Codex in MS-023C.
+The operator later applies the authenticated-admin package by selecting a Git SHA/image identity, placing real backend admin-auth values in the backend runtime env, placing frontend runtime values in the admin UI runtime env, selecting backend-network service DNS or proven host-gateway for the admin UI proxy, keeping the admin UI bound to loopback, and configuring the external edge separately. These instructions are human/operator-managed and are not executed by Codex in MS-023D.
 
-Admin UI full production acceptance remains pending until the operator-managed production networking fix is applied and live `/status-api/health/ready` is verified with redacted evidence.
+Read-only status-dashboard production transport is accepted in MS-023D. Authenticated admin-shell production acceptance remains pending until backend admin auth is configured in the backend runtime and redacted login/session/logout evidence is accepted.

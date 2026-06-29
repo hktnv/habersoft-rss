@@ -44,10 +44,12 @@ const requiredFrontendFiles = [
   "Dockerfile",
   ".dockerignore",
   "deploy/production/compose.yaml",
+  "deploy/production/backend-admin-auth.env.template",
   ".docs/read-only-status-dashboard.md",
   ".docs/same-origin-health-transport.md",
   ".docs/production-activation-readiness.md",
   ".docs/production-activation-package.md",
+  ".docs/live-status-dashboard-acceptance.md",
   ".docs/admin-auth-production-operator-handoff.md",
   "src/App.tsx",
   "src/auth/adminSessionBoundary.ts",
@@ -61,6 +63,7 @@ const requiredFrontendFiles = [
   "scripts/auth-proxy-harness.mjs",
   "scripts/production-readiness-verify.mjs",
   "scripts/production-activation-package-verify.mjs",
+  "scripts/live-evidence-intake-verify.mjs",
   "scripts/production-mode-rc.mjs",
   "tests/app-shell.test.tsx",
   "tests/admin-session-boundary.test.ts",
@@ -180,12 +183,13 @@ function assertRootDocs() {
       !frontendProduction.includes("MS-022B_PRODUCTION_ACTIVATION_PACKAGE_READY") &&
       !frontendProduction.includes("MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY") &&
       !frontendProduction.includes("MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED") &&
-      !frontendProduction.includes("MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED")) ||
+      !frontendProduction.includes("MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED") &&
+      !frontendProduction.includes("MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED")) ||
     !frontendProduction.includes("/admin-auth/session") ||
     !frontendProduction.includes("/admin-auth/login") ||
-    !frontendProduction.includes("NOT_DEPLOYED")
+    !frontendProduction.includes("AUTH_NOT_CONFIGURED_RESIDUAL")
   ) {
-    failures.push("frontend production guide must state MS-022A auth foundation and not deployed");
+    failures.push("frontend production guide must state MS-022A auth foundation and MS-023D auth residual");
   }
   if (/byte-identical mirror/iu.test(rootProduction) || /operator mirror PRODUCTION\.md SHA-256/iu.test(rootProduction)) {
     failures.push("root production guide still claims old mirror contract");

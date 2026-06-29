@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const backendRoot = path.join(repoRoot, "rss-habersoft-com");
-const packageStatus = "MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED";
+const packageStatus = "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED";
 const failures = [];
 
 assertRequiredFiles();
@@ -44,14 +44,17 @@ function assertRequiredFiles() {
     "README.md",
     "PRODUCTION.md",
     ".docs/production-activation-package.md",
+    ".docs/live-status-dashboard-acceptance.md",
     ".docs/admin-auth-production-operator-handoff.md",
     "deploy/production/compose.yaml",
     "deploy/production/compose.backend-network.yaml",
     "deploy/production/operator-managed.env.template",
+    "deploy/production/backend-admin-auth.env.template",
     "nginx.conf",
     "docker-entrypoint.sh",
     "scripts/operator-managed-production-package-verify.mjs",
     "scripts/production-upstream-contract-verify.mjs",
+    "scripts/live-evidence-intake-verify.mjs",
     "scripts/status-api-upstream-remediation-harness.mjs",
     "scripts/production-mode-rc.mjs",
     ".docs/status-api-upstream-remediation.md",
@@ -70,6 +73,12 @@ function assertPackageScript() {
   if (pkg.scripts?.["verify:production-upstream-contract"] !== "node scripts/production-upstream-contract-verify.mjs") {
     failures.push("package.json missing verify:production-upstream-contract");
   }
+  if (pkg.scripts?.["verify:live-evidence-intake"] !== "node scripts/live-evidence-intake-verify.mjs") {
+    failures.push("package.json missing verify:live-evidence-intake");
+  }
+  if (pkg.scripts?.["verify:admin-auth-not-configured-remediation"] !== "node scripts/live-evidence-intake-verify.mjs") {
+    failures.push("package.json missing verify:admin-auth-not-configured-remediation");
+  }
   if (pkg.scripts?.["test:status-api-upstream-remediation"] !== "node scripts/status-api-upstream-remediation-harness.mjs") {
     failures.push("package.json missing test:status-api-upstream-remediation");
   }
@@ -85,6 +94,7 @@ function assertDocs() {
     readFrontend("README.md"),
     readFrontend("PRODUCTION.md"),
     readFrontend(".docs/production-activation-package.md"),
+    readFrontend(".docs/live-status-dashboard-acceptance.md"),
     readFrontend(".docs/status-api-upstream-remediation.md"),
     readFrontend(".docs/admin-auth-production-operator-handoff.md"),
     readBackend(".docs/admin-auth-production-activation.md")
@@ -92,11 +102,13 @@ function assertDocs() {
 
   for (const fragment of [
     packageStatus,
-    "NOT_DEPLOYED",
+    "AUTH_NOT_CONFIGURED_RESIDUAL",
+    "codex_public_readonly_verified",
+    "operator_reported",
     "rollback baseline is operator-managed",
     "server deployment/configuration is operator-managed",
     "no production deployment",
-    "no production contact",
+    "public read-only GET verification",
     "no registry",
     "no Git tag",
     "ADMIN_UI_AUTH_MODE",
@@ -104,6 +116,10 @@ function assertDocs() {
     "ADMIN_UI_ADMIN_PASSWORD_HASH",
     "ADMIN_UI_SESSION_SECRET",
     "ADMIN_UI_SESSION_COOKIE_SECURE",
+    "backend-admin-auth.env.template",
+    "Passing backend-only auth variables only to the frontend/admin UI Compose command does not enable backend auth",
+    "backend runtime admin-auth env placement",
+    "backend API restart/recreate",
     "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN",
     "ADMIN_UI_AUTH_UPSTREAM_ORIGIN",
     "/status-api/health/live",
@@ -112,6 +128,8 @@ function assertDocs() {
     "/admin-auth/login",
     "/admin-auth/logout",
     "operator-managed.env.template",
+    "verify:live-evidence-intake",
+    "verify:admin-auth-not-configured-remediation",
     "internal backend origin",
     "https://rss.habersoft.com",
     "http://host.docker.internal:3200",
@@ -121,7 +139,7 @@ function assertDocs() {
     "ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>",
     "compose.backend-network.yaml",
     "test:status-api-production-networking",
-    "OPERATOR_DEPLOYED_HEALTHZ_VERIFIED_STATUS_API_BLOCKED"
+    "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED"
   ]) {
     if (!docs.includes(fragment)) failures.push(`docs missing ${fragment}`);
   }
@@ -138,6 +156,9 @@ function assertDocs() {
 
 function assertSecretlessTemplate() {
   const template = readFrontend("deploy/production/operator-managed.env.template");
+  const backendTemplate = readFrontend("deploy/production/backend-admin-auth.env.template");
+  const frontendAssignments = parseEnvAssignments(template);
+  const backendAssignments = parseEnvAssignments(backendTemplate);
   for (const fragment of [
     "RSS_ADMIN_UI_IMAGE=<immutable-admin-ui-image-identity>",
     "ADMIN_UI_HOST_PORT=8081",
@@ -151,17 +172,43 @@ function assertSecretlessTemplate() {
     "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000",
     "ADMIN_UI_AUTH_UPSTREAM_ORIGIN=http://main-service-api:3000",
     "ADMIN_UI_ENVIRONMENT_NAME=production",
+    "backend-admin-auth.env.template",
+    "does not enable backend auth",
+    "HTTP 501 not_configured",
+    "keep ADMIN_UI_HEALTH_UPSTREAM_ORIGIN unchanged"
+  ]) {
+    if (!template.includes(fragment)) failures.push(`operator template missing ${fragment}`);
+  }
+
+  for (const name of [
+    "ADMIN_UI_AUTH_MODE",
+    "ADMIN_UI_ADMIN_USERNAME",
+    "ADMIN_UI_ADMIN_PASSWORD_HASH",
+    "ADMIN_UI_SESSION_SECRET",
+    "ADMIN_UI_SESSION_TTL_SECONDS",
+    "ADMIN_UI_SESSION_COOKIE_NAME",
+    "ADMIN_UI_SESSION_COOKIE_SECURE",
+    "ADMIN_UI_SESSION_REDIS_PREFIX"
+  ]) {
+    if (name in frontendAssignments) failures.push(`frontend operator template must not actively assign backend-only ${name}`);
+    if (!(name in backendAssignments)) failures.push(`backend admin-auth template missing ${name}`);
+  }
+
+  for (const fragment of [
     "ADMIN_UI_AUTH_MODE=single_admin",
     "ADMIN_UI_ADMIN_USERNAME=<operator-provided-admin-username>",
     "ADMIN_UI_ADMIN_PASSWORD_HASH=<operator-generated-pbkdf2-hash>",
     "ADMIN_UI_SESSION_SECRET=<operator-generated-session-secret>",
     "ADMIN_UI_SESSION_COOKIE_SECURE=true",
-    "ADMIN_UI_SESSION_REDIS_PREFIX=admin_auth:production"
+    "ADMIN_UI_SESSION_REDIS_PREFIX=admin_auth:production",
+    "backend API service runtime",
+    "AUTH_NOT_CONFIGURED_RESIDUAL",
+    "not to keep changing ADMIN_UI_HEALTH_UPSTREAM_ORIGIN"
   ]) {
-    if (!template.includes(fragment)) failures.push(`operator template missing ${fragment}`);
+    if (!backendTemplate.includes(fragment)) failures.push(`backend admin-auth template missing ${fragment}`);
   }
 
-  if (/password\s*=\s*[^<\s][^\n]*/iu.test(template)) {
+  if (/password\s*=\s*[^<\s][^\n]*/iu.test(template) || /password\s*=\s*[^<\s][^\n]*/iu.test(backendTemplate)) {
     failures.push("operator template contains a non-placeholder password assignment");
   }
 }
@@ -241,8 +288,8 @@ function assertComposeTemplates() {
   const rootCompose = run("docker", ["compose", "config", "--quiet"], {
     cwd: repoRoot,
     env: {
-      RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023c-local",
-      RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023c-local",
+      RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023d-local",
+      RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023d-local",
       POSTGRES_USER: "main_service",
       POSTGRES_PASSWORD: "main_service_local_password",
       POSTGRES_DB: "main_service",
@@ -251,11 +298,11 @@ function assertComposeTemplates() {
       ADMIN_UI_AUTH_MODE: "single_admin",
       ADMIN_UI_ADMIN_USERNAME: "synthetic",
       ADMIN_UI_ADMIN_PASSWORD_HASH: "pbkdf2-sha256$120000$bXMwMjNhLXIyLXBhY2thZ2Utc2FsdC0wMA$kIDFpLaX3lmgcOPk3F7v4BA4CvFutkhDEQ199HSlZlQ",
-      ADMIN_UI_SESSION_SECRET: "synthetic_ms023c_operator_package_secret_48_bytes_minimum",
+      ADMIN_UI_SESSION_SECRET: "synthetic_ms023d_operator_package_secret_48_bytes_minimum",
       ADMIN_UI_SESSION_TTL_SECONDS: "900",
       ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
       ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-      ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023c",
+      ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023d",
       ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
       ADMIN_UI_ENVIRONMENT_NAME: "operator-package-local",
       ADMIN_UI_HOST_PORT: "8081"
@@ -269,7 +316,7 @@ function assertBackendSyntheticConfig() {
     cwd: backendRoot
   });
   if (synthetic.status !== 0) failures.push("backend synthetic admin auth config verifier failed");
-  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret|synthetic-ms023b-admin-password|synthetic_ms023b_admin_session_secret|synthetic-ms023c-admin-password|synthetic_ms023c_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
+  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret|synthetic-ms023b-admin-password|synthetic_ms023b_admin_session_secret|synthetic-ms023c-admin-password|synthetic_ms023c_admin_session_secret|synthetic-ms023d-admin-password|synthetic_ms023d_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
     failures.push("backend synthetic config verifier printed sensitive material");
   }
 
@@ -310,6 +357,18 @@ function readFrontend(relative) {
 
 function readBackend(relative) {
   return readFileSync(path.join(backendRoot, relative), "utf8");
+}
+
+function parseEnvAssignments(text) {
+  const values = {};
+  for (const rawLine of text.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (line === "" || line.startsWith("#")) continue;
+    const match = /^(?<name>[A-Z0-9_]+)=(?<value>.*)$/u.exec(line);
+    if (match?.groups === undefined) continue;
+    values[match.groups.name] = match.groups.value.trim();
+  }
+  return values;
 }
 
 function run(command, args, options = {}) {

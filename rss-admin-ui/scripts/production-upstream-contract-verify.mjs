@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
-const packageStatus = "MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED";
+const packageStatus = "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED";
 const upstreamNames = ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "ADMIN_UI_AUTH_UPSTREAM_ORIGIN"];
 const publicEdgeOrigins = [
   "https://rss.habersoft.com",
@@ -60,6 +60,8 @@ function assertPackageScripts() {
   const scripts = pkg.scripts ?? {};
   const required = {
     "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs",
+    "verify:live-evidence-intake": "node scripts/live-evidence-intake-verify.mjs",
+    "verify:admin-auth-not-configured-remediation": "node scripts/live-evidence-intake-verify.mjs",
     "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs",
     "test:status-api-production-networking": "node scripts/status-api-upstream-remediation-harness.mjs"
   };
@@ -83,7 +85,10 @@ function assertTemplateContract() {
     "localhost, ::1, [::1], or 0.0.0.0",
     "https://rss-panel.habersoft.com",
     "host.docker.internal:3200",
-    "main-service-api:3000"
+    "main-service-api:3000",
+    "backend-admin-auth.env.template",
+    "does not enable backend auth",
+    "keep ADMIN_UI_HEALTH_UPSTREAM_ORIGIN unchanged"
   ]) {
     if (!operatorTemplate.includes(fragment)) failures.push(`operator template missing ${fragment}`);
   }
@@ -163,8 +168,8 @@ function assertComposeExamples() {
   const rootCompose = run("docker", ["compose", "config", "--quiet"], {
     cwd: repoRoot,
     env: {
-      RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023c-local",
-      RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023c-local",
+      RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023d-local",
+      RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023d-local",
       POSTGRES_USER: "main_service",
       POSTGRES_PASSWORD: "main_service_local_password",
       POSTGRES_DB: "main_service",
@@ -173,11 +178,11 @@ function assertComposeExamples() {
       ADMIN_UI_AUTH_MODE: "single_admin",
       ADMIN_UI_ADMIN_USERNAME: "synthetic",
       ADMIN_UI_ADMIN_PASSWORD_HASH: "pbkdf2-sha256$120000$bXMwMjNiLXVwc3RyZWFtLTAw$Lv9lJTd4qyEV0qIYDy5Za3XfcVN58bDSEJI5EIovXVk",
-      ADMIN_UI_SESSION_SECRET: "synthetic_ms023c_upstream_contract_secret_48_bytes_minimum",
+      ADMIN_UI_SESSION_SECRET: "synthetic_ms023d_upstream_contract_secret_48_bytes_minimum",
       ADMIN_UI_SESSION_TTL_SECONDS: "900",
       ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
       ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-      ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023c",
+      ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023d",
       ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
       ADMIN_UI_ENVIRONMENT_NAME: "upstream-contract-local",
       ADMIN_UI_HOST_PORT: "8081"
@@ -215,13 +220,15 @@ function assertDocsContract() {
     readFrontend("PRODUCTION.md"),
     readFrontend(".docs/same-origin-health-transport.md"),
     readFrontend(".docs/production-activation-package.md"),
+    readFrontend(".docs/live-status-dashboard-acceptance.md"),
     readFrontend(".docs/status-api-upstream-remediation.md"),
     readFrontend(".docs/admin-auth-production-operator-handoff.md")
   ].join("\n");
 
   for (const fragment of [
     packageStatus,
-    "OPERATOR_DEPLOYED_HEALTHZ_VERIFIED_STATUS_API_BLOCKED",
+    "AUTH_NOT_CONFIGURED_RESIDUAL",
+    "codex_public_readonly_verified",
     "operator-reported",
     "public `https://rss-panel.habersoft.com/status-api/health/ready` still returns `502`",
     "container-loopback upstream misconfiguration",
@@ -234,9 +241,11 @@ function assertDocsContract() {
     "http://host.docker.internal:3200",
     "http://main-service-api:3000",
     "npm run verify:production-upstream-contract",
+    "npm run verify:live-evidence-intake",
+    "npm run verify:admin-auth-not-configured-remediation",
     "npm run test:status-api-production-networking",
     "npm run test:status-api-upstream-remediation",
-    "Admin UI full production acceptance remains pending"
+    "Authenticated admin-shell production acceptance remains pending"
   ]) {
     if (!docs.includes(fragment)) failures.push(`docs missing upstream contract fragment: ${fragment}`);
   }

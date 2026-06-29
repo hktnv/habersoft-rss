@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED`.
+Status: `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`.
 
 ## Scope
 
-Included through MS-023C:
+Included through MS-023D:
 
 - application shell,
 - root route,
@@ -42,13 +42,17 @@ Included through MS-023C:
 - status-api production networking harness,
 - secretless operator env template,
 - backend-network production Compose overlay,
-- operator handoff docs for a future no-secret production activation milestone.
+- operator handoff docs for a future no-secret production activation milestone,
+- live read-only production status-dashboard evidence intake,
+- backend admin-auth env placement template,
+- `AUTH_NOT_CONFIGURED_RESIDUAL` remediation verifier.
 
 Not included:
 
 - business pages,
 - production login/session activation,
 - production credential provisioning,
+- authenticated admin-shell production acceptance,
 - Agent authentication,
 - backend writes,
 - automatic polling or monitoring history,
@@ -74,6 +78,8 @@ npm run verify:production-readiness
 npm run verify:production-activation-package
 npm run verify:operator-managed-production-package
 npm run verify:production-upstream-contract
+npm run verify:live-evidence-intake
+npm run verify:admin-auth-not-configured-remediation
 npm run verify:auth-boundary
 npm audit --omit=dev
 ```
@@ -91,6 +97,8 @@ ADMIN_UI_ENVIRONMENT_NAME
 `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` is server-only and must be an absolute HTTP(S) internal backend origin without userinfo, path, query, or fragment. It must be reachable from inside the admin UI proxy runtime and must not be a public edge hostname such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. In the production Docker bridge package it must also not use `127.0.0.1`, `localhost`, `::1`, `[::1]`, or `0.0.0.0`; those names refer to the admin UI container or an unspecified local address, not the backend host loopback. No secret belongs in the frontend bundle or runtime config. The dashboard does not render the upstream origin; it shows only the non-secret environment label and current browser-observed health state.
 
 `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is also server-only and optional. When absent, `/admin-auth/**` stays in static fail-closed mode. When present, only `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` are proxied upstream. When enabled in production it must use the same internal backend origin class as health, not the public backend edge.
+
+Backend admin-auth variables such as `ADMIN_UI_AUTH_MODE`, `ADMIN_UI_ADMIN_USERNAME`, `ADMIN_UI_ADMIN_PASSWORD_HASH`, `ADMIN_UI_SESSION_SECRET`, and `ADMIN_UI_SESSION_COOKIE_SECURE` are consumed by the backend API runtime, not by the frontend/admin UI runtime. Passing those backend-only variables only to the frontend/admin UI Compose command does not enable backend auth.
 
 ## Health Dashboard
 
@@ -111,7 +119,9 @@ MS-022B prepares the activation package without activating production. Backend h
 
 MS-023A-R2 keeps production activation out of scope and makes the production package explicitly operator-managed. Rollback baseline is operator-managed, server deployment/configuration is operator-managed, and this repository package is validated locally with synthetic credentials only.
 
-MS-023B keeps production mutation out of scope and remediates the operator-reported public-edge status-api blocker. MS-023C keeps production mutation out of scope and remediates the operator-reported container-loopback upstream misconfiguration. In the production Docker bridge package, do not use `http://127.0.0.1:3200`, `localhost`, `::1`, `[::1]`, or `0.0.0.0` for admin UI upstream origins. Prefer backend-network mode with `compose.backend-network.yaml`, `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`, and `http://<backend_service_or_alias>:3000`. The repository backend production Compose service is `main-service-api` and its container port is `3000`. Use `http://host.docker.internal:3200` only after an operator-run container-side reachability check proves that the backend port is reachable through host-gateway. Admin UI full production acceptance remains pending until the operator applies the network fix and verifies `/status-api/health/ready`.
+MS-023B keeps production mutation out of scope and remediates the operator-reported public-edge status-api blocker. MS-023C keeps production mutation out of scope and remediates the operator-reported container-loopback upstream misconfiguration. In the production Docker bridge package, do not use `http://127.0.0.1:3200`, `localhost`, `::1`, `[::1]`, or `0.0.0.0` for admin UI upstream origins. Prefer backend-network mode with `compose.backend-network.yaml`, `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`, and `http://<backend_service_or_alias>:3000`. The repository backend production Compose service is `main-service-api` and its container port is `3000`. Use `http://host.docker.internal:3200` only after an operator-run container-side reachability check proves that the backend port is reachable through host-gateway.
+
+MS-023D records operator-reported plus Codex public read-only verification that production `/healthz`, `/status-api/health/live`, and `/status-api/health/ready` are accepted for the read-only status-dashboard transport. `/admin-auth/session` remains HTTP `501 not_configured`, classified as `AUTH_NOT_CONFIGURED_RESIDUAL`. This is not a blocker for read-only status-dashboard closure, but it blocks authenticated admin-shell production acceptance. The next operator action is backend runtime admin-auth env placement and backend API restart/recreate under the operator rollback plan, not continued changes to `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`.
 
 ## Docker
 
@@ -129,10 +139,10 @@ Container health endpoint:
 
 Local root Compose publishes the UI on loopback port `8081`.
 
-MS-023C local rehearsal commands:
+MS-023D local rehearsal commands:
 
 ```bash
-docker build -t rss-admin-ui:ms023c-local .
+docker build -t rss-admin-ui:ms023d-local .
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
 npm run test:proxy-security
@@ -144,6 +154,8 @@ npm run verify:production-readiness
 npm run verify:production-activation-package
 npm run verify:operator-managed-production-package
 npm run verify:production-upstream-contract
+npm run verify:live-evidence-intake
+npm run verify:admin-auth-not-configured-remediation
 npm run verify:auth-boundary
 ```
 
@@ -155,6 +167,7 @@ npm run verify:auth-boundary
 - [Admin session sentinel](.docs/admin-session-sentinel.md)
 - [Production activation readiness contract](.docs/production-activation-readiness.md)
 - [Production activation package](.docs/production-activation-package.md)
+- [Live status dashboard acceptance](.docs/live-status-dashboard-acceptance.md)
 - [Status-api upstream remediation](.docs/status-api-upstream-remediation.md)
 - [Admin auth production operator handoff](.docs/admin-auth-production-operator-handoff.md)
 - [Read-only status dashboard contract](.docs/read-only-status-dashboard.md)
