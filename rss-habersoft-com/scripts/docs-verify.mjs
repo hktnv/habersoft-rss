@@ -210,7 +210,8 @@ function assertFrontendProductionGuide() {
   const text = readFileSync(path.join(frontendRoot, "PRODUCTION.md"), "utf8");
   const requiredPhrases = [
     "FOUNDATION_ONLY",
-    "NOT_DEPLOYED",
+    "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED",
+    "AUTH_NOT_CONFIGURED_RESIDUAL",
     "rss-admin-ui",
     "AGENT_KEY",
     "no production deployment"

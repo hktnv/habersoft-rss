@@ -4,15 +4,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultImage = "rss-admin-ui:ms023c-local";
+const defaultImage = "rss-admin-ui:ms023d-local";
 const image = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? defaultImage;
 const suffix = randomUUID().slice(0, 8);
-const network = `rss-admin-ui-ms023c-networking-${suffix}`;
-const publicEdgeName = `rss-admin-ui-ms023c-public-edge-${suffix}`;
-const internalBackendName = `rss-admin-ui-ms023c-internal-backend-${suffix}`;
-const publicFrontendName = `rss-admin-ui-ms023c-public-runtime-${suffix}`;
-const unreachableFrontendName = `rss-admin-ui-ms023c-unreachable-runtime-${suffix}`;
-const internalFrontendName = `rss-admin-ui-ms023c-internal-runtime-${suffix}`;
+const network = `rss-admin-ui-ms023d-networking-${suffix}`;
+const publicEdgeName = `rss-admin-ui-ms023d-public-edge-${suffix}`;
+const internalBackendName = `rss-admin-ui-ms023d-internal-backend-${suffix}`;
+const publicFrontendName = `rss-admin-ui-ms023d-public-runtime-${suffix}`;
+const unreachableFrontendName = `rss-admin-ui-ms023d-unreachable-runtime-${suffix}`;
+const internalFrontendName = `rss-admin-ui-ms023d-internal-runtime-${suffix}`;
 const sensitiveHeaders = {
   authorization: false,
   cookie: false,

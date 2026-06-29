@@ -16,8 +16,8 @@ describe("admin UI authenticated status shell", () => {
     expect(await screen.findByRole("heading", { name: "Admin session active" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Read-only Status Dashboard" })).toBeInTheDocument();
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
-    expect(screen.getByText("READ_ONLY_STATUS_DASHBOARD_SAME_ORIGIN_REHEARSED")).toBeInTheDocument();
-    expect(screen.getByText("NOT_DEPLOYED")).toBeInTheDocument();
+    expect(screen.getByText("READ_ONLY_STATUS_DASHBOARD_PRODUCTION_TRANSPORT_ACTIVE")).toBeInTheDocument();
+    expect(screen.getByText("AUTH_NOT_CONFIGURED_RESIDUAL")).toBeInTheDocument();
     expect(screen.getByText("OUT_OF_SCOPE")).toBeInTheDocument();
   });
 

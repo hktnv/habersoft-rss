@@ -4,6 +4,8 @@ Status: `MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY - NOT_DEPLOYED`.
 
 MS-023A-R2 prepares the backend admin auth/session configuration contract for a later operator-authorized, operator-managed production deployment milestone. It does not deploy the admin UI, mutate production, capture rollback baseline, publish an image, create a Git tag, or request real production secrets.
 
+MS-023D status-dashboard production evidence leaves backend admin auth as `AUTH_NOT_CONFIGURED_RESIDUAL`: `/admin-auth/session` returns HTTP `501` with `status=not_configured` while `/healthz` and `/status-api/health/*` pass through the admin UI. That result is not fixed by changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`. The next operator action is to verify these backend admin-auth variables are present in the backend API runtime, then restart/recreate the backend API under the operator rollback plan. Passing these variables only to the frontend/admin UI Compose command does not enable backend auth.
+
 ## Runtime Contract
 
 The backend consumes these admin auth environment variables only in the API role:

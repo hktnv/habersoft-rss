@@ -12,13 +12,16 @@ const requiredFiles = [
   "README.md",
   "PRODUCTION.md",
   ".docs/production-activation-package.md",
+  ".docs/live-status-dashboard-acceptance.md",
   ".docs/admin-auth-production-operator-handoff.md",
   "deploy/production/operator-managed.env.template",
+  "deploy/production/backend-admin-auth.env.template",
   "deploy/production/compose.backend-network.yaml",
   "scripts/production-mode-rc.mjs",
   "scripts/production-activation-package-verify.mjs",
   "scripts/operator-managed-production-package-verify.mjs",
   "scripts/production-upstream-contract-verify.mjs",
+  "scripts/live-evidence-intake-verify.mjs",
   "scripts/status-api-upstream-remediation-harness.mjs",
   ".docs/status-api-upstream-remediation.md",
   "../rss-habersoft-com/scripts/admin-auth-provisioning.mjs",
@@ -41,11 +44,12 @@ console.log(
   JSON.stringify(
     {
       status: "production-activation-package-verify-ok",
-      admin_ui_state: "MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED - NOT_DEPLOYED",
+      admin_ui_state: "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED",
       provisioning_helpers: "present",
       local_rc_harness: "present",
       operator_managed_package: "present",
       upstream_remediation_package: "present",
+      live_evidence_intake: "present",
       production_contact: false,
       registry_publication: false
     },
@@ -63,6 +67,8 @@ function assertPackageScripts() {
     "verify:production-activation-package": "node scripts/production-activation-package-verify.mjs",
     "verify:operator-managed-production-package": "node scripts/operator-managed-production-package-verify.mjs",
     "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs",
+    "verify:live-evidence-intake": "node scripts/live-evidence-intake-verify.mjs",
+    "verify:admin-auth-not-configured-remediation": "node scripts/live-evidence-intake-verify.mjs",
     "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs",
     "test:status-api-production-networking": "node scripts/status-api-upstream-remediation-harness.mjs",
     "test:production-mode-rc": "node scripts/production-mode-rc.mjs"
@@ -88,6 +94,7 @@ function assertDocsBoundary() {
     readFrontend("README.md"),
     readFrontend("PRODUCTION.md"),
     readFrontend(".docs/production-activation-package.md"),
+    readFrontend(".docs/live-status-dashboard-acceptance.md"),
     readFrontend(".docs/status-api-upstream-remediation.md"),
     readFrontend(".docs/admin-auth-production-operator-handoff.md"),
     readBackend("README.md"),
@@ -96,9 +103,10 @@ function assertDocsBoundary() {
   ].join("\n");
 
   const required = [
-    "MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED",
-    "NOT_DEPLOYED",
-    "OPERATOR_DEPLOYED_HEALTHZ_VERIFIED_STATUS_API_BLOCKED",
+    "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED",
+    "AUTH_NOT_CONFIGURED_RESIDUAL",
+    "codex_public_readonly_verified",
+    "operator_reported",
     "rollback baseline is operator-managed",
     "server deployment/configuration is operator-managed",
     "internal backend origin",
@@ -114,6 +122,10 @@ function assertDocsBoundary() {
     "ADMIN_UI_ADMIN_PASSWORD_HASH",
     "ADMIN_UI_SESSION_SECRET",
     "ADMIN_UI_SESSION_COOKIE_SECURE",
+    "backend-admin-auth.env.template",
+    "Passing backend-only auth variables only to the frontend/admin UI Compose command does not enable backend auth",
+    "backend runtime admin-auth env placement",
+    "backend API restart/recreate",
     "ADMIN_UI_AUTH_UPSTREAM_ORIGIN",
     "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN",
     "/admin-auth/session",
@@ -127,6 +139,8 @@ function assertDocsBoundary() {
     "no Git tag",
     "operator-authorized",
     "operator-managed.env.template",
+    "verify:live-evidence-intake",
+    "verify:admin-auth-not-configured-remediation",
     "verify:production-upstream-contract",
     "test:status-api-production-networking",
     "test:status-api-upstream-remediation"
@@ -152,7 +166,7 @@ function assertBackendProvisioningScripts() {
     cwd: backendRoot
   });
   if (synthetic.status !== 0) failures.push("backend synthetic admin auth config verifier failed");
-  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret|synthetic-ms023b-admin-password|synthetic_ms023b_admin_session_secret|synthetic-ms023c-admin-password|synthetic_ms023c_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
+  if (/synthetic-ms022b-admin-password|synthetic_ms022b_admin_session_secret|synthetic-ms023a-r2-admin-password|synthetic_ms023a_r2_admin_session_secret|synthetic-ms023b-admin-password|synthetic_ms023b_admin_session_secret|synthetic-ms023c-admin-password|synthetic_ms023c_admin_session_secret|synthetic-ms023d-admin-password|synthetic_ms023d_admin_session_secret/iu.test(synthetic.stdout + synthetic.stderr)) {
     failures.push("backend config verifier printed synthetic secret material");
   }
 }
@@ -172,8 +186,8 @@ function assertBrowserSurface() {
     { label: "browser auth persistence", pattern: /\b(localStorage|sessionStorage|indexedDB|cookieStore)\b|document\.cookie/u },
     { label: "server upstream origin env", pattern: /ADMIN_UI_(?:HEALTH|AUTH)_UPSTREAM_ORIGIN/u },
     { label: "local compose upstream", pattern: /main-service-api:3000/u },
-    { label: "synthetic password", pattern: /synthetic-ms022b-admin-password|synthetic-ms023a-r2-admin-password|synthetic-ms023b-admin-password|synthetic-ms023c-admin-password/u },
-    { label: "synthetic session secret", pattern: /synthetic_ms022b_admin_session_secret|synthetic_ms023a_r2_admin_session_secret|synthetic_ms023b_admin_session_secret|synthetic_ms023c_admin_session_secret/u },
+    { label: "synthetic password", pattern: /synthetic-ms022b-admin-password|synthetic-ms023a-r2-admin-password|synthetic-ms023b-admin-password|synthetic-ms023c-admin-password|synthetic-ms023d-admin-password/u },
+    { label: "synthetic session secret", pattern: /synthetic_ms022b_admin_session_secret|synthetic_ms023a_r2_admin_session_secret|synthetic_ms023b_admin_session_secret|synthetic_ms023c_admin_session_secret|synthetic_ms023d_admin_session_secret/u },
     { label: "private key", pattern: /BEGIN (?:RSA )?PRIVATE KEY/u }
   ];
 

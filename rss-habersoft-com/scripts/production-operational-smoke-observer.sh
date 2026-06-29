@@ -107,7 +107,9 @@ if [ -z "$REPO_ROOT" ] && [ "${MS019F_TEST_MODE:-0}" = "1" ]; then
 fi
 [ -n "$REPO_ROOT" ] || fail "repository root could not be resolved"
 
-if [ -f "$REPO_ROOT/backend/package.json" ]; then
+if [ -f "$REPO_ROOT/rss-habersoft-com/package.json" ]; then
+  BACKEND_DIR="$REPO_ROOT/rss-habersoft-com"
+elif [ -f "$REPO_ROOT/backend/package.json" ]; then
   BACKEND_DIR="$REPO_ROOT/backend"
 else
   BACKEND_DIR="$REPO_ROOT"
