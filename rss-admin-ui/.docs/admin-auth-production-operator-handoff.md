@@ -1,8 +1,8 @@
 # Admin Auth Production Operator Handoff
 
-Status: `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`.
+Status: `MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR`.
 
-This handoff is for the remaining operator-authorized authenticated admin activation milestone. MS-023D accepts only the read-only status-dashboard production transport. It does not activate production admin auth, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, does not capture rollback baseline, and does not collect real production credentials.
+This handoff is for the remaining operator-authorized authenticated admin activation milestone. MS-023D accepts only the read-only status-dashboard production transport, and MS-023D status-dashboard production transport remains accepted in MS-024A. MS-024A prepares the admin-auth enablement package but does not activate production admin auth, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, does not capture rollback baseline, and does not collect real production credentials.
 
 ## Authority Checklist
 
@@ -43,6 +43,8 @@ Do not set either upstream to public edge origins such as `https://rss.habersoft
 
 MS-023D evidence already accepts `/healthz`, `/status-api/health/live`, and `/status-api/health/ready`. If `/admin-auth/session` returns HTTP `501 not_configured`, do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`. Verify backend runtime admin-auth env placement from `deploy/production/backend-admin-auth.env.template`, then restart/recreate the backend API under the operator rollback plan.
 
+MS-024A clarification: `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. Placing values only in `rss-admin-ui/.env.production` is insufficient; backend-only auth variables must be applied to the backend API service runtime. Validate the backend env file with `npm run admin-auth:verify-config -- --env-file <path> --require-enabled` before backend API restart/recreate.
+
 Use backend helpers from `rss-habersoft-com`:
 
 ```bash
@@ -52,6 +54,15 @@ npm run admin-auth:verify-config
 ```
 
 The helpers redact generated values by default. Use sensitive output only in a controlled operator terminal and move the value directly into the operator-owned secret store. Never commit real values.
+
+Use the redacted frontend smoke helper after backend env placement:
+
+```bash
+ADMIN_AUTH_SMOKE_BASE_URL=https://rss-panel.habersoft.com npm run auth-smoke:redacted
+ADMIN_AUTH_SMOKE_BASE_URL=https://rss-panel.habersoft.com ADMIN_AUTH_SMOKE_USERNAME=<operator-owned-username> ADMIN_AUTH_SMOKE_PASSWORD=<operator-owned-password> npm run auth-smoke:redacted -- --login-smoke
+```
+
+Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw production response bodies into chat, Git, docs, or receipts. MS-024A validation commands are `npm run test:admin-auth-smoke-redacted` and `npm run verify:ms024a-auth-enablement-package`. No CORS broadening is part of the activation package.
 
 ## Activation Evidence Checklist
 

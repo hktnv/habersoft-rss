@@ -56,11 +56,15 @@ try {
 
   assert(results.session.status === 200, "session proxy failed");
   assert(results.session.json?.reason === "unauthenticated", "session body mismatch");
+  assert(results.session.headers.setCookie === null, "session Set-Cookie was relayed");
+  assertNoCorsHeaders(results.session.headers, "session route");
   assert(results.login.status === 200, "login proxy failed");
   assert(results.login.json?.authenticated === true, "login body mismatch");
   assert(/HttpOnly/iu.test(results.login.headers.setCookie ?? ""), "login Set-Cookie was not relayed");
+  assertNoCorsHeaders(results.login.headers, "login route");
   assert(results.logout.status === 200, "logout proxy failed");
   assert(/Max-Age=0/iu.test(results.logout.headers.setCookie ?? ""), "logout clear cookie was not relayed");
+  assertNoCorsHeaders(results.logout.headers, "logout route");
 
   assert(results.postSession.status === 405, "POST session was not rejected at frontend");
   assert(results.getLogin.status === 405, "GET login was not rejected at frontend");
@@ -139,7 +143,13 @@ function runFrontendRequests() {
           cacheControl: response.headers.get("cache-control"),
           contentType: response.headers.get("content-type"),
           setCookie: response.headers.get("set-cookie"),
-          wwwAuthenticate: response.headers.get("www-authenticate")
+          wwwAuthenticate: response.headers.get("www-authenticate"),
+          accessControlAllowOrigin: response.headers.get("access-control-allow-origin"),
+          accessControlAllowCredentials: response.headers.get("access-control-allow-credentials"),
+          accessControlAllowHeaders: response.headers.get("access-control-allow-headers"),
+          accessControlAllowMethods: response.headers.get("access-control-allow-methods"),
+          accessControlExposeHeaders: response.headers.get("access-control-expose-headers"),
+          accessControlMaxAge: response.headers.get("access-control-max-age")
         }
       };
     }
@@ -271,6 +281,7 @@ function sentinelProgram() {
         });
 
         response.setHeader("Content-Type", "application/json");
+        emitCorsHeaders(response);
         if (parsed.pathname === "/health/live") {
           response.end(JSON.stringify({ status: "live" }));
           return;
@@ -311,6 +322,15 @@ function sentinelProgram() {
       });
     });
     server.listen(3100, "0.0.0.0");
+
+    function emitCorsHeaders(response) {
+      response.setHeader("Access-Control-Allow-Origin", "https://evil.invalid");
+      response.setHeader("Access-Control-Allow-Credentials", "true");
+      response.setHeader("Access-Control-Allow-Headers", "authorization,cookie,x-agent-key");
+      response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE");
+      response.setHeader("Access-Control-Expose-Headers", "set-cookie,www-authenticate");
+      response.setHeader("Access-Control-Max-Age", "86400");
+    }
   `;
 }
 
@@ -333,6 +353,19 @@ function docker(args, options = {}) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function assertNoCorsHeaders(headers, label) {
+  for (const [name, value] of Object.entries({
+    "Access-Control-Allow-Origin": headers.accessControlAllowOrigin,
+    "Access-Control-Allow-Credentials": headers.accessControlAllowCredentials,
+    "Access-Control-Allow-Headers": headers.accessControlAllowHeaders,
+    "Access-Control-Allow-Methods": headers.accessControlAllowMethods,
+    "Access-Control-Expose-Headers": headers.accessControlExposeHeaders,
+    "Access-Control-Max-Age": headers.accessControlMaxAge
+  })) {
+    assert(value === null, `${label} relayed upstream ${name}`);
+  }
 }
 
 function sleep(ms) {

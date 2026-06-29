@@ -1,10 +1,10 @@
 # Admin Auth Production Activation Package
 
-Status: `MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY - NOT_DEPLOYED`.
+Status: `MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR`.
 
-MS-023A-R2 prepares the backend admin auth/session configuration contract for a later operator-authorized, operator-managed production deployment milestone. It does not deploy the admin UI, mutate production, capture rollback baseline, publish an image, create a Git tag, or request real production secrets.
+MS-024A prepares the backend admin auth/session configuration contract for a later operator-authorized, operator-managed production activation milestone. It does not deploy the admin UI, mutate production, capture rollback baseline, publish an image, create a Git tag, or request real production secrets.
 
-MS-023D status-dashboard production evidence leaves backend admin auth as `AUTH_NOT_CONFIGURED_RESIDUAL`: `/admin-auth/session` returns HTTP `501` with `status=not_configured` while `/healthz` and `/status-api/health/*` pass through the admin UI. That result is not fixed by changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`. The next operator action is to verify these backend admin-auth variables are present in the backend API runtime, then restart/recreate the backend API under the operator rollback plan. Passing these variables only to the frontend/admin UI Compose command does not enable backend auth.
+MS-023D status-dashboard production transport remains accepted. MS-023D status-dashboard production evidence leaves backend admin auth as `AUTH_NOT_CONFIGURED_RESIDUAL`: `/admin-auth/session` returns HTTP `501` with `status=not_configured` while `/healthz` and `/status-api/health/*` pass through the admin UI. In MS-024A, `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. That result is not fixed by changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`. The next operator action is to verify these backend admin-auth variables are present in the backend API service runtime, then restart/recreate the backend API under the operator rollback plan. Passing these variables only to the frontend/admin UI Compose command or placing values only in `rss-admin-ui/.env.production` is insufficient and does not enable backend auth.
 
 ## Runtime Contract
 
@@ -37,9 +37,10 @@ Run from `rss-habersoft-com` only with non-production test values unless a later
 npm run admin-auth:hash
 npm run admin-auth:secret
 npm run admin-auth:verify-config -- --synthetic --require-enabled
+npm run admin-auth:verify-config -- --env-file <path-to-operator-owned-backend-env> --require-enabled
 ```
 
-`admin-auth:hash` reads the password from `ADMIN_UI_ADMIN_PASSWORD` or stdin. It redacts the generated hash by default; an operator must pass `--emit-sensitive-output` to intentionally print the value for secure external secret storage. `admin-auth:secret` follows the same redacted-by-default pattern for a session secret. `admin-auth:verify-config` validates the current environment or the built-in synthetic config without printing the password hash or session secret.
+`admin-auth:hash` reads the password from `ADMIN_UI_ADMIN_PASSWORD` or stdin. It redacts the generated hash by default; an operator must pass `--emit-sensitive-output` to intentionally print the value for secure external secret storage. `admin-auth:secret` follows the same redacted-by-default pattern for a session secret. `admin-auth:verify-config` validates the current environment, the built-in synthetic config, or an operator-owned env file without printing the password hash or session secret. The env-file verifier rejects placeholders, disabled mode when `--require-enabled` is used, missing values, invalid password hashes, and short session secrets.
 
 Tracked examples must use placeholders:
 
@@ -68,3 +69,5 @@ A future production activation milestone must be operator-authorized and must pr
 - rollback path and exact image/env identity used for rollback.
 
 MS-023A-R2 local RC validation is not production evidence. It uses synthetic credentials, loopback/Docker networking, local PostgreSQL, local Redis, local JWKS fixture, same-origin frontend paths, and no production deployment. Rollback baseline and server-side deployment/configuration remain operator-managed.
+
+MS-024A adds redacted frontend smoke support for later operator evidence: `npm run auth-smoke:redacted` classifies session state by default, and optional `--login-smoke` uses `ADMIN_AUTH_SMOKE_USERNAME` and `ADMIN_AUTH_SMOKE_PASSWORD` environment variables only. Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw production response bodies into Git/chat/docs. No CORS broadening is part of the MS-024A package.

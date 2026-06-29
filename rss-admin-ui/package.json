@@ -13,6 +13,7 @@
     "test": "vitest run --config vitest.config.ts",
     "test:auth-session-sentinel": "node scripts/auth-session-sentinel-harness.mjs",
     "test:auth-proxy": "node scripts/auth-proxy-harness.mjs",
+    "test:admin-auth-smoke-redacted": "node scripts/admin-auth-smoke-harness.mjs",
     "test:proxy-security": "node scripts/proxy-security-harness.mjs",
     "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs",
     "test:status-api-production-networking": "node scripts/status-api-upstream-remediation-harness.mjs",
@@ -24,6 +25,8 @@
     "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs",
     "verify:live-evidence-intake": "node scripts/live-evidence-intake-verify.mjs",
     "verify:admin-auth-not-configured-remediation": "node scripts/live-evidence-intake-verify.mjs",
+    "verify:ms024a-auth-enablement-package": "node scripts/ms024a-auth-enablement-verify.mjs",
+    "auth-smoke:redacted": "node scripts/admin-auth-smoke.mjs",
     "verify:auth-boundary": "node scripts/auth-boundary-verify.mjs"
   },
   "dependencies": {

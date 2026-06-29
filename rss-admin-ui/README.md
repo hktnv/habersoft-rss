@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`.
+Status: `MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR`.
 
 ## Scope
 
-Included through MS-023D:
+Included through MS-024A:
 
 - application shell,
 - root route,
@@ -32,6 +32,8 @@ Included through MS-023D:
 - frontend auth/session boundary verifier,
 - auth-session sentinel runtime harness,
 - auth proxy runtime harness,
+- auth proxy upstream CORS response-header stripping,
+- redacted admin auth smoke tool and local harness,
 - local full-stack auth acceptance harness,
 - secretless admin auth production activation package,
 - local production-mode RC acceptance harness,
@@ -45,7 +47,8 @@ Included through MS-023D:
 - operator handoff docs for a future no-secret production activation milestone,
 - live read-only production status-dashboard evidence intake,
 - backend admin-auth env placement template,
-- `AUTH_NOT_CONFIGURED_RESIDUAL` remediation verifier.
+- `AUTH_NOT_CONFIGURED_RESIDUAL` remediation verifier,
+- MS-024A auth enablement package verifier.
 
 Not included:
 
@@ -69,6 +72,7 @@ npm test
 npm run build
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
+npm run test:admin-auth-smoke-redacted
 npm run test:proxy-security
 npm run test:status-api-upstream-remediation
 npm run test:status-api-production-networking
@@ -80,6 +84,7 @@ npm run verify:operator-managed-production-package
 npm run verify:production-upstream-contract
 npm run verify:live-evidence-intake
 npm run verify:admin-auth-not-configured-remediation
+npm run verify:ms024a-auth-enablement-package
 npm run verify:auth-boundary
 npm audit --omit=dev
 ```
@@ -123,6 +128,8 @@ MS-023B keeps production mutation out of scope and remediates the operator-repor
 
 MS-023D records operator-reported plus Codex public read-only verification that production `/healthz`, `/status-api/health/live`, and `/status-api/health/ready` are accepted for the read-only status-dashboard transport. `/admin-auth/session` remains HTTP `501 not_configured`, classified as `AUTH_NOT_CONFIGURED_RESIDUAL`. This is not a blocker for read-only status-dashboard closure, but it blocks authenticated admin-shell production acceptance. The next operator action is backend runtime admin-auth env placement and backend API restart/recreate under the operator rollback plan, not continued changes to `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`.
 
+MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR keeps that live status-dashboard result accepted and prepares the remaining authenticated-admin activation package. MS-023D status-dashboard production transport remains accepted. The same-origin status/auth proxies now hide upstream `Access-Control-*` response headers; authenticated admin activation still requires backend admin-auth values in the backend API service runtime. `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. Placing values only in `rss-admin-ui/.env.production` is insufficient; use `deploy/production/backend-admin-auth.env.template` for the backend runtime and restart/recreate the backend API under the operator rollback plan after placement. Redacted local/operator smoke support is available through `npm run auth-smoke:redacted`, with real credentials supplied only by environment variables and never by command-line arguments.
+
 ## Docker
 
 Local image build:
@@ -139,12 +146,13 @@ Container health endpoint:
 
 Local root Compose publishes the UI on loopback port `8081`.
 
-MS-023D local rehearsal commands:
+MS-024A local rehearsal commands:
 
 ```bash
 docker build -t rss-admin-ui:ms023d-local .
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
+npm run test:admin-auth-smoke-redacted
 npm run test:proxy-security
 npm run test:status-api-upstream-remediation
 npm run test:status-api-production-networking
@@ -156,6 +164,7 @@ npm run verify:operator-managed-production-package
 npm run verify:production-upstream-contract
 npm run verify:live-evidence-intake
 npm run verify:admin-auth-not-configured-remediation
+npm run verify:ms024a-auth-enablement-package
 npm run verify:auth-boundary
 ```
 

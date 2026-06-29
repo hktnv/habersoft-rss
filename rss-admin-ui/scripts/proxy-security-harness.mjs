@@ -65,6 +65,8 @@ try {
   assert(results.encodedTraversal.status === 404, "encoded traversal path widened the route set");
   assert(results.live.headers.setCookie === null, "Set-Cookie was relayed to the browser surface");
   assert(results.ready.headers.wwwAuthenticate === null, "WWW-Authenticate was relayed to the browser surface");
+  assertNoCorsHeaders(results.live.headers, "live route");
+  assertNoCorsHeaders(results.ready.headers, "ready route");
   assert(/no-store/iu.test(results.live.headers.cacheControl ?? ""), "live route is cacheable");
 
   const records = sentinelRecords();
@@ -130,6 +132,12 @@ function runFrontendRequests() {
         headers: {
           setCookie: response.headers.get("set-cookie"),
           wwwAuthenticate: response.headers.get("www-authenticate"),
+          accessControlAllowOrigin: response.headers.get("access-control-allow-origin"),
+          accessControlAllowCredentials: response.headers.get("access-control-allow-credentials"),
+          accessControlAllowHeaders: response.headers.get("access-control-allow-headers"),
+          accessControlAllowMethods: response.headers.get("access-control-allow-methods"),
+          accessControlExposeHeaders: response.headers.get("access-control-expose-headers"),
+          accessControlMaxAge: response.headers.get("access-control-max-age"),
           cacheControl: response.headers.get("cache-control")
         }
       };
@@ -256,6 +264,7 @@ function sentinelProgram() {
         });
 
         response.setHeader("Content-Type", "application/json");
+        emitCorsHeaders(response);
         if (parsed.pathname === "/health/live") {
           response.setHeader("Set-Cookie", "session=redacted");
           response.end(JSON.stringify({ status: "live" }));
@@ -277,6 +286,15 @@ function sentinelProgram() {
       });
     });
     server.listen(3100, "0.0.0.0");
+
+    function emitCorsHeaders(response) {
+      response.setHeader("Access-Control-Allow-Origin", "https://evil.invalid");
+      response.setHeader("Access-Control-Allow-Credentials", "true");
+      response.setHeader("Access-Control-Allow-Headers", "authorization,cookie,x-agent-key");
+      response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE");
+      response.setHeader("Access-Control-Expose-Headers", "set-cookie,www-authenticate");
+      response.setHeader("Access-Control-Max-Age", "86400");
+    }
   `;
 }
 
@@ -299,6 +317,19 @@ function docker(args, options = {}) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function assertNoCorsHeaders(headers, label) {
+  for (const [name, value] of Object.entries({
+    "Access-Control-Allow-Origin": headers.accessControlAllowOrigin,
+    "Access-Control-Allow-Credentials": headers.accessControlAllowCredentials,
+    "Access-Control-Allow-Headers": headers.accessControlAllowHeaders,
+    "Access-Control-Allow-Methods": headers.accessControlAllowMethods,
+    "Access-Control-Expose-Headers": headers.accessControlExposeHeaders,
+    "Access-Control-Max-Age": headers.accessControlMaxAge
+  })) {
+    assert(value === null, `${label} relayed upstream ${name}`);
+  }
 }
 
 function sleep(ms) {

@@ -1,6 +1,6 @@
 # Live Status Dashboard Acceptance
 
-Status: `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`.
+Status: `MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR`.
 
 MS-023D closes the read-only status-dashboard production acceptance boundary for the already operator-managed admin UI surface. The accepted scope is limited to the production shell health endpoint and same-origin status-api transport:
 
@@ -13,6 +13,8 @@ GET /status-api/health/ready
 This is not authenticated admin product acceptance. Login, session-authenticated dashboard visibility, logout, business admin pages, feed/user/tenant management, backend writes, monitoring/SLA claims, and privileged production evidence projection remain out of scope.
 
 Codex did not mutate production for MS-023D. Codex did not SSH/SCP/SFTP/rsync, restart services, run production Docker commands, edit production env files, capture rollback baseline, publish an image, create a registry tag, create a Git tag, create a GitHub Release, create a PR, or read production secrets.
+
+MS-023D status-dashboard production transport remains accepted in MS-024A. MS-024A adds the auth enablement package only: proxy CORS-header stripping, redacted auth smoke tooling, and backend admin-auth env-file validation. It does not accept authenticated admin-shell production, and it does not perform production deployment or rollback-baseline capture.
 
 ## Evidence Boundary
 
@@ -70,6 +72,8 @@ Next operator action for `/admin-auth/session -> 501 not_configured`:
 3. Restart/recreate only the backend API runtime under the operator rollback plan after env placement is corrected.
 4. Re-run redacted auth smoke evidence without pasting real admin credentials, password hashes, session secrets, cookies, logs, or raw response bodies into chat, Git, docs, or receipts. Do not paste real admin credentials into chat, Git, docs, receipts, or issue comments.
 
+MS-024A clarification: `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. Placing values only in `rss-admin-ui/.env.production` is insufficient because those backend auth variables must be present in the backend API service runtime. Validate the backend env file with `npm run admin-auth:verify-config -- --env-file <path> --require-enabled`, then perform backend API restart/recreate only as an operator action under the rollback plan.
+
 Expected authenticated-admin progression after backend auth activation:
 
 ```text
@@ -80,3 +84,5 @@ POST /admin-auth/logout -> HTTP 200, server-side session invalidated
 ```
 
 That progression is not accepted by MS-023D and requires a separate operator-authorized evidence milestone.
+
+The redacted smoke helper for that later evidence is `npm run auth-smoke:redacted`; local synthetic coverage is `npm run test:admin-auth-smoke-redacted` and package coverage is `npm run verify:ms024a-auth-enablement-package`.

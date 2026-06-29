@@ -166,6 +166,12 @@ auth_proxy_routes() {
     proxy_set_header Content-Length "";
     proxy_hide_header Set-Cookie;
     proxy_hide_header WWW-Authenticate;
+    proxy_hide_header Access-Control-Allow-Origin;
+    proxy_hide_header Access-Control-Allow-Credentials;
+    proxy_hide_header Access-Control-Allow-Headers;
+    proxy_hide_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Expose-Headers;
+    proxy_hide_header Access-Control-Max-Age;
     proxy_intercept_errors on;
     error_page 500 502 504 = @admin_auth_unavailable;
     proxy_connect_timeout 2s;
@@ -191,6 +197,12 @@ auth_proxy_routes() {
     proxy_set_header Content-Length \$content_length;
     proxy_set_header Cookie \$http_cookie;
     proxy_hide_header WWW-Authenticate;
+    proxy_hide_header Access-Control-Allow-Origin;
+    proxy_hide_header Access-Control-Allow-Credentials;
+    proxy_hide_header Access-Control-Allow-Headers;
+    proxy_hide_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Expose-Headers;
+    proxy_hide_header Access-Control-Max-Age;
     proxy_intercept_errors on;
     error_page 500 502 504 = @admin_auth_unavailable;
     proxy_connect_timeout 2s;
@@ -215,6 +227,12 @@ auth_proxy_routes() {
     proxy_set_header Content-Length \$content_length;
     proxy_set_header Cookie \$http_cookie;
     proxy_hide_header WWW-Authenticate;
+    proxy_hide_header Access-Control-Allow-Origin;
+    proxy_hide_header Access-Control-Allow-Credentials;
+    proxy_hide_header Access-Control-Allow-Headers;
+    proxy_hide_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Expose-Headers;
+    proxy_hide_header Access-Control-Max-Age;
     proxy_intercept_errors on;
     error_page 500 502 504 = @admin_auth_unavailable;
     proxy_connect_timeout 2s;

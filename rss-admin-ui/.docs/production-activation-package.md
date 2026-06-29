@@ -1,8 +1,8 @@
 # Production Activation Package
 
-Status: `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`.
+Status: `MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR`.
 
-MS-023D records read-only production status-dashboard transport acceptance for the already operator-managed live admin UI surface. It preserves the no-secret, operator-managed production package, validates local production-mode release candidates with synthetic/local fixtures only, and adds a focused `AUTH_NOT_CONFIGURED_RESIDUAL` remediation contract. It does not mutate production, capture rollback baseline, perform production deployment, publish a registry image, create a Git tag, create a GitHub Release, or create a PR.
+MS-024A preserves MS-023D read-only production status-dashboard transport acceptance for the already operator-managed live admin UI surface and prepares the remaining authenticated-admin activation package. It preserves the no-secret, operator-managed production package, validates local production-mode release candidates with synthetic/local fixtures only, adds proxy CORS-header hardening, improves backend admin-auth env-file validation, and adds redacted auth smoke tooling. It does not mutate production, capture rollback baseline, perform production deployment, publish a registry image, create a Git tag, create a GitHub Release, or create a PR.
 
 Rollback baseline is operator-managed. Server deployment/configuration is operator-managed. Codex-owned repository work is limited to templates, same-origin proxy configuration, local validation, and runbook guidance.
 
@@ -32,7 +32,7 @@ Unknown `/status-api/**` and `/admin-auth/**` paths reject safely. Unsupported m
 
 Backend admin auth variables are documented in `../rss-habersoft-com/.docs/admin-auth-production-activation.md` from the repository root and mirrored as a frontend handoff checklist in `deploy/production/backend-admin-auth.env.template`. They include `ADMIN_UI_AUTH_MODE`, `ADMIN_UI_ADMIN_USERNAME`, `ADMIN_UI_ADMIN_PASSWORD_HASH`, `ADMIN_UI_SESSION_SECRET`, `ADMIN_UI_SESSION_COOKIE_SECURE`, and related session controls. They must be applied to the backend API runtime; passing backend-only auth variables only to the frontend/admin UI Compose command does not enable backend auth.
 
-Both upstream origins must be internal backend origins reachable from inside the admin UI proxy runtime. They must not be public Habersoft edge origins such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. In the production Docker bridge package they must also not use container-local or unspecified hosts such as `127.0.0.1`, `localhost`, `::1`, `[::1]`, or `0.0.0.0`.
+Both upstream origins must be internal backend origins reachable from inside the admin UI proxy runtime. They must not be public Habersoft edge origins such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. In the production Docker bridge package they must also not use container-local or unspecified hosts such as `127.0.0.1`, `localhost`, `::1`, `[::1]`, or `0.0.0.0`. MS-024A does not broaden CORS; the status and auth proxy routes hide upstream `Access-Control-*` response headers from the browser.
 
 The secretless frontend operator template is `deploy/production/operator-managed.env.template`. The backend-only auth checklist is `deploy/production/backend-admin-auth.env.template`. Keep filled copies operator-owned and untracked. Preferred backend-network mode uses `deploy/production/compose.backend-network.yaml`, `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`, and service DNS such as `http://main-service-api:3000`. Host-gateway mode with `http://host.docker.internal:3200` is allowed only after an operator-run container-side reachability check proves that the backend port is reachable through host-gateway.
 
@@ -49,6 +49,19 @@ Operator-reported and Codex public read-only verified result:
 
 The `501 not_configured` admin-auth result is `AUTH_NOT_CONFIGURED_RESIDUAL`. It is not a blocker for read-only status-dashboard closure; it is a blocker for authenticated admin-shell production acceptance. Do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` for this residual. Verify backend runtime admin-auth env placement, verify `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` remains an internal backend origin, and restart/recreate the backend API under the operator rollback plan after correcting backend env placement. See [live-status-dashboard-acceptance.md](live-status-dashboard-acceptance.md) and [status-api-upstream-remediation.md](status-api-upstream-remediation.md).
 
+MS-023D status-dashboard production transport remains accepted. In MS-024A, `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. Placing values only in `rss-admin-ui/.env.production` is insufficient because backend admin-auth variables must be present in the backend API service runtime. The operator should validate the backend env file with `npm run admin-auth:verify-config -- --env-file <path> --require-enabled`, apply it to the backend runtime outside Git, and then perform backend API restart/recreate under the operator rollback plan.
+
+## MS-024A Redacted Auth Smoke
+
+The repository provides `npm run auth-smoke:redacted` for operator-managed evidence collection:
+
+```bash
+ADMIN_AUTH_SMOKE_BASE_URL=https://rss-panel.habersoft.com npm run auth-smoke:redacted
+ADMIN_AUTH_SMOKE_BASE_URL=https://rss-panel.habersoft.com ADMIN_AUTH_SMOKE_USERNAME=<operator-owned-username> ADMIN_AUTH_SMOKE_PASSWORD=<operator-owned-password> npm run auth-smoke:redacted -- --login-smoke
+```
+
+Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw response bodies into Git/chat/docs. The default mode performs only `GET /admin-auth/session` classification. Optional login smoke uses environment variables only, stores the temporary cookie jar under `ADMIN_AUTH_SMOKE_TMP_DIR` when provided, deletes that jar, and emits redacted summaries suitable for a later operator evidence receipt.
+
 ## Local RC Acceptance
 
 Run from `rss-admin-ui`:
@@ -60,6 +73,8 @@ npm run verify:operator-managed-production-package
 npm run verify:production-upstream-contract
 npm run verify:live-evidence-intake
 npm run verify:admin-auth-not-configured-remediation
+npm run verify:ms024a-auth-enablement-package
+npm run test:admin-auth-smoke-redacted
 npm run test:status-api-production-networking
 npm run test:status-api-upstream-remediation
 ```

@@ -1,4 +1,6 @@
 import { pbkdf2Sync, randomBytes, timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 const ADMIN_PASSWORD_HASH_ALGORITHM = "pbkdf2-sha256";
 const ADMIN_PASSWORD_HASH_ITERATIONS = 120000;
@@ -7,8 +9,7 @@ const ADMIN_PASSWORD_HASH_SALT_BYTES = 16;
 const SESSION_SECRET_BYTES = 48;
 
 const args = process.argv.slice(2);
-const command = args.find((arg) => !arg.startsWith("--"));
-const flags = new Set(args.filter((arg) => arg.startsWith("--")));
+const { command, flags, optionValues } = parseCli(args);
 
 try {
   switch (command) {
@@ -22,13 +23,45 @@ try {
       verifyConfigCommand();
       break;
     default:
-      fail("usage: admin-auth-provisioning.mjs <hash|secret|verify-config> [--verify|--validate|--synthetic|--require-enabled|--emit-sensitive-output]");
+      fail("usage: admin-auth-provisioning.mjs <hash|secret|verify-config> [--verify|--validate|--synthetic|--env-file <path>|--require-enabled|--emit-sensitive-output]");
   }
 } catch (error) {
   if (error instanceof Error) {
     fail(error.message);
   }
   fail("unexpected admin auth provisioning error");
+}
+
+function parseCli(rawArgs) {
+  const positional = [];
+  const parsedFlags = new Set();
+  const parsedValues = new Map();
+
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index];
+    if (!arg.startsWith("--")) {
+      positional.push(arg);
+      continue;
+    }
+
+    const equalsIndex = arg.indexOf("=");
+    const name = equalsIndex === -1 ? arg : arg.slice(0, equalsIndex);
+    if (name === "--env-file") {
+      const value = equalsIndex === -1 ? rawArgs[index + 1] : arg.slice(equalsIndex + 1);
+      if (value === undefined || value.startsWith("--") || value.trim() === "") {
+        fail("--env-file requires a path");
+      }
+      if (equalsIndex === -1) index += 1;
+      parsedFlags.add(name);
+      parsedValues.set(name, value);
+      continue;
+    }
+
+    if (equalsIndex !== -1) fail(`${name} does not accept a value`);
+    parsedFlags.add(arg);
+  }
+
+  return { command: positional[0], flags: parsedFlags, optionValues: parsedValues };
 }
 
 async function hashCommand() {
@@ -90,7 +123,15 @@ function secretCommand() {
 }
 
 function verifyConfigCommand() {
-  const env = flags.has("--synthetic") ? syntheticAdminAuthEnv() : process.env;
+  if (flags.has("--synthetic") && optionValues.has("--env-file")) {
+    fail("--synthetic and --env-file are mutually exclusive");
+  }
+
+  const env = flags.has("--synthetic")
+    ? syntheticAdminAuthEnv()
+    : optionValues.has("--env-file")
+      ? loadEnvFile(optionValues.get("--env-file"))
+      : process.env;
   const issues = validateAdminAuthEnv(env, flags.has("--require-enabled"));
 
   if (issues.length > 0) {
@@ -106,6 +147,37 @@ function verifyConfigCommand() {
     session_secret: env.ADMIN_UI_SESSION_SECRET === undefined ? "not-set" : "redacted",
     cookie_secure_required: env.APP_ENV === "production"
   });
+}
+
+function loadEnvFile(file) {
+  const resolved = path.resolve(file);
+  if (/^ms-023a-secrets\.json$/iu.test(path.basename(resolved))) {
+    fail("refusing to read ms-023a-secrets.json");
+  }
+
+  const env = {};
+  const text = readFileSync(resolved, "utf8");
+  for (const [lineIndex, rawLine] of text.split(/\r?\n/u).entries()) {
+    let line = rawLine.trim();
+    if (line === "" || line.startsWith("#")) continue;
+    if (line.startsWith("export ")) line = line.slice("export ".length).trimStart();
+
+    const match = /^(?<name>[A-Z0-9_]+)=(?<value>.*)$/u.exec(line);
+    if (match?.groups === undefined) {
+      fail(`invalid env-file assignment on line ${lineIndex + 1}`);
+    }
+
+    let value = match.groups.value.trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    env[match.groups.name] = value;
+  }
+
+  return { APP_ENV: "production", ...env };
 }
 
 function validateAdminAuthEnv(env, requireEnabled) {
@@ -139,6 +211,8 @@ function validateAdminAuthEnv(env, requireEnabled) {
 
   if (username === "") {
     issues.push("ADMIN_UI_ADMIN_USERNAME is required");
+  } else if (isPlaceholderLike(username)) {
+    issues.push("ADMIN_UI_ADMIN_USERNAME must not be a placeholder");
   } else {
     if (username.trim() !== username) issues.push("ADMIN_UI_ADMIN_USERNAME must not include leading or trailing whitespace");
     if (username.length > 128 || containsAsciiControlCharacter(username)) {
@@ -146,7 +220,9 @@ function validateAdminAuthEnv(env, requireEnabled) {
     }
   }
 
-  if (!isAdminPasswordHashFormat(passwordHash)) {
+  if (isPlaceholderLike(passwordHash)) {
+    issues.push("ADMIN_UI_ADMIN_PASSWORD_HASH must not be a placeholder");
+  } else if (!isAdminPasswordHashFormat(passwordHash)) {
     issues.push("ADMIN_UI_ADMIN_PASSWORD_HASH must use the pbkdf2-sha256 encoded hash format");
   }
 
@@ -176,6 +252,10 @@ function validateSessionSecret(secret, production) {
   if (secret === undefined || secret === "") {
     issues.push("ADMIN_UI_SESSION_SECRET is required");
     return issues;
+  }
+
+  if (isPlaceholderLike(secret)) {
+    issues.push("ADMIN_UI_SESSION_SECRET must not be a placeholder");
   }
 
   if (Buffer.byteLength(secret, "utf8") < 32) {
@@ -262,6 +342,14 @@ function parseBoolean(value, defaultValue, name, issues) {
 
 function containsAsciiControlCharacter(value) {
   return /[\u0000-\u001f\u007f]/u.test(value);
+}
+
+function isPlaceholderLike(value) {
+  const trimmed = value.trim();
+  return (
+    /^<[^>]+>$/u.test(trimmed) ||
+    /\b(?:operator-provided|operator-generated|replace_with|placeholder|changeme|todo|local_only)\b/iu.test(trimmed)
+  );
 }
 
 async function readSecretInput(envName) {

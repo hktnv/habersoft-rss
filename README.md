@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard transport with same-origin admin auth/session routes | `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard transport with same-origin admin auth/session routes | `MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -56,6 +56,7 @@ npm test
 npm run build
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
+npm run test:admin-auth-smoke-redacted
 npm run test:proxy-security
 npm run test:status-api-upstream-remediation
 npm run test:status-api-production-networking
@@ -67,6 +68,8 @@ npm run verify:operator-managed-production-package
 npm run verify:production-upstream-contract
 npm run verify:live-evidence-intake
 npm run verify:admin-auth-not-configured-remediation
+npm run verify:ms024a-auth-enablement-package
+npm run auth-smoke:redacted
 npm run verify:auth-boundary
 npm audit --omit=dev
 ```
@@ -88,6 +91,8 @@ MS-023A-R2 promotes those safe repository-side pieces into an operator-managed p
 MS-023B remediates the operator-reported `/status-api/health/ready` public-edge blocker as a repository package. MS-023C remediates the next operator-reported blocker: `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://127.0.0.1:3200` inside the admin UI production Docker bridge container is a container-loopback upstream misconfiguration. The admin UI upstream contract now rejects public Habersoft edge origins and Docker bridge loopback/unspecified origins, documents backend-network service DNS as the preferred production mode, keeps host-gateway mode conditional on container-side reachability proof, adds `npm run test:status-api-production-networking`, and keeps `npm run verify:production-upstream-contract`.
 
 MS-023D records operator-reported plus Codex public read-only verification that `https://rss-panel.habersoft.com/healthz`, `/status-api/health/live`, and `/status-api/health/ready` are production-active for the read-only status dashboard transport. `/admin-auth/session` still returns HTTP `501` with `status=not_configured`, classified as `AUTH_NOT_CONFIGURED_RESIDUAL`. That residual is not a blocker for read-only status-dashboard closure, but it blocks authenticated admin-shell production acceptance. The next operator action is backend runtime admin-auth env placement and backend API restart/recreate under the operator rollback plan, not continued changes to `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`.
+
+MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR lands the admin-auth enablement package while preserving the MS-023D accepted status-dashboard result. MS-023D status-dashboard production transport remains accepted. MS-024A hardens same-origin `/status-api/*` and `/admin-auth/*` proxy routes so upstream CORS response headers are not surfaced to the browser, adds redacted operator auth smoke tooling, and improves backend admin-auth env-file validation with synthetic/local checks only. `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream; placing values only in `rss-admin-ui/.env.production` is insufficient because backend admin-auth values must be visible to the backend API service runtime. The remaining operator action is backend runtime admin-auth env placement and backend API restart/recreate under the operator rollback plan.
 
 ## Root Docker Workflow
 
@@ -115,7 +120,7 @@ Root Compose wires `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000
 - [Admin UI admin auth/session boundary](rss-admin-ui/.docs/admin-auth-session-boundary.md) - MS-021A protected shell and real-auth blocker contract.
 - [Admin UI admin session static fallback](rss-admin-ui/.docs/admin-session-sentinel.md) - MS-021B/MS-022A same-origin not_configured fallback contract.
 - [Admin UI production activation readiness](rss-admin-ui/.docs/production-activation-readiness.md) - MS-020D no-deploy activation readiness contract and local verifier.
-- [Admin UI production activation package](rss-admin-ui/.docs/production-activation-package.md) - operator-managed, secretless production package, local RC acceptance, and MS-023D status transport closure.
+- [Admin UI production activation package](rss-admin-ui/.docs/production-activation-package.md) - operator-managed, secretless production package, local RC acceptance, MS-023D status transport closure, and MS-024A auth enablement package.
 - [Admin UI live status dashboard acceptance](rss-admin-ui/.docs/live-status-dashboard-acceptance.md) - MS-023D production read-only status transport acceptance and `AUTH_NOT_CONFIGURED_RESIDUAL` classification.
 - [Admin UI status-api upstream remediation](rss-admin-ui/.docs/status-api-upstream-remediation.md) - MS-023C blocker runbook, MS-023D accepted status-api result, production networking contract, and local networking harness.
 - [Admin UI production operator handoff](rss-admin-ui/.docs/admin-auth-production-operator-handoff.md) - Future operator authority, redacted evidence, and rollback checklist.
@@ -137,7 +142,7 @@ The backend production evidence series remains closed and is not reopened by thi
 | MS-019E | `SUCCESS` |
 | MS-019F | `SUCCESS_GOVERNANCE_ACCEPTED` |
 
-MS-020C adds a local/tested same-origin health transport contract and local full-stack rehearsal for the read-only admin status dashboard. MS-020D packages the production activation readiness contract and local verifier. MS-021A adds the protected admin shell safety boundary. MS-021B adds a same-origin auth-status sentinel only. MS-022A adds the local admin auth/session foundation and exact same-origin proxy activation, still with no production deployment. MS-022B prepares the secretless production activation package and local production-mode RC harness while keeping the admin UI `NOT_DEPLOYED`. MS-023A-R2 prepares the operator-managed production package and runbook updates while still keeping the admin UI `NOT_DEPLOYED`. MS-023B prepares the public-edge upstream remediation package. MS-023C prepares the production Docker bridge networking remediation package while requiring an operator-managed backend-network or proven host-gateway fix before live status-api acceptance. MS-023D accepts the read-only status-dashboard production transport from operator-reported and public read-only verified evidence, while classifying `/admin-auth/session -> 501 not_configured` as `AUTH_NOT_CONFIGURED_RESIDUAL`. These milestones do not deploy, restart, pull on, publish an image to, create a Git tag for, mutate production, or capture rollback baseline on behalf of the operator.
+MS-020C adds a local/tested same-origin health transport contract and local full-stack rehearsal for the read-only admin status dashboard. MS-020D packages the production activation readiness contract and local verifier. MS-021A adds the protected admin shell safety boundary. MS-021B adds a same-origin auth-status sentinel only. MS-022A adds the local admin auth/session foundation and exact same-origin proxy activation, still with no production deployment. MS-022B prepares the secretless production activation package and local production-mode RC harness while keeping the admin UI `NOT_DEPLOYED`. MS-023A-R2 prepares the operator-managed production package and runbook updates while still keeping the admin UI `NOT_DEPLOYED`. MS-023B prepares the public-edge upstream remediation package. MS-023C prepares the production Docker bridge networking remediation package while requiring an operator-managed backend-network or proven host-gateway fix before live status-api acceptance. MS-023D accepts the read-only status-dashboard production transport from operator-reported and public read-only verified evidence, while classifying `/admin-auth/session -> 501 not_configured` as `AUTH_NOT_CONFIGURED_RESIDUAL`. MS-024A prepares the auth enablement package, CORS-header stripping proxy hardening, redacted auth smoke tool, and backend env-file validation while authenticated admin activation remains pending operator backend runtime changes. These milestones do not deploy, restart, pull on, publish an image to, create a Git tag for, mutate production, or capture rollback baseline on behalf of the operator.
 
 ## No-Secret Policy
 
