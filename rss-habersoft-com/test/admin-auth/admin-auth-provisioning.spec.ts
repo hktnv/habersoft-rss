@@ -128,6 +128,59 @@ describe("admin auth provisioning helpers", () => {
     }
   });
 
+  it("treats optional/defaulted admin auth session settings as diagnostic defaults, not required gaps", () => {
+    const password = "synthetic-ms024e-admin-password";
+    const hash = parseJson(
+      runProvisioning(["hash", "--emit-sensitive-output"], {
+        ADMIN_UI_ADMIN_PASSWORD: password
+      }).stdout
+    ).password_hash as string;
+    const tempRoot = mkdtempSync(path.join(backendRoot, ".tmp-admin-auth-config-"));
+
+    try {
+      const envFile = path.join(tempRoot, "admin-auth-required-only.env");
+      writeFileSync(
+        envFile,
+        [
+          "ADMIN_UI_AUTH_MODE=single_admin",
+          "ADMIN_UI_ADMIN_USERNAME=admin",
+          `ADMIN_UI_ADMIN_PASSWORD_HASH=${hash.replaceAll("$", "$$")}`,
+          "ADMIN_UI_SESSION_SECRET=synthetic_ms024e_admin_session_secret_48_bytes_minimum"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const verify = runProvisioning(["verify-config", "--env-file", envFile, "--require-enabled"]);
+      expect(verify.status).toBe(0);
+      expect(verify.stdout).toContain("admin-auth-config-verify-ok");
+      expect(verify.stdout).not.toContain(hash);
+      expect(verify.stdout).not.toContain(hash.replaceAll("$", "$$"));
+
+      const diagnose = runNodeScript(adminAuthDiagnoseScript, ["--env-file", envFile, "--require-enabled"]);
+      expect(diagnose.status).toBe(0);
+      const body = parseJson(diagnose.stdout);
+      expect(body.classifications).toContain("ADMIN_AUTH_SINGLE_ADMIN_CONFIG_PRESENT");
+      expect(body.diagnostic_classes).toEqual(expect.arrayContaining([
+        "optional_defaulted",
+        "configured_present",
+        "worker_absent_by_design",
+        "frontend_proxy_recreate_required",
+        "auth_configured_unauthenticated",
+        "authenticated_login_not_yet_proven"
+      ]));
+      expect(body.diagnostic_classes).not.toContain("required_missing");
+      expect(body.variables).toMatchObject({
+        ADMIN_UI_SESSION_TTL_SECONDS: "optional_defaulted",
+        ADMIN_UI_SESSION_COOKIE_NAME: "optional_defaulted",
+        ADMIN_UI_SESSION_REDIS_PREFIX: "optional_defaulted"
+      });
+      expect(diagnose.stdout).not.toContain(hash);
+      expect(diagnose.stdout).not.toContain(hash.replaceAll("$", "$$"));
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it("fails closed for malformed production config without echoing submitted secret values", () => {
     const badHash = "plaintext-password";
     const badSecret = "short-secret";
@@ -155,7 +208,8 @@ describe("admin auth provisioning helpers", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("backend-admin-auth-diagnostics-ok");
     expect(result.stdout).toContain("ADMIN_AUTH_SINGLE_ADMIN_CONFIG_PRESENT");
-    expect(result.stdout).toContain("present-redacted");
+    expect(result.stdout).toContain("configured_present");
+    expect(result.stdout).toContain("worker_absent_by_design");
     expect(result.stdout).not.toContain("synthetic-ms024d-admin-password");
     expect(result.stdout).not.toContain("synthetic_ms024d_admin_session_secret");
   });

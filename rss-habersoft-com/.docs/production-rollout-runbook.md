@@ -94,8 +94,11 @@ Active production deployment sequence'in canonical komutlari [../PRODUCTION.md](
 6. Run migration status/deploy as operator procedure requires.
 7. Start or recreate API and worker.
 8. Verify internal and public health.
+9. If the admin UI frontend uses backend service DNS, recreate it with `cd /opt/habersoft-rss/rss-admin-ui && npm run ops:compose:recreate` after backend API/image/network/admin-auth env recreation.
 
 No `prisma db push`, volume prune, Redis flush, source upload, package transfer-as-production-source or direct public API bind is allowed.
+
+For admin-auth activation or backend image/network changes, do not stop at backend loopback success. Recreate the frontend with the canonical helper so status/auth proxy routes refresh their backend upstream/network references before `auth-smoke:redacted` evidence is collected.
 
 ## Internal and Public Acceptance
 

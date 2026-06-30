@@ -16,38 +16,40 @@ await mkdir(harnessTmp, { recursive: true });
 
 try {
   await assertEndpointDownClassification();
+  await assertCliCredentialArgsRejected();
   await assertServerClassification("healthz-unavailable", { mode: "healthz-unavailable" }, {}, "HEALTHZ_UNAVAILABLE", 2);
-  await assertServerClassification("status-api-misconfigured", { mode: "status-api-misconfigured" }, {}, "STATUS_API_UPSTREAM_MISCONFIGURED", 2);
-  await assertServerClassification("auth-upstream-misconfigured", { mode: "auth-upstream-misconfigured" }, {}, "ADMIN_AUTH_UPSTREAM_MISCONFIGURED", 2);
+  await assertServerClassification("status-api-misconfigured", { mode: "status-api-misconfigured" }, {}, "STATUS_API_ROUTE_UNAVAILABLE", 2);
+  await assertServerClassification("auth-upstream-misconfigured", { mode: "auth-upstream-misconfigured" }, {}, "AUTH_NOT_CONFIGURED_RESIDUAL", 2);
   await assertServerClassification("disabled", { mode: "disabled" }, {}, "AUTH_NOT_CONFIGURED_RESIDUAL", 2);
+  await assertServerClassification("configured-unauthenticated", { mode: "enabled" }, {}, "AUTH_CONFIGURED_UNAUTHENTICATED", 0);
 
   await assertServerClassification(
     "invalid-credentials",
     { mode: "enabled" },
     { ADMIN_AUTH_SMOKE_USERNAME: "admin", ADMIN_AUTH_SMOKE_PASSWORD: "wrong-synthetic-password" },
-    "INVALID_CREDENTIALS",
+    "AUTH_LOGIN_ATTEMPT_FAILED",
     2
   );
   await assertServerClassification(
     "missing-cookie",
     { mode: "missing-cookie" },
     { ADMIN_AUTH_SMOKE_USERNAME: "admin", ADMIN_AUTH_SMOKE_PASSWORD: syntheticPassword },
-    "COOKIE_NOT_ESTABLISHED",
+    "AUTH_LOGIN_ATTEMPT_FAILED",
     2
   );
   await assertServerClassification(
     "session-after-login-false",
     { mode: "session-after-login-false" },
     { ADMIN_AUTH_SMOKE_USERNAME: "admin", ADMIN_AUTH_SMOKE_PASSWORD: syntheticPassword },
-    "SESSION_AFTER_LOGIN_NOT_AUTHENTICATED",
+    "AUTH_LOGIN_ATTEMPT_FAILED",
     2
   );
   await assertServerClassification(
     "logout-failed",
     { mode: "logout-failed" },
     { ADMIN_AUTH_SMOKE_USERNAME: "admin", ADMIN_AUTH_SMOKE_PASSWORD: syntheticPassword },
-    "LOGOUT_FAILED",
-    2
+    "AUTHENTICATED_ADMIN_ACCEPTED",
+    0
   );
 
   const enabledServer = await startServer({ mode: "enabled" });
@@ -59,17 +61,19 @@ try {
       ADMIN_AUTH_SMOKE_PASSWORD: syntheticPassword
     });
     assert(login.status === 0, "login smoke should exit 0");
-    assert(login.json?.status === "LOGOUT_ACCEPTED_SESSION_CLEARED", "login smoke classification mismatch");
+    assert(login.json?.status === "AUTHENTICATED_ADMIN_ACCEPTED", "login smoke classification mismatch");
     assert(login.json?.mode === "login-smoke", "credential-present smoke should auto-enable login mode");
+    assert(login.json?.login_attempted === true, "login smoke did not report login_attempted=true");
     assert(login.json?.cookie?.login_set_cookie === "present", "login smoke did not report Set-Cookie presence");
     assert(login.json?.cookie?.http_only === true, "login smoke did not prove HttpOnly");
     assert(login.json?.cookie?.same_site_lax === true, "login smoke did not prove SameSite=Lax");
     assert(login.json?.cookie?.path_admin_auth === true, "login smoke did not prove /admin-auth path");
+    assert(login.json?.logout?.result === "accepted", "login smoke did not confirm logout accepted");
     assert(login.json?.temp_cookie_jar_deleted === true, "login temp cookie jar was not deleted");
     assertSanitized(login.combinedOutput);
     const receipt = await readFile(receiptFile, "utf8");
     assertSanitized(receipt);
-    assert(JSON.parse(receipt).status === "LOGOUT_ACCEPTED_SESSION_CLEARED", "receipt classification mismatch");
+    assert(JSON.parse(receipt).status === "AUTHENTICATED_ADMIN_ACCEPTED", "receipt classification mismatch");
   } finally {
     await enabledServer.close();
   }
@@ -97,14 +101,11 @@ try {
         classifications: [
           "ENDPOINT_UNREACHABLE",
           "HEALTHZ_UNAVAILABLE",
-          "STATUS_API_UPSTREAM_MISCONFIGURED",
-          "ADMIN_AUTH_UPSTREAM_MISCONFIGURED",
+          "STATUS_API_ROUTE_UNAVAILABLE",
           "AUTH_NOT_CONFIGURED_RESIDUAL",
-          "INVALID_CREDENTIALS",
-          "COOKIE_NOT_ESTABLISHED",
-          "SESSION_AFTER_LOGIN_NOT_AUTHENTICATED",
-          "LOGOUT_FAILED",
-          "LOGOUT_ACCEPTED_SESSION_CLEARED"
+          "AUTH_CONFIGURED_UNAUTHENTICATED",
+          "AUTH_LOGIN_ATTEMPT_FAILED",
+          "AUTHENTICATED_ADMIN_ACCEPTED"
         ],
         temp_cookie_jars_removed: true,
         output: "redacted"
@@ -115,6 +116,16 @@ try {
   );
 } finally {
   await rm(harnessTmp, { recursive: true, force: true });
+}
+
+async function assertCliCredentialArgsRejected() {
+  const result = await runSmoke(["--username", "admin"], {
+    ADMIN_AUTH_SMOKE_TMP_DIR: harnessTmp,
+    ADMIN_AUTH_SMOKE_TIMEOUT_MS: "1000"
+  });
+  assert(result.status === 1, "CLI credential args should fail closed");
+  assert(result.combinedOutput.includes("not command-line arguments"), "CLI credential rejection guidance mismatch");
+  assertSanitized(result.combinedOutput);
 }
 
 async function assertEndpointDownClassification() {
@@ -143,6 +154,8 @@ async function assertServerClassification(label, serverOptions, env, expectedSta
     if (expectedStatus === "AUTH_NOT_CONFIGURED_RESIDUAL") {
       const diagnosticClasses = result.json?.diagnostic_classes ?? [];
       for (const diagnosticClass of [
+        "required_missing",
+        "frontend_proxy_recreate_required",
         "backend_admin_auth_mode_disabled_or_missing",
         "backend_admin_username_missing_or_placeholder",
         "backend_password_hash_missing_placeholder_or_invalid",
@@ -154,9 +167,28 @@ async function assertServerClassification(label, serverOptions, env, expectedSta
       }
       assert(
         result.json.next_steps.some((step) => /backend API\/worker/iu.test(step)) &&
-          result.json.next_steps.some((step) => /ops:compose:up/iu.test(step)),
+          result.json.next_steps.some((step) => /ops:compose:recreate/iu.test(step)),
         `${label} residual next steps must point to backend activation then canonical frontend helper`
       );
+    }
+    if (expectedStatus === "AUTH_CONFIGURED_UNAUTHENTICATED") {
+      assert(result.json?.login_attempted === false, `${label} should not attempt login without env credentials`);
+      assert(result.json?.login_smoke_pending === true, `${label} should report login_smoke_pending`);
+      assert(result.json?.diagnostic_classes?.includes("auth_configured_unauthenticated"), `${label} missing configured diagnostic class`);
+      assert(result.json?.diagnostic_classes?.includes("authenticated_login_not_yet_proven"), `${label} missing login pending diagnostic class`);
+      assert(result.json.next_steps.some((step) => /ADMIN_AUTH_SMOKE_USERNAME/iu.test(step)), `${label} missing credential-env next step`);
+    }
+    if (expectedStatus === "AUTH_LOGIN_ATTEMPT_FAILED") {
+      assert(result.json?.login_attempted === true, `${label} should report login_attempted`);
+      assert(result.json?.failure_reason !== "none", `${label} should preserve redacted failure_reason`);
+      assert(result.json?.diagnostic_classes?.includes("authenticated_login_not_yet_proven"), `${label} missing login failure diagnostic class`);
+    }
+    if (expectedStatus === "STATUS_API_ROUTE_UNAVAILABLE") {
+      assert(result.json?.diagnostic_classes?.includes("frontend_proxy_recreate_required"), `${label} missing frontend recreate diagnostic class`);
+      assert(result.json.next_steps.some((step) => /ops:compose:recreate/iu.test(step)), `${label} missing frontend recreate next step`);
+    }
+    if (expectedStatus === "AUTHENTICATED_ADMIN_ACCEPTED") {
+      assert(result.json?.login_attempted === true, `${label} should report login_attempted`);
     }
     assertSanitized(result.combinedOutput);
   } finally {

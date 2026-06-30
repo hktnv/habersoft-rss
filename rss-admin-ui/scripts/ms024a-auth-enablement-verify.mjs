@@ -143,7 +143,8 @@ function assertRedactedSmokeTool() {
     "temp_cookie_jar_deleted",
     "AUTH_NOT_CONFIGURED_RESIDUAL",
     "AUTH_CONFIGURED_UNAUTHENTICATED",
-    "LOGOUT_ACCEPTED_SESSION_CLEARED",
+    "AUTH_LOGIN_ATTEMPT_FAILED",
+    "AUTHENTICATED_ADMIN_ACCEPTED",
     "output: \"redacted\""
   ]) {
     if (!smoke.includes(fragment)) failures.push(`redacted smoke tool missing ${fragment}`);

@@ -1,8 +1,8 @@
 # Production Activation Package
 
-Status: `MS-024C_PRODUCTION_OVERLAY_CANONICALIZATION_READY_OPERATOR_RETEST_REQUIRED`.
+Status: `MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING`.
 
-MS-024A preserves MS-023D read-only production status-dashboard transport acceptance for the already operator-managed live admin UI surface and prepares the remaining authenticated-admin activation package. MS-024B adds operator ergonomics, classified auth-smoke diagnostics, and graduated guardrails for the operator-reported latest recreate blocker. MS-024C canonicalizes the backend-network overlay/helper path for production service-DNS upstreams, prevents missing service DNS from hiding `/healthz`, and sharpens backend-auth residual diagnostics. This package preserves the no-secret, operator-managed production package, validates local production-mode release candidates with synthetic/local fixtures only, keeps proxy CORS-header hardening, improves backend admin-auth env-file validation, and adds redacted auth smoke tooling. It does not mutate production, capture rollback baseline, perform production deployment, publish a registry image, create a Git tag, create a GitHub Release, or create a PR.
+MS-024A preserves MS-023D read-only production status-dashboard transport acceptance for the already operator-managed live admin UI surface and prepares the remaining authenticated-admin activation package. MS-024B adds operator ergonomics, classified auth-smoke diagnostics, and graduated guardrails for the operator-reported latest recreate blocker. MS-024C canonicalizes the backend-network overlay/helper path for production service-DNS upstreams, prevents missing service DNS from hiding `/healthz`, and sharpens backend-auth residual diagnostics. MS-024E records operator-reported evidence that backend admin-auth is configured and the frontend edge returns `AUTH_CONFIGURED_UNAUTHENTICATED` after `npm run ops:compose:recreate`; login smoke remains pending. This package preserves the no-secret, operator-managed production package, validates local production-mode release candidates with synthetic/local fixtures only, keeps proxy CORS-header hardening, improves backend admin-auth env-file validation, and adds redacted auth smoke tooling. It does not mutate production, capture rollback baseline, perform production deployment, publish a registry image, create a Git tag, create a GitHub Release, or create a PR.
 
 Rollback baseline is operator-managed. Server deployment/configuration is operator-managed. Codex-owned repository work is limited to templates, same-origin proxy configuration, local validation, and runbook guidance.
 
@@ -36,7 +36,7 @@ Both upstream origins must be internal backend origins reachable from inside the
 
 The secretless frontend operator template is `deploy/production/operator-managed.env.template`. The backend-only auth checklist is `deploy/production/backend-admin-auth.env.template`. Keep filled copies operator-owned and untracked. Preferred backend-network mode uses `deploy/production/compose.backend-network.yaml`, `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`, and service DNS such as `http://main-service-api:3000`. For production Docker bridge service DNS, that overlay is canonical runtime input. Plain `deploy/production/compose.yaml` is inspection/degraded-only for that topology. Host-gateway mode with `http://host.docker.internal:3200` is allowed only after an operator-run container-side reachability check proves that the backend port is reachable through host-gateway.
 
-## MS-023D Live Acceptance
+## MS-023D Live Acceptance And MS-024E Auth Evidence
 
 Bounded status: `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`.
 
@@ -47,9 +47,20 @@ Operator-reported and Codex public read-only verified result:
 - `/status-api/health/ready` returns `200` with `status=ready`, `postgres=up`, `redis=up`, and `tenantAuth=up`;
 - `/admin-auth/session` returns HTTP `501` with `status=not_configured`.
 
-The `501 not_configured` admin-auth result is `AUTH_NOT_CONFIGURED_RESIDUAL`. It is not a blocker for read-only status-dashboard closure; it is a blocker for authenticated admin-shell production acceptance. Do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` for this residual. Verify backend runtime admin-auth env placement, verify `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` remains an internal backend origin, and restart/recreate the backend API under the operator rollback plan after correcting backend env placement. See [live-status-dashboard-acceptance.md](live-status-dashboard-acceptance.md) and [status-api-upstream-remediation.md](status-api-upstream-remediation.md).
+The historical `501 not_configured` admin-auth result is `AUTH_NOT_CONFIGURED_RESIDUAL`. It is not a blocker for read-only status-dashboard closure; it is a blocker for authenticated admin-shell production acceptance. Do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` for this residual. Verify backend runtime admin-auth env placement, verify `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` remains an internal backend origin, and restart/recreate the backend API under the operator rollback plan after correcting backend env placement. See [live-status-dashboard-acceptance.md](live-status-dashboard-acceptance.md) and [status-api-upstream-remediation.md](status-api-upstream-remediation.md).
 
 MS-023D status-dashboard production transport remains accepted. In MS-024A, `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. Placing values only in `rss-admin-ui/.env.production` is insufficient because backend admin-auth variables must be present in the backend API service runtime. The operator should validate the backend env file with `npm run admin-auth:verify-config -- --env-file <path> --require-enabled`, apply it to the backend runtime outside Git, and then perform backend API restart/recreate under the operator rollback plan.
+
+MS-024E intakes the later operator-reported retest:
+
+- backend diagnostics passed with `ADMIN_AUTH_SINGLE_ADMIN_CONFIG_PRESENT`, API env wired, and worker `worker_absent_by_design`;
+- backend loopback `/admin-auth/session` returned `configured=true`, `authenticated=false`, `reason=unauthenticated`;
+- initial frontend edge status/auth failed with `502`/`auth_unavailable` until the frontend was recreated;
+- frontend proxy recovered after canonical overlay helper recreate: `cd /opt/habersoft-rss/rss-admin-ui && npm run ops:compose:recreate` refreshed backend-network overlay/upstream references;
+- post-fix `/admin-auth/session` returned `configured=true`, `authenticated=false`, `reason=unauthenticated`;
+- `auth-smoke:redacted` returned `AUTH_CONFIGURED_UNAUTHENTICATED` with empty `diagnostic_classes`.
+
+`AUTH_CONFIGURED_UNAUTHENTICATED` means login_smoke_pending; in operator wording, login smoke pending. It is not authenticated admin-shell production acceptance.
 
 ## MS-024A Redacted Auth Smoke
 
@@ -60,7 +71,7 @@ npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
 ADMIN_AUTH_SMOKE_USERNAME=<operator-owned-username> ADMIN_AUTH_SMOKE_PASSWORD=<operator-owned-password> npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
 ```
 
-Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw response bodies into Git/chat/docs. The default mode performs session/status classification. Supplying both `ADMIN_AUTH_SMOKE_USERNAME` and `ADMIN_AUTH_SMOKE_PASSWORD` through environment variables enables login/session/logout smoke, stores the temporary cookie jar under `ADMIN_AUTH_SMOKE_TMP_DIR` when provided, deletes that jar, classifies failures such as endpoint down, `/healthz` unavailable, `AUTH_NOT_CONFIGURED_RESIDUAL`, auth upstream misconfiguration, invalid credentials, missing cookie, post-login session failure, and logout failure, and emits redacted next steps. Under MS-024C, `AUTH_NOT_CONFIGURED_RESIDUAL` includes diagnostic classes for backend auth mode disabled/missing, backend username missing/placeholder, backend password hash missing/placeholder/invalid, backend session secret missing/weak, backend Redis/session dependency unavailable, and frontend proxy reachable while the backend auth endpoint reports not configured.
+Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw response bodies into Git/chat/docs. The default mode performs session/status classification. Supplying both `ADMIN_AUTH_SMOKE_USERNAME` and `ADMIN_AUTH_SMOKE_PASSWORD` through environment variables enables login/session/logout smoke, stores the temporary cookie jar under `ADMIN_AUTH_SMOKE_TMP_DIR` when provided, deletes that jar, and emits redacted next steps. MS-024E auth-smoke status classes are `AUTH_NOT_CONFIGURED_RESIDUAL`, `AUTH_CONFIGURED_UNAUTHENTICATED`, `AUTH_LOGIN_ATTEMPT_FAILED`, `AUTHENTICATED_ADMIN_ACCEPTED`, and `STATUS_API_ROUTE_UNAVAILABLE`. CLI credential arguments are rejected.
 
 ## Local RC Acceptance
 
@@ -94,7 +105,7 @@ The RC harness builds local backend/frontend images, starts PostgreSQL, Redis, t
 - Docker bridge loopback/container-local upstreams start the static runtime and fail closed at the exact proxy route boundary;
 - unreachable upstream connection failures return bounded browser-safe JSON `502` with no raw Nginx diagnostic body;
 - internal upstream live/ready remediation succeeds with synthetic local fixtures;
-- live-evidence intake docs classify `AUTH_NOT_CONFIGURED_RESIDUAL` without claiming authenticated admin acceptance;
+- live-evidence intake docs preserve historical `AUTH_NOT_CONFIGURED_RESIDUAL`, classify current `AUTH_CONFIGURED_UNAUTHENTICATED`, and do not claim authenticated admin acceptance;
 - frontend runtime and backend admin-auth env templates remain separated;
 - unknown auth/status paths and wrong methods reject safely;
 - browser static assets and runtime config do not contain upstream origins, password, password hash, session secret, Agent key, Tenant bearer token, or browser auth persistence calls;
@@ -111,7 +122,7 @@ git pull --ff-only origin main
 cd /opt/habersoft-rss/rss-admin-ui
 npm run production:diagnose:redacted
 npm run ops:compose:config
-npm run ops:compose:up -- --force-recreate rss-admin-ui
+npm run ops:compose:recreate
 npm run ops:compose:ps
 npm run ops:compose:logs -- rss-admin-ui
 curl -fsS http://127.0.0.1:8081/healthz
@@ -137,7 +148,7 @@ A later production activation receipt must include redacted evidence for:
 - remote Git SHA;
 - environment variable presence, with secret values redacted;
 - fail-closed session before login;
-- `AUTH_NOT_CONFIGURED_RESIDUAL` if `/admin-auth/session` is still `501 not_configured`;
+- `AUTH_CONFIGURED_UNAUTHENTICATED` for `/admin-auth/session` before login, or `AUTH_NOT_CONFIGURED_RESIDUAL` if it regresses to `501 not_configured`;
 - login/session/logout smoke;
 - `/status-api/health/live` and `/status-api/health/ready` through the panel path;
 - protected shell locked, unlocked, and locked-after-logout behavior;
@@ -149,6 +160,6 @@ A later production activation receipt must include redacted evidence for:
 
 Before any server mutation, the operator must capture rollback baseline and current-state evidence according to the backend/frontend runbooks. MS-023A-R2 does not capture or infer that baseline.
 
-The operator later applies the authenticated-admin package by selecting a Git SHA/image identity, placing real backend admin-auth values in the backend runtime env, placing frontend runtime values in the admin UI runtime env, selecting backend-network service DNS or proven host-gateway for the admin UI proxy, keeping the admin UI bound to loopback, and configuring the external edge separately. These instructions are human/operator-managed and are not executed by Codex in MS-023D.
+The operator later applies the authenticated-admin package by selecting a Git SHA/image identity, placing real backend admin-auth values in the backend runtime env, placing frontend runtime values in the admin UI runtime env, selecting backend-network service DNS or proven host-gateway for the admin UI proxy, keeping the admin UI bound to loopback, and configuring the external edge separately. After backend API/image/network/admin-auth env recreate, run `npm run ops:compose:recreate` from `rss-admin-ui` before auth evidence. These instructions are human/operator-managed and are not executed by Codex in MS-024E.
 
-Read-only status-dashboard production transport is accepted in MS-023D. Authenticated admin-shell production acceptance remains pending until backend admin auth is configured in the backend runtime and redacted login/session/logout evidence is accepted.
+Read-only status-dashboard production transport is accepted in MS-023D. Backend admin auth configured unauthenticated evidence is operator-reported in MS-024E. Authenticated admin-shell production acceptance remains pending until redacted login/session/logout evidence is accepted.

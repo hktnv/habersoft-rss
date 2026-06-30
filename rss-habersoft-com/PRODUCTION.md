@@ -35,7 +35,7 @@ npm run production:diagnose:redacted
 
 If those files are absent, `npm run production:diagnose:redacted` reports the missing operator-owned files without reading or printing secret values. This is part of the MS-024B graduated guardrails policy: reduce harmless inspection friction without weakening backend secrets.
 
-MS-024D admin-auth residual boundary: when the frontend panel health and status routes are reachable but `/admin-auth/session` still returns `501 not_configured`, the next action is backend API runtime admin-auth env activation, not frontend overlay trial-and-error. Production Compose now maps the admin-auth variables from the operator env files into `main-service-api`; it intentionally does not map them into `main-service-worker`. Validate the operator-owned backend env file with:
+MS-024E admin-auth configured boundary: MS-024D's backend runtime env wiring has operator-reported live evidence. Backend diagnostics passed with `ADMIN_AUTH_SINGLE_ADMIN_CONFIG_PRESENT`, the API service received admin-auth env, the worker remained `worker_absent_by_design`, and backend loopback `/admin-auth/session` returned `configured=true`, `authenticated=false`, `reason=unauthenticated`. Production Compose maps the admin-auth variables from the operator env files into `main-service-api`; it intentionally does not map them into `main-service-worker`. Validate the operator-owned backend env file with:
 
 ```bash
 npm run admin-auth:verify-config -- --env-file <operator-backend-auth-env> --require-enabled
@@ -43,7 +43,7 @@ npm run production:admin-auth:diagnose:redacted -- --synthetic
 npm run production:admin-auth:compose:verify
 ```
 
-The redacted residual classes are backend auth mode disabled/missing, backend admin username missing/placeholder, backend password hash missing/placeholder/invalid, backend session secret missing/weak, Redis/session dependency unreachable, or frontend proxy reachable while the backend auth endpoint reports not configured. For an admin-auth-only env activation, the affected backend service is `main-service-api`; `main-service-worker` does not consume admin auth and need not be recreated solely for this change. Standard backend image/shared-env rollouts can still recreate API and worker together under the operator rollback/config decision.
+The redacted diagnostics now distinguish `required_missing`, `optional_defaulted`, `configured_present`, `worker_absent_by_design`, `frontend_proxy_recreate_required`, `auth_configured_unauthenticated`, and `authenticated_login_not_yet_proven`. `ADMIN_UI_SESSION_TTL_SECONDS`, `ADMIN_UI_SESSION_COOKIE_NAME`, and `ADMIN_UI_SESSION_REDIS_PREFIX` are optional/defaulted when absent; they are not required gaps when the strict `single_admin` values are valid. For an admin-auth-only env activation, the affected backend service is `main-service-api`; `main-service-worker` does not consume admin auth and need not be recreated solely for this change. Standard backend image/shared-env rollouts can still recreate API and worker together under the operator rollback/config decision. After any backend API/image/network/admin-auth env recreate, also run `cd /opt/habersoft-rss/rss-admin-ui && npm run ops:compose:recreate` so frontend proxy upstream/network references are refreshed before auth smoke.
 
 Production source delivery icin tek gecerli akış:
 
@@ -396,6 +396,15 @@ docker compose --env-file "${SHARED_ENV}" --env-file "${IMAGE_ENV}" -f "${COMPOS
 ```
 
 `--env-file` only supplies interpolation values to Docker Compose. A variable reaches a container only when the target service lists it under `environment:`. The production Compose file explicitly passes admin-auth variables to `main-service-api` and intentionally omits them from `main-service-worker`.
+
+Post-backend-recreate frontend guardrail: after `main-service-api`, the backend Compose project/network, the backend runtime image, or backend admin-auth env is recreated, run the canonical frontend helper from the frontend project:
+
+```bash
+cd /opt/habersoft-rss/rss-admin-ui
+npm run ops:compose:recreate
+```
+
+The helper uses the backend-network overlay when configured. Without this follow-up, the frontend Nginx container can retain stale backend upstream/network references and status/auth proxy routes may return `502` or `auth_unavailable` even while backend loopback auth is correctly configured.
 
 Compose config dogrulama:
 

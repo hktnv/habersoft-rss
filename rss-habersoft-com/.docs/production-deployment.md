@@ -21,6 +21,8 @@ Production model tek Linux host + Docker Engine / Docker Compose v2 modelidir. D
 
 Production source acquisition Git-only operator akisidir: lokal source tree sunucuya upload edilmez; operator sunucuda `git pull --ff-only origin main` ile exact commit'i alir, Docker image'i sunucuda build eder ve generated `deploy/runtime-image.env` ile Compose'u calistirir. Production Compose invocation explicit `deploy/production/compose.yaml`, external shared production env ve `deploy/runtime-image.env` context'i ile yapilir; bare `docker compose ...` production command'i degildir. Codex production SSH kullanmaz; server Git/Docker/OpenLiteSpeed/TLS islemleri operator-managed kalir.
 
+Admin UI proxy guardrail: if an operator recreates `main-service-api`, the backend Compose project/network, backend runtime image, or backend admin-auth env, the frontend proxy runtime must also be recreated from `rss-admin-ui` with `npm run ops:compose:recreate`. The helper applies the backend-network overlay when configured and prevents stale frontend Nginx upstream/network references from surfacing as `502` or `auth_unavailable` after backend loopback health/auth is already correct.
+
 Production Compose service inventory:
 
 - `postgres`

@@ -46,7 +46,8 @@ console.log(
   JSON.stringify(
     {
       status: "production-activation-package-verify-ok",
-      admin_ui_state: "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED",
+      admin_ui_state: "MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING",
+      prior_status_dashboard_state: "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED",
       provisioning_helpers: "present",
       local_rc_harness: "present",
       operator_managed_package: "present",
@@ -108,9 +109,12 @@ function assertDocsBoundary() {
 
   const required = [
     "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED",
+    "MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING",
     "AUTH_NOT_CONFIGURED_RESIDUAL",
+    "AUTH_CONFIGURED_UNAUTHENTICATED",
     "codex_public_readonly_verified",
     "operator_reported",
+    "operator-reported",
     "rollback baseline is operator-managed",
     "server deployment/configuration is operator-managed",
     "internal backend origin",
@@ -130,6 +134,9 @@ function assertDocsBoundary() {
     "Passing backend-only auth variables only to the frontend/admin UI Compose command does not enable backend auth",
     "backend runtime admin-auth env placement",
     "backend API restart/recreate",
+    "frontend proxy recovered after canonical overlay helper recreate",
+    "npm run ops:compose:recreate",
+    "login smoke pending",
     "ADMIN_UI_AUTH_UPSTREAM_ORIGIN",
     "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN",
     "/admin-auth/session",

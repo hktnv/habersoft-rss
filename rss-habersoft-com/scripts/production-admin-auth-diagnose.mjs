@@ -15,7 +15,18 @@ const adminAuthEnvNames = [
   "ADMIN_UI_SESSION_COOKIE_SECURE",
   "ADMIN_UI_SESSION_REDIS_PREFIX"
 ];
-const sensitiveNames = new Set(["ADMIN_UI_ADMIN_PASSWORD_HASH", "ADMIN_UI_SESSION_SECRET"]);
+const requiredSingleAdminEnvNames = [
+  "ADMIN_UI_AUTH_MODE",
+  "ADMIN_UI_ADMIN_USERNAME",
+  "ADMIN_UI_ADMIN_PASSWORD_HASH",
+  "ADMIN_UI_SESSION_SECRET"
+];
+const optionalDefaultedEnvNames = [
+  "ADMIN_UI_SESSION_TTL_SECONDS",
+  "ADMIN_UI_SESSION_COOKIE_NAME",
+  "ADMIN_UI_SESSION_COOKIE_SECURE",
+  "ADMIN_UI_SESSION_REDIS_PREFIX"
+];
 const { flags, options } = parseArgs(process.argv.slice(2));
 
 rejectCredentialArgs(process.argv.slice(2));
@@ -26,10 +37,16 @@ if (flags.has("--synthetic") && options.has("--env-file")) {
 
 const envSource = resolveEnvSource();
 const wiring = inspectComposeWiring();
-const classifications = classifyAdminAuth(envSource.env, flags.has("--require-enabled"));
+const assessment = classifyAdminAuth(envSource.env, flags.has("--require-enabled"));
+const classifications = [...assessment.classifications];
 
 for (const name of wiring.missingApiEnv) classifications.push(`COMPOSE_API_ENV_MISSING_${name}`);
 if (wiring.workerAdminAuthEnv.length > 0) classifications.push("COMPOSE_WORKER_ADMIN_AUTH_ENV_PRESENT");
+const diagnosticClasses = unique([
+  ...assessment.diagnosticClasses,
+  wiring.workerAdminAuthEnv.length === 0 ? "worker_absent_by_design" : "worker_admin_auth_env_unexpected_present",
+  ...(wiring.missingApiEnv.length > 0 ? ["required_missing"] : [])
+]);
 
 const attentionRequired = classifications.some(
   (classification) =>
@@ -44,18 +61,21 @@ writeJson({
   status,
   source: envSource.source,
   runtime_target: "main-service-api",
-  worker_admin_auth_env: wiring.workerAdminAuthEnv.length === 0 ? "absent_by_design" : "unexpected_present",
+  worker_admin_auth_env: wiring.workerAdminAuthEnv.length === 0 ? "worker_absent_by_design" : "unexpected_present",
   compose_wiring: {
     api_admin_auth_env_names: wiring.missingApiEnv.length === 0 ? "present" : "incomplete",
     worker_admin_auth_env_names: wiring.workerAdminAuthEnv.length === 0 ? "absent" : "present"
   },
   classifications,
-  variables: Object.fromEntries(adminAuthEnvNames.map((name) => [name, redactedPresence(envSource.env, name)])),
+  diagnostic_classes: diagnosticClasses,
+  variables: Object.fromEntries(adminAuthEnvNames.map((name) => [name, variableStatus(envSource.env, name)])),
   next_steps: [
     "npm run admin-auth:verify-config -- --env-file <operator-backend-auth-env> --require-enabled",
     "npm run production:admin-auth:compose:verify",
     "npm run production:diagnose:redacted",
-    "recreate main-service-api after operator-owned admin-auth env changes"
+    "recreate main-service-api after operator-owned admin-auth env changes",
+    "after backend API/image/network/admin-auth env recreate, run: cd /opt/habersoft-rss/rss-admin-ui && npm run ops:compose:recreate",
+    "then run frontend auth smoke without credentials to confirm AUTH_CONFIGURED_UNAUTHENTICATED, followed by credential env login smoke for AUTHENTICATED_ADMIN_ACCEPTED"
   ],
   output: "redacted"
 });
@@ -91,17 +111,19 @@ function resolveEnvSource() {
 
 function classifyAdminAuth(env, requireEnabled) {
   const classifications = [];
+  const diagnosticClasses = [];
   const mode = env.ADMIN_UI_AUTH_MODE === undefined || env.ADMIN_UI_AUTH_MODE.trim() === ""
     ? "disabled"
     : env.ADMIN_UI_AUTH_MODE.trim();
 
   if (mode !== "disabled" && mode !== "single_admin") {
-    return ["ADMIN_AUTH_MODE_INVALID"];
+    return { classifications: ["ADMIN_AUTH_MODE_INVALID"], diagnosticClasses: ["required_missing"] };
   }
 
   if (mode === "disabled") {
     classifications.push(requireEnabled ? "ADMIN_AUTH_DISABLED_BUT_REQUIRED" : "ADMIN_AUTH_DISABLED");
-    return classifications;
+    if (requireEnabled) diagnosticClasses.push("required_missing");
+    return { classifications, diagnosticClasses };
   }
 
   const issues = [];
@@ -118,6 +140,13 @@ function classifyAdminAuth(env, requireEnabled) {
   const redisPrefix = env.ADMIN_UI_SESSION_REDIS_PREFIX === undefined || env.ADMIN_UI_SESSION_REDIS_PREFIX.trim() === ""
     ? "admin_auth:production"
     : env.ADMIN_UI_SESSION_REDIS_PREFIX;
+
+  if (requiredSingleAdminEnvNames.some((name) => isMissingOrEmpty(env[name]))) {
+    diagnosticClasses.push("required_missing");
+  }
+  if (optionalDefaultedEnvNames.some((name) => isMissingOrEmpty(env[name]))) {
+    diagnosticClasses.push("optional_defaulted");
+  }
 
   if (username === "" || isPlaceholderLike(username) || username.trim() !== username || containsAsciiControlCharacter(username)) {
     issues.push("ADMIN_AUTH_USERNAME_INVALID_OR_PLACEHOLDER");
@@ -152,7 +181,17 @@ function classifyAdminAuth(env, requireEnabled) {
     issues.push("ADMIN_AUTH_REDIS_PREFIX_INVALID");
   }
 
-  return issues.length === 0 ? ["ADMIN_AUTH_SINGLE_ADMIN_CONFIG_PRESENT"] : issues;
+  if (issues.length === 0) {
+    diagnosticClasses.push(
+      "configured_present",
+      "auth_configured_unauthenticated",
+      "authenticated_login_not_yet_proven",
+      "frontend_proxy_recreate_required"
+    );
+    return { classifications: ["ADMIN_AUTH_SINGLE_ADMIN_CONFIG_PRESENT"], diagnosticClasses };
+  }
+
+  return { classifications: issues, diagnosticClasses };
 }
 
 function inspectComposeWiring() {
@@ -263,10 +302,24 @@ function containsAsciiControlCharacter(value) {
   return /[\u0000-\u001f\u007f]/u.test(value);
 }
 
-function redactedPresence(env, name) {
-  if (env[name] === undefined) return "missing";
-  if (env[name].trim() === "") return "empty";
-  return sensitiveNames.has(name) ? "present-redacted" : "present";
+function variableStatus(env, name) {
+  if (requiredSingleAdminEnvNames.includes(name)) {
+    return isMissingOrEmpty(env[name]) ? "required_missing" : "configured_present";
+  }
+
+  if (optionalDefaultedEnvNames.includes(name)) {
+    return isMissingOrEmpty(env[name]) ? "optional_defaulted" : "configured_present";
+  }
+
+  return isMissingOrEmpty(env[name]) ? "required_missing" : "configured_present";
+}
+
+function isMissingOrEmpty(value) {
+  return value === undefined || value.trim() === "";
+}
+
+function unique(values) {
+  return [...new Set(values)];
 }
 
 function parseArgs(rawArgs) {

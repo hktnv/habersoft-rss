@@ -114,29 +114,28 @@ function assertSmokeDiagnostics() {
     "--endpoint",
     "ENDPOINT_UNREACHABLE",
     "HEALTHZ_UNAVAILABLE",
-    "STATUS_API_UPSTREAM_MISCONFIGURED",
-    "STATUS_API_UPSTREAM_UNAVAILABLE",
-    "ADMIN_AUTH_UPSTREAM_MISCONFIGURED",
-    "LOGIN_ROUTE_UNAVAILABLE",
-    "INVALID_CREDENTIALS",
-    "COOKIE_NOT_ESTABLISHED",
-    "SESSION_AFTER_LOGIN_NOT_AUTHENTICATED",
-    "LOGOUT_FAILED",
+    "STATUS_API_ROUTE_UNAVAILABLE",
+    "AUTH_NOT_CONFIGURED_RESIDUAL",
+    "AUTH_CONFIGURED_UNAUTHENTICATED",
+    "AUTH_LOGIN_ATTEMPT_FAILED",
+    "AUTHENTICATED_ADMIN_ACCEPTED",
     "next_steps",
     "frontend container may be down/restarting",
     "backend admin-auth env likely not loaded",
-    "do not use 127.0.0.1 inside Docker bridge"
+    "do not use 127.0.0.1 inside Docker bridge",
+    "login_smoke_pending",
+    "ops:compose:recreate"
   ]) {
     if (!smoke.includes(fragment)) failures.push(`auth smoke missing diagnostic fragment: ${fragment}`);
   }
   for (const fragment of [
     "ENDPOINT_UNREACHABLE",
     "HEALTHZ_UNAVAILABLE",
-    "STATUS_API_UPSTREAM_MISCONFIGURED",
-    "ADMIN_AUTH_UPSTREAM_MISCONFIGURED",
-    "COOKIE_NOT_ESTABLISHED",
-    "SESSION_AFTER_LOGIN_NOT_AUTHENTICATED",
-    "LOGOUT_FAILED",
+    "STATUS_API_ROUTE_UNAVAILABLE",
+    "AUTH_NOT_CONFIGURED_RESIDUAL",
+    "AUTH_CONFIGURED_UNAUTHENTICATED",
+    "AUTH_LOGIN_ATTEMPT_FAILED",
+    "AUTHENTICATED_ADMIN_ACCEPTED",
     "assertSanitized"
   ]) {
     if (!harness.includes(fragment)) failures.push(`auth smoke harness missing classification fragment: ${fragment}`);
@@ -161,6 +160,7 @@ function assertDocs() {
     "npm run ops:compose:logs",
     "npm run ops:compose:config",
     "npm run ops:compose:up",
+    "npm run ops:compose:recreate",
     "npm run production:diagnose:redacted",
     "npm run verify:operator-ergonomics",
     "npm run verify:production-overlay-canonicalization",

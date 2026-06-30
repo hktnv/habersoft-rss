@@ -1,8 +1,8 @@
 # Admin Auth Production Operator Handoff
 
-Status: `MS-024D_BACKEND_ADMIN_AUTH_RUNTIME_ENV_WIRING_READY_OPERATOR_RETEST_REQUIRED`.
+Status: `MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING`.
 
-This handoff is for the remaining operator-authorized authenticated admin activation milestone. MS-023D accepts only the read-only status-dashboard production transport, and MS-023D status-dashboard production transport remains accepted in MS-024A. MS-024B is repository remediation for the operator-reported latest recreate/auth-smoke blocker. MS-024C removes the remaining overlay trial-and-error by making the helper path canonical for service-DNS upstreams and by keeping `/healthz` available if service DNS is unresolved at runtime. MS-024D lands backend production Compose env wiring for `main-service-api` and redacted/synthetic verification helpers. It does not activate production admin auth, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, does not capture rollback baseline, and does not collect real production credentials.
+This handoff is for the remaining operator-authorized authenticated admin activation milestone. MS-023D accepts only the read-only status-dashboard production transport, and MS-023D status-dashboard production transport remains accepted. MS-024B is repository remediation for the operator-reported latest recreate/auth-smoke blocker. MS-024C removes overlay trial-and-error by making the helper path canonical for service-DNS upstreams and by keeping `/healthz` available if service DNS is unresolved at runtime. MS-024D lands backend production Compose env wiring for `main-service-api` and redacted/synthetic verification helpers. MS-024E records operator-reported evidence that backend admin auth is configured and the frontend edge returns `AUTH_CONFIGURED_UNAUTHENTICATED` after `npm run ops:compose:recreate`. It does not accept authenticated admin login, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, does not capture rollback baseline, and does not collect real production credentials.
 
 ## Authority Checklist
 
@@ -17,7 +17,7 @@ Before production activation, the operator must explicitly authorize:
 - rollback target and rollback authority.
 - operator-managed rollback baseline capture before mutation.
 
-Without that authority, authenticated admin-shell production acceptance remains blocked by `AUTH_NOT_CONFIGURED_RESIDUAL`.
+Without that authority and a successful redacted credential smoke, authenticated admin-shell production acceptance remains pending. `AUTH_CONFIGURED_UNAUTHENTICATED` only proves the pre-login session boundary.
 
 ## Secret Handling Checklist
 
@@ -43,11 +43,20 @@ Do not set either upstream to public edge origins such as `https://rss.habersoft
 
 MS-024B graduated guardrails mean these bad upstream values should not crash-loop the static frontend anymore. `/healthz` remains available, while exact proxy routes return bounded JSON reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully.
 
-MS-024C helper guardrails mean backend service DNS such as `http://main-service-api:3000` requires the backend-network overlay. Use `npm run ops:compose:config` and `npm run ops:compose:up -- --force-recreate rss-admin-ui`; do not rely on plain `deploy/production/compose.yaml` for a production bridge runtime using service DNS. The helper includes `compose.backend-network.yaml` when `ADMIN_UI_BACKEND_DOCKER_NETWORK` is set and blocks before recreate when service DNS is configured without that network value.
+MS-024C helper guardrails mean backend service DNS such as `http://main-service-api:3000` requires the backend-network overlay. Use `npm run ops:compose:config` and `npm run ops:compose:recreate`; do not rely on plain `deploy/production/compose.yaml` for a production bridge runtime using service DNS. The helper includes `compose.backend-network.yaml` when `ADMIN_UI_BACKEND_DOCKER_NETWORK` is set and blocks before recreate when service DNS is configured without that network value.
 
 MS-023D evidence already accepts `/healthz`, `/status-api/health/live`, and `/status-api/health/ready`. If `/admin-auth/session` returns HTTP `501 not_configured`, do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`. Verify backend runtime admin-auth env placement from `deploy/production/backend-admin-auth.env.template`, then restart/recreate the backend API under the operator rollback plan.
 
-MS-024D clarification: `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. Placing values only in `rss-admin-ui/.env.production` is insufficient; backend-only auth variables must be applied to the backend API service runtime. Production Compose now maps those variables into `main-service-api` and intentionally omits them from `main-service-worker`. Validate the backend env file with `npm run admin-auth:verify-config -- --env-file <path> --require-enabled` before backend API restart/recreate.
+MS-024E clarification: `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. `/admin-auth/session -> configured=true, authenticated=false, reason=unauthenticated` means backend auth is configured and waiting for login smoke. Placing values only in `rss-admin-ui/.env.production` is insufficient; backend-only auth variables must be applied to the backend API service runtime. Production Compose maps those variables into `main-service-api` and intentionally omits them from `main-service-worker`. Validate the backend env file with `npm run admin-auth:verify-config -- --env-file <path> --require-enabled` before backend API restart/recreate.
+
+After backend API/image/network/admin-auth env recreate, run the frontend helper before edge auth evidence:
+
+```bash
+cd /opt/habersoft-rss/rss-admin-ui
+npm run ops:compose:recreate
+```
+
+This refreshes frontend Nginx upstream/network references. Otherwise status/auth proxy routes can return `502` or `auth_unavailable` even while backend loopback auth is configured.
 
 Use backend helpers from `rss-habersoft-com`:
 
@@ -68,7 +77,7 @@ npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
 ADMIN_AUTH_SMOKE_USERNAME=<operator-owned-username> ADMIN_AUTH_SMOKE_PASSWORD=<operator-owned-password> npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
 ```
 
-Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw production response bodies into chat, Git, docs, or receipts. MS-024C auth-smoke classifies endpoint down, `/healthz` unavailable, status-api upstream unavailable/misconfigured, backend admin-auth env not loaded, auth upstream misconfigured, invalid credentials, missing cookie, post-login session failure, and logout failure with redacted next steps. `AUTH_NOT_CONFIGURED_RESIDUAL` maps to backend admin-auth mode disabled/missing, backend admin username missing/placeholder, backend password hash missing/placeholder/invalid, backend session secret missing/weak, backend Redis/session dependency unreachable, or frontend proxy reachable while the backend auth endpoint reports not configured. MS-024A/MS-024B/MS-024C validation commands are `npm run test:admin-auth-smoke-redacted`, `npm run verify:ms024a-auth-enablement-package`, `npm run verify:operator-ergonomics`, and `npm run verify:production-overlay-canonicalization`. No CORS broadening is part of the activation package.
+Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw production response bodies into chat, Git, docs, or receipts. MS-024E auth-smoke classifies `AUTH_NOT_CONFIGURED_RESIDUAL`, `AUTH_CONFIGURED_UNAUTHENTICATED`, `AUTH_LOGIN_ATTEMPT_FAILED`, `AUTHENTICATED_ADMIN_ACCEPTED`, and `STATUS_API_ROUTE_UNAVAILABLE` with redacted next steps. If credentials are absent, `AUTH_CONFIGURED_UNAUTHENTICATED` is expected and reports `login_smoke_pending`. If credentials are present, the report states `login_attempted` without printing values. MS-024A/MS-024B/MS-024C/MS-024E validation commands are `npm run test:admin-auth-smoke-redacted`, `npm run verify:ms024a-auth-enablement-package`, `npm run verify:operator-ergonomics`, and `npm run verify:production-overlay-canonicalization`. No CORS broadening is part of the activation package.
 
 ## MS-024C operator retest checklist
 
@@ -77,7 +86,7 @@ git pull --ff-only origin main
 cd /opt/habersoft-rss/rss-admin-ui
 npm run production:diagnose:redacted
 npm run ops:compose:config
-npm run ops:compose:up -- --force-recreate rss-admin-ui
+npm run ops:compose:recreate
 npm run ops:compose:ps
 npm run ops:compose:logs -- rss-admin-ui
 curl -fsS http://127.0.0.1:8081/healthz
@@ -97,7 +106,7 @@ docker compose \
   up -d --no-build --pull never --force-recreate rss-admin-ui
 ```
 
-This checklist is no live acceptance claimed for authenticated admin shell. The authenticated admin shell remains pending until operator-owned backend env activation, `main-service-api` recreate, and redacted login/session/logout smoke passes.
+This checklist is no live acceptance claimed for authenticated admin shell. MS-024E has operator-reported configured unauthenticated evidence, but the authenticated admin shell remains pending until redacted login/session/logout smoke passes.
 
 ## Activation Evidence Checklist
 
@@ -106,7 +115,7 @@ Future acceptance evidence should prove, with redaction:
 - remote Git SHA and image identity;
 - expected frontend and backend env variable names are present;
 - secret values are redacted;
-- `AUTH_NOT_CONFIGURED_RESIDUAL` is gone; `GET /admin-auth/session` without a valid cookie returns `configured=true`, `authenticated=false`, and HTTP `200`;
+- `AUTH_NOT_CONFIGURED_RESIDUAL` is gone; `GET /admin-auth/session` without a valid cookie returns `configured=true`, `authenticated=false`, and HTTP `200` (`AUTH_CONFIGURED_UNAUTHENTICATED`);
 - `GET /admin-auth/session` fails closed before login;
 - invalid login is rejected;
 - valid login creates an HttpOnly, `SameSite=Lax`, `Secure`, `/admin-auth` cookie;

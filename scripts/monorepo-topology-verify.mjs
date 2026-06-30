@@ -82,6 +82,8 @@ const protectedBackendPaths = [
   "package-lock.json"
 ];
 const allowedBackendAdminAuthDelta = new Set([
+  "deploy/production/compose.yaml",
+  "deploy/production/production.env.template",
   "package.json",
   "src/api.module.ts",
   "src/bootstrap/api-entrypoint.ts",
@@ -114,7 +116,7 @@ console.log(JSON.stringify({
   topology: "POLYREPO_STYLE_SINGLE_GIT_MONOREPO",
   migration_base: migrationBase,
   project_roots: [backendRoot, frontendRoot],
-  backend_protected_content: "byte-identical-except-ms022a-admin-auth-and-ms022b-package-delta",
+  backend_protected_content: "byte-identical-except-admin-auth-runtime-and-ms024d-production-env-wiring-delta",
   nested_git: false
 }, null, 2));
 
@@ -184,12 +186,14 @@ function assertRootDocs() {
       !frontendProduction.includes("MS-023A-R2_OPERATOR_MANAGED_PRODUCTION_PACKAGE_READY") &&
       !frontendProduction.includes("MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED") &&
       !frontendProduction.includes("MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED") &&
-      !frontendProduction.includes("MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED")) ||
+      !frontendProduction.includes("MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED") &&
+      !frontendProduction.includes("MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING")) ||
     !frontendProduction.includes("/admin-auth/session") ||
     !frontendProduction.includes("/admin-auth/login") ||
-    !frontendProduction.includes("AUTH_NOT_CONFIGURED_RESIDUAL")
+    !frontendProduction.includes("AUTH_NOT_CONFIGURED_RESIDUAL") ||
+    !frontendProduction.includes("AUTH_CONFIGURED_UNAUTHENTICATED")
   ) {
-    failures.push("frontend production guide must state MS-022A auth foundation and MS-023D auth residual");
+    failures.push("frontend production guide must state MS-022A auth foundation, historical MS-023D auth residual, and MS-024E configured unauthenticated state");
   }
   if (/byte-identical mirror/iu.test(rootProduction) || /operator mirror PRODUCTION\.md SHA-256/iu.test(rootProduction)) {
     failures.push("root production guide still claims old mirror contract");

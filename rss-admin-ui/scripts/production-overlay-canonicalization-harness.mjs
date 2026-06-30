@@ -217,7 +217,7 @@ async function assertAuthResidualDiagnostics() {
     }
     assert(json.next_steps.some((step) => /admin-auth config verifier/iu.test(step)), "auth residual missing backend verifier next step");
     assert(json.next_steps.some((step) => /backend API\/worker/iu.test(step)), "auth residual missing backend recreate next step");
-    assert(json.next_steps.some((step) => /ops:compose:up/iu.test(step)), "auth residual missing canonical frontend helper next step");
+    assert(json.next_steps.some((step) => /ops:compose:recreate/iu.test(step)), "auth residual missing canonical frontend helper next step");
     assertSanitized(result.stdout + result.stderr);
     return { classification: json.status, diagnostic_classes: json.diagnostic_classes.length };
   } finally {

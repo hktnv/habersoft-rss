@@ -90,7 +90,8 @@ function diagnose() {
     ps_status: ps.status,
     next_steps: [
       "npm run ops:compose:config",
-      "npm run ops:compose:up -- --force-recreate rss-admin-ui",
+      "npm run ops:compose:recreate",
+      "after backend API/image/network/admin-auth env recreate, run npm run ops:compose:recreate so frontend Nginx refreshes backend upstream/network references",
       "npm run ops:compose:ps",
       "npm run ops:compose:logs -- rss-admin-ui",
       "curl -fsS http://127.0.0.1:8081/healthz",
@@ -124,7 +125,7 @@ function printBlocked(label) {
           "set ADMIN_UI_BACKEND_DOCKER_NETWORK to the existing backend Docker network name",
           "keep ADMIN_UI_HEALTH_UPSTREAM_ORIGIN and ADMIN_UI_AUTH_UPSTREAM_ORIGIN on the operator-approved backend service-DNS origin",
           "run npm run ops:compose:config",
-          "run npm run ops:compose:up -- --force-recreate rss-admin-ui"
+          "run npm run ops:compose:recreate"
         ],
         output: "redacted"
       },

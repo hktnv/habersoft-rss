@@ -5,8 +5,10 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const backendRoot = path.join(repoRoot, "rss-habersoft-com");
-const packageStatus = "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED";
+const packageStatus = "MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING";
+const priorPackageStatus = "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED";
 const authResidual = "AUTH_NOT_CONFIGURED_RESIDUAL";
+const configuredUnauthenticated = "AUTH_CONFIGURED_UNAUTHENTICATED";
 const failures = [];
 
 const backendOnlyAuthVars = [
@@ -46,7 +48,9 @@ console.log(
     {
       status: "live-evidence-intake-verify-ok",
       admin_ui_state: packageStatus,
-      admin_auth_residual: authResidual,
+      prior_status_dashboard_state: priorPackageStatus,
+      historical_admin_auth_residual: authResidual,
+      current_admin_auth_state: configuredUnauthenticated,
       read_only_status_dashboard_transport: "accepted",
       authenticated_admin_acceptance: false,
       production_mutation: false,
@@ -114,9 +118,12 @@ function assertDocs() {
 
   for (const fragment of [
     packageStatus,
+    priorPackageStatus,
     authResidual,
+    configuredUnauthenticated,
     "codex_public_readonly_verified",
     "operator_reported",
+    "operator-reported",
     "read-only status-dashboard production",
     "not authenticated admin product acceptance",
     "/healthz",
@@ -126,6 +133,9 @@ function assertDocs() {
     "501",
     "not_configured",
     "configured=false",
+    "configured=true",
+    "authenticated=false",
+    "unauthenticated",
     "postgres=up",
     "redis=up",
     "tenantAuth=up",
@@ -134,6 +144,9 @@ function assertDocs() {
     "Passing backend-only auth variables only to the frontend/admin UI Compose command does not enable backend auth",
     "backend runtime admin-auth env placement",
     "backend API restart/recreate",
+    "frontend proxy recovered after canonical overlay helper recreate",
+    "npm run ops:compose:recreate",
+    "login smoke pending",
     "not continued changes to `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`",
     "Do not paste real admin credentials",
     "No production deployment",

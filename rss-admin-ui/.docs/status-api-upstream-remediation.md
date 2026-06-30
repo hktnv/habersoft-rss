@@ -1,12 +1,12 @@
 # Status API Production Networking Remediation
 
-Status: `MS-024C_PRODUCTION_OVERLAY_CANONICALIZATION_READY_OPERATOR_RETEST_REQUIRED`.
+Status: `MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING`.
 
-MS-023C is a repository-level remediation package for an operator-reported live install blocker. MS-023D records that the live status-api blocker is now resolved for the read-only status-dashboard transport. MS-024B adds graduated guardrails after the operator-reported latest recreate showed a restart-loop and generic auth-smoke failure. MS-024C canonicalizes the backend-network overlay/helper path after the operator proved that plain `deploy/production/compose.yaml` can fail for service-DNS upstreams such as `main-service-api`. Codex did not mutate the live server, capture rollback baseline, read secrets, publish an image, create a Git tag, create a GitHub Release, or create a PR.
+MS-023C is a repository-level remediation package for an operator-reported live install blocker. MS-023D records that the live status-api blocker is now resolved for the read-only status-dashboard transport. MS-024B adds graduated guardrails after the operator-reported latest recreate showed a restart-loop and generic auth-smoke failure. MS-024C canonicalizes the backend-network overlay/helper path after the operator proved that plain `deploy/production/compose.yaml` can fail for service-DNS upstreams such as `main-service-api`. MS-024E records the post-backend-recreate edge symptom: backend loopback auth was configured, but the frontend retained stale upstream/network references until `npm run ops:compose:recreate`. Codex did not mutate the live server, capture rollback baseline, read secrets, publish an image, create a Git tag, create a GitHub Release, or create a PR.
 
-The bounded live status is now `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`. Evidence source is `operator_reported` plus `codex_public_readonly_verified`. Authenticated admin-shell production acceptance remains pending because `/admin-auth/session` returns `501 not_configured`, classified as `AUTH_NOT_CONFIGURED_RESIDUAL`.
+The bounded live status is now `MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING`. Evidence source is `operator_reported` plus `codex_public_readonly_verified` for MS-023D status transport, plus MS-024E operator-reported configured unauthenticated auth evidence. Authenticated admin-shell production acceptance remains pending because only `AUTH_CONFIGURED_UNAUTHENTICATED` has been reported, not `AUTHENTICATED_ADMIN_ACCEPTED`.
 
-MS-024B does not claim the latest live recreate is healthy. It is no live acceptance claimed until the operator retests. The authenticated admin shell remains pending.
+MS-024B did not claim the then-latest live recreate was healthy. MS-024E records the later operator retest as configured unauthenticated after frontend helper recreate. The authenticated admin shell remains pending.
 
 ## MS-023D Accepted Result
 
@@ -17,7 +17,25 @@ The operator reported and Codex verified using public read-only GET requests wit
 - `https://rss-panel.habersoft.com/status-api/health/ready -> 200, status=ready, postgres=up, redis=up, tenantAuth=up`;
 - `https://rss-panel.habersoft.com/admin-auth/session -> 501, configured=false, authenticated=false, status=not_configured`.
 
-The status-api production networking blocker is closed for the read-only dashboard transport. The admin-auth result is a separate backend auth activation residual. Because `/healthz` and `/status-api/health/*` pass, do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` for the auth residual. Verify backend runtime admin-auth env placement and backend API restart/recreate under the operator rollback plan.
+The status-api production networking blocker is closed for the read-only dashboard transport. The historical admin-auth result was a separate backend auth activation residual. Because `/healthz` and `/status-api/health/*` pass, do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` for auth states. MS-024E records backend auth as configured unauthenticated after backend env activation and frontend helper recreate.
+
+## MS-024E Post-Backend-Recreate Guardrail
+
+Operator-reported MS-024E sequence:
+
+- backend diagnostics and loopback checks proved admin auth was configured;
+- frontend edge `/status-api/health/ready` initially returned `502`, and `/admin-auth/session` returned `auth_unavailable`;
+- root cause was stale frontend upstream/network state after backend `--force-recreate`;
+- frontend proxy recovered after canonical overlay helper recreate when the operator ran `cd /opt/habersoft-rss/rss-admin-ui && npm run ops:compose:recreate`;
+- the helper used the backend-network overlay and recovered status/auth proxy routes;
+- post-fix auth smoke returned `AUTH_CONFIGURED_UNAUTHENTICATED` with empty `diagnostic_classes`.
+
+After any backend API/image/network/admin-auth env recreate, run the frontend helper before status/auth edge evidence:
+
+```bash
+cd /opt/habersoft-rss/rss-admin-ui
+npm run ops:compose:recreate
+```
 
 ## Operator-Reported Symptom
 
@@ -74,7 +92,7 @@ Use the helper path as the recommended production path. It auto-includes the bac
 cd /opt/habersoft-rss/rss-admin-ui
 npm run production:diagnose:redacted
 npm run ops:compose:config
-npm run ops:compose:up -- --force-recreate rss-admin-ui
+npm run ops:compose:recreate
 npm run ops:compose:ps
 npm run ops:compose:logs -- rss-admin-ui
 ```

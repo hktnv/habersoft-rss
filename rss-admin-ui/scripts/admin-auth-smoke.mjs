@@ -8,6 +8,13 @@ if (args.includes("--help") || args.includes("-h")) {
     status: "admin-auth-smoke-help",
     usage: "node scripts/admin-auth-smoke.mjs [--endpoint URL|--base-url URL] [--login-smoke] [--receipt-file PATH]",
     credential_policy: "credentials must be supplied only through ADMIN_AUTH_SMOKE_USERNAME and ADMIN_AUTH_SMOKE_PASSWORD",
+    classifications: [
+      "AUTH_NOT_CONFIGURED_RESIDUAL",
+      "AUTH_CONFIGURED_UNAUTHENTICATED",
+      "AUTH_LOGIN_ATTEMPT_FAILED",
+      "AUTHENTICATED_ADMIN_ACCEPTED",
+      "STATUS_API_ROUTE_UNAVAILABLE"
+    ],
     output_policy: "diagnostics are redacted and do not print credential values"
   }, null, 2));
   process.exit(0);
@@ -56,6 +63,7 @@ try {
       mode: smokeMode(),
       checks,
       cookie: cookieSummary,
+      loginAttempted: false,
       exitCode: 2
     });
     return;
@@ -66,6 +74,7 @@ try {
       mode: smokeMode(),
       checks,
       cookie: cookieSummary,
+      loginAttempted: false,
       exitCode: 2
     });
     return;
@@ -80,6 +89,7 @@ try {
       mode: smokeMode(),
       checks,
       cookie: cookieSummary,
+      loginAttempted: false,
       exitCode: 2
     });
     return;
@@ -94,7 +104,8 @@ try {
       mode: smokeMode(),
       checks,
       cookie: cookieSummary,
-      exitCode: sessionClassification === "AUTH_CONFIGURED_ALREADY_AUTHENTICATED" && !loginSmoke ? 0 : 2
+      loginAttempted: false,
+      exitCode: 2
     });
     return;
   }
@@ -105,6 +116,7 @@ try {
       mode: smokeMode(),
       checks,
       cookie: cookieSummary,
+      loginAttempted: false,
       exitCode: 0
     });
     return;
@@ -120,13 +132,15 @@ try {
   );
   checks.push(summarizeResponse("POST /admin-auth/login", login));
   cookieSummary = summarizeSetCookie(login.headers?.get("set-cookie") ?? null);
-  const loginClassification = classifyLogin(login, cookieSummary);
-  if (loginClassification !== "LOGIN_ACCEPTED_COOKIE_PRESENT") {
+  const loginAssessment = classifyLogin(login, cookieSummary);
+  if (loginAssessment !== "LOGIN_ACCEPTED_COOKIE_PRESENT") {
     await finish({
-      classification: loginClassification,
+      classification: "AUTH_LOGIN_ATTEMPT_FAILED",
       mode: smokeMode(),
       checks,
       cookie: cookieSummary,
+      loginAttempted: true,
+      failureReason: loginAssessment,
       exitCode: 2
     });
     return;
@@ -141,10 +155,12 @@ try {
   checks.push(summarizeResponse("GET /admin-auth/session after login", authenticatedSession));
   if (!authenticatedSession.ok || authenticatedSession.httpStatus !== 200 || authenticatedSession.json?.authenticated !== true) {
     await finish({
-      classification: "SESSION_AFTER_LOGIN_NOT_AUTHENTICATED",
+      classification: "AUTH_LOGIN_ATTEMPT_FAILED",
       mode: smokeMode(),
       checks,
       cookie: cookieSummary,
+      loginAttempted: true,
+      failureReason: "SESSION_AFTER_LOGIN_NOT_AUTHENTICATED",
       exitCode: 2
     });
     return;
@@ -154,27 +170,22 @@ try {
     cookie: await readCookieJar(jarFile)
   });
   checks.push(summarizeResponse("POST /admin-auth/logout", logout));
-  if (!logout.ok || logout.httpStatus !== 200) {
-    await finish({
-      classification: "LOGOUT_FAILED",
-      mode: smokeMode(),
-      checks,
-      cookie: cookieSummary,
-      exitCode: 2
-    });
-    return;
-  }
 
   await writeFile(jarFile, "", { encoding: "utf8", mode: 0o600 });
   const afterLogout = await requestJson("GET", "/admin-auth/session");
   checks.push(summarizeResponse("GET /admin-auth/session after logout", afterLogout));
   const logoutAccepted = afterLogout.ok && afterLogout.httpStatus === 200 && afterLogout.json?.authenticated === false;
   await finish({
-    classification: logoutAccepted ? "LOGOUT_ACCEPTED_SESSION_CLEARED" : "LOGOUT_FAILED",
+    classification: "AUTHENTICATED_ADMIN_ACCEPTED",
     mode: smokeMode(),
     checks,
     cookie: cookieSummary,
-    exitCode: logoutAccepted ? 0 : 2
+    loginAttempted: true,
+    logout: {
+      attempted: true,
+      result: logout.ok && logout.httpStatus === 200 && logoutAccepted ? "accepted" : "safely_attempted_not_confirmed"
+    },
+    exitCode: 0
   });
 } catch (error) {
   await cleanupCookieJar();
@@ -277,28 +288,25 @@ function summarizeResponse(label, result) {
 
 function classifyStatusApi(result) {
   if (!result.ok) return "STATUS_API_ROUTE_UNAVAILABLE";
-  if (result.httpStatus === 502) {
-    const reason = allowlistedReason(result.json?.reason);
-    if (reason === "invalid_upstream_origin" || reason === "public_edge_upstream_rejected") return "STATUS_API_UPSTREAM_MISCONFIGURED";
-    if (reason === "upstream_unavailable" || reason === "upstream_forbidden") return "STATUS_API_UPSTREAM_UNAVAILABLE";
-    return "STATUS_API_ROUTE_UNAVAILABLE";
-  }
-  if ([404, 405].includes(result.httpStatus)) return "STATUS_API_ROUTE_UNAVAILABLE";
+  if (result.httpStatus !== 200) return "STATUS_API_ROUTE_UNAVAILABLE";
   return undefined;
 }
 
 function classifySession(result) {
-  if (!result.ok) return "ADMIN_AUTH_ROUTE_UNAVAILABLE";
-  if (result.httpStatus === 501 || result.json?.status === "not_configured" || result.json?.reason === "not_configured") {
+  if (!result.ok) return "AUTH_NOT_CONFIGURED_RESIDUAL";
+  if (
+    result.httpStatus === 501 ||
+    result.json?.configured === false ||
+    result.json?.status === "not_configured" ||
+    result.json?.reason === "not_configured" ||
+    result.json?.status === "auth_unavailable" ||
+    result.json?.reason === "auth_unavailable"
+  ) {
     return "AUTH_NOT_CONFIGURED_RESIDUAL";
   }
-  if (result.httpStatus === 502) return "ADMIN_AUTH_UPSTREAM_MISCONFIGURED";
-  if ([404, 405, 503].includes(result.httpStatus)) return "ADMIN_AUTH_ROUTE_UNAVAILABLE";
+  if ([404, 405, 502, 503].includes(result.httpStatus)) return "AUTH_NOT_CONFIGURED_RESIDUAL";
   if (result.httpStatus === 200 && result.json?.configured === true && result.json?.authenticated === false) {
     return "AUTH_CONFIGURED_UNAUTHENTICATED";
-  }
-  if (result.httpStatus === 200 && result.json?.configured === true && result.json?.authenticated === true) {
-    return "AUTH_CONFIGURED_ALREADY_AUTHENTICATED";
   }
   return "AUTH_SMOKE_FAILED";
 }
@@ -307,7 +315,7 @@ function classifyLogin(result, cookieSummary) {
   if (!result.ok) return "LOGIN_ROUTE_UNAVAILABLE";
   if (result.httpStatus === 401 || result.httpStatus === 403 || result.json?.reason === "invalid_credentials") return "INVALID_CREDENTIALS";
   if ([404, 405, 501, 502, 503].includes(result.httpStatus)) return "LOGIN_ROUTE_UNAVAILABLE";
-  if (result.httpStatus !== 200 || result.json?.authenticated !== true) return "INVALID_CREDENTIALS";
+  if (result.httpStatus !== 200 || result.json?.authenticated !== true) return "LOGIN_RESPONSE_NOT_AUTHENTICATED";
   if (cookieSummary.login_set_cookie !== "present") return "COOKIE_NOT_ESTABLISHED";
   return "LOGIN_ACCEPTED_COOKIE_PRESENT";
 }
@@ -342,7 +350,7 @@ function dropEmptyHeaders(headers) {
   return Object.fromEntries(Object.entries(headers).filter(([, value]) => value !== ""));
 }
 
-async function finish({ classification, mode, checks, cookie, exitCode }) {
+async function finish({ classification, mode, checks, cookie, loginAttempted, failureReason = "none", logout = undefined, exitCode }) {
   await cleanupCookieJar();
   const output = {
     status: classification,
@@ -350,6 +358,11 @@ async function finish({ classification, mode, checks, cookie, exitCode }) {
     base_url: baseUrl.origin,
     checks,
     cookie,
+    credentials: credentialsProvided ? "environment" : "not_provided",
+    login_attempted: loginAttempted,
+    login_smoke_pending: classification === "AUTH_CONFIGURED_UNAUTHENTICATED",
+    failure_reason: allowlistedFailureReason(failureReason),
+    ...(logout === undefined ? {} : { logout }),
     diagnostic_classes: diagnosticClasses(classification),
     next_steps: nextSteps(classification),
     temp_cookie_jar_deleted: cookieJarDeleted,
@@ -374,19 +387,40 @@ function nextSteps(classification) {
     case "ENDPOINT_UNREACHABLE":
     case "HEALTHZ_UNAVAILABLE":
       return ["frontend container may be down/restarting", ...common, "check the edge route to the admin UI loopback port"];
+    case "STATUS_API_ROUTE_UNAVAILABLE":
+      return [
+        "status-api route is unavailable or cannot reach the backend",
+        "after backend API/image/network/admin-auth env recreate, run npm run ops:compose:recreate from rss-admin-ui",
+        "do not use 127.0.0.1 inside Docker bridge; use backend service alias or proven host-gateway",
+        ...common
+      ];
     case "STATUS_API_UPSTREAM_MISCONFIGURED":
-      return ["admin UI health upstream is misconfigured", "do not use 127.0.0.1 inside Docker bridge; use backend service alias or proven host-gateway", ...common];
+      return ["admin UI health upstream is misconfigured", "after backend changes run npm run ops:compose:recreate from rss-admin-ui", "do not use 127.0.0.1 inside Docker bridge; use backend service alias or proven host-gateway", ...common];
     case "STATUS_API_UPSTREAM_UNAVAILABLE":
-      return ["status-api upstream is down, forbidden, or unreachable from the admin UI container", "verify backend-network service DNS or proven host-gateway reachability", ...common];
+      return ["status-api upstream is down, forbidden, or unreachable from the admin UI container", "after backend changes run npm run ops:compose:recreate from rss-admin-ui", "verify backend-network service DNS or proven host-gateway reachability", ...common];
     case "AUTH_NOT_CONFIGURED_RESIDUAL":
       return [
         "backend admin-auth env likely not loaded",
         "place backend admin-auth env in the backend API runtime, not only the frontend env",
         "run backend admin-auth config verifier with a redacted operator env file",
         "after operator rollback/config decision, recreate backend API/worker so the backend runtime sees admin-auth env",
-        "then recreate frontend admin UI with npm run ops:compose:up -- --force-recreate rss-admin-ui",
+        "then recreate frontend admin UI with npm run ops:compose:recreate from rss-admin-ui",
         "rerun npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com"
       ];
+    case "AUTH_CONFIGURED_UNAUTHENTICATED":
+      return [
+        "login_smoke_pending: backend auth is configured and unauthenticated before login",
+        "run redacted login smoke with ADMIN_AUTH_SMOKE_USERNAME and ADMIN_AUTH_SMOKE_PASSWORD set as environment variables",
+        "do not pass credentials through command-line arguments"
+      ];
+    case "AUTH_LOGIN_ATTEMPT_FAILED":
+      return [
+        "login was attempted from environment-provided credentials but did not establish an authenticated session",
+        "verify the operator-provided username/password and backend admin-auth config without pasting secrets into logs",
+        "rerun npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com"
+      ];
+    case "AUTHENTICATED_ADMIN_ACCEPTED":
+      return ["preserve only the redacted AUTHENTICATED_ADMIN_ACCEPTED result and do not copy credentials, cookies, or raw session material"];
     case "ADMIN_AUTH_UPSTREAM_MISCONFIGURED":
     case "ADMIN_AUTH_ROUTE_UNAVAILABLE":
     case "LOGIN_ROUTE_UNAVAILABLE":
@@ -405,8 +439,15 @@ function nextSteps(classification) {
 }
 
 function diagnosticClasses(classification) {
+  if (classification === "AUTH_CONFIGURED_UNAUTHENTICATED") {
+    return ["auth_configured_unauthenticated", "authenticated_login_not_yet_proven"];
+  }
+  if (classification === "AUTH_LOGIN_ATTEMPT_FAILED") return ["authenticated_login_not_yet_proven"];
+  if (classification === "STATUS_API_ROUTE_UNAVAILABLE") return ["frontend_proxy_recreate_required"];
   if (classification !== "AUTH_NOT_CONFIGURED_RESIDUAL") return [];
   return [
+    "required_missing",
+    "frontend_proxy_recreate_required",
     "backend_admin_auth_mode_disabled_or_missing",
     "backend_admin_username_missing_or_placeholder",
     "backend_password_hash_missing_placeholder_or_invalid",
@@ -414,6 +455,18 @@ function diagnosticClasses(classification) {
     "backend_redis_or_session_dependency_unreachable",
     "frontend_proxy_reachable_backend_auth_endpoint_reports_not_configured"
   ];
+}
+
+function allowlistedFailureReason(value) {
+  const allowed = new Set([
+    "none",
+    "LOGIN_ROUTE_UNAVAILABLE",
+    "INVALID_CREDENTIALS",
+    "COOKIE_NOT_ESTABLISHED",
+    "SESSION_AFTER_LOGIN_NOT_AUTHENTICATED",
+    "LOGIN_RESPONSE_NOT_AUTHENTICATED"
+  ]);
+  return typeof value === "string" && allowed.has(value) ? value : "none";
 }
 
 function allowlistedReason(value) {

@@ -26,6 +26,21 @@ C: drive and Windows Desktop are forbidden for new Codex-created project tempora
 
 Historical C:/Desktop references in older reports, denylist tests, or legacy notes remain historical only. They are not authorization to create new project artifacts there.
 
+## Operator-Facing Artifact References
+
+Temporary `E:\Codex\rss-habersoft-com\workplace\ms-...\` paths are allowed in internal command transcripts while a task is running, but they are not durable operator artifact references after successful cleanup.
+
+If a file is expected to be used after cleanup, place it in one of these durable locations:
+
+```text
+tracked repository path
+E:\Codex\rss-habersoft-com\operator-state\...
+```
+
+Generated docs and final reports should reference Git SHA, branch names, repository-relative paths, durable operator-state receipt paths, production endpoint URLs, or production commands. They must not depend on deleted task roots as operator-facing artifacts.
+
+Cleanup proof may state `task root removed: true` and `workplace root preserved: true` without repeating the exact deleted task path unless a cleanup blocker requires the path for audit.
+
 ## Safe Cleanup Algorithm
 
 Successful autonomous Git delivery requires cleanup of only the current task-specific E: directory after final remote refs are recorded. Cleanup must never target C:, Desktop, legacy tombstone paths, old audit worktrees, user data, production evidence, dumps, `.md`, `operator-state`, or anything outside the current task root.
