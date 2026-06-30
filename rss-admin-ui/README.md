@@ -2,7 +2,7 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED`.
+Status: `MS-024C_PRODUCTION_OVERLAY_CANONICALIZATION_READY_OPERATOR_RETEST_REQUIRED`.
 
 ## Scope
 
@@ -53,7 +53,8 @@ Included through MS-024A:
 - backend admin-auth env placement template,
 - `AUTH_NOT_CONFIGURED_RESIDUAL` remediation verifier,
 - MS-024A auth enablement package verifier.
-- MS-024B operator ergonomics verifier.
+- MS-024B operator ergonomics verifier,
+- MS-024C production overlay canonicalization verifier.
 
 Not included:
 
@@ -91,6 +92,10 @@ npm run verify:live-evidence-intake
 npm run verify:admin-auth-not-configured-remediation
 npm run verify:ms024a-auth-enablement-package
 npm run verify:operator-ergonomics
+npm run verify:production-overlay-canonicalization
+npm run ops:compose:config
+npm run ops:compose:up -- --force-recreate rss-admin-ui
+npm run ops:compose:recreate
 npm run ops:compose:ps
 npm run ops:compose:logs -- rss-admin-ui
 npm run production:diagnose:redacted
@@ -113,6 +118,8 @@ ADMIN_UI_ENVIRONMENT_NAME
 `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is also server-only and optional. When absent, `/admin-auth/**` stays in static fail-closed mode. When present, only `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` are proxied upstream. When enabled in production it must use the same internal backend origin class as health, not the public backend edge.
 
 MS-024B changes the operator runtime posture to graduated guardrails. Missing, malformed, public-edge, or Docker bridge loopback upstreams no longer crash-loop the static frontend container. `/healthz` and the static app start, while exact proxy routes return bounded JSON with reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` remains available for strict synthetic checks.
+
+MS-024C adds the production overlay canonicalization layer. In production Docker bridge mode, backend service DNS such as `main-service-api` resolves only when the admin UI container is attached to the backend Docker network. For that topology, `compose.backend-network.yaml` is part of the canonical runtime invocation, not an optional remembered overlay. Use `npm run ops:compose:config` and `npm run ops:compose:up -- --force-recreate rss-admin-ui`; the helper includes the overlay when `ADMIN_UI_BACKEND_DOCKER_NETWORK` is configured and blocks before recreate with redacted guidance if a service-DNS upstream is configured without that network input. Plain `deploy/production/compose.yaml` remains useful for static inspection and degraded/no-upstream defaults, but it is not the complete production runtime path for `http://main-service-api:3000`.
 
 Backend admin-auth variables such as `ADMIN_UI_AUTH_MODE`, `ADMIN_UI_ADMIN_USERNAME`, `ADMIN_UI_ADMIN_PASSWORD_HASH`, `ADMIN_UI_SESSION_SECRET`, and `ADMIN_UI_SESSION_COOKIE_SECURE` are consumed by the backend API runtime, not by the frontend/admin UI runtime. Passing those backend-only variables only to the frontend/admin UI Compose command does not enable backend auth.
 
@@ -143,6 +150,8 @@ MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVAT
 
 MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED responds to the operator-reported `admin-auth-smoke: fetch failed`, frontend Compose interpolation failure, and restart-loop blocker. Frontend production Compose uses `habersoft-rss-frontend:latest` only as an operator-managed mutable local image default so `docker compose -f deploy/production/compose.yaml ps` and `config` can inspect without an env file. Release candidates should still use an immutable image identity in operator env. The authenticated admin shell remains pending; no live acceptance claimed for the latest operator recreate until redacted retest evidence is returned.
 
+MS-024C responds to the operator-reported plain-compose recreate failure where Nginx crashed on `host not found in upstream "main-service-api"`. Runtime proxy generation now resolves backend service DNS at request time, so a missing backend-network attachment should not hide `/healthz`, `env-config.js`, or static assets. Exact `/status-api/*` and `/admin-auth/*` routes still fail closed with bounded JSON when upstream DNS or reachability is wrong.
+
 ## Docker
 
 Local image build:
@@ -164,8 +173,12 @@ Operator inspection helpers:
 ```bash
 npm run ops:compose:ps
 npm run ops:compose:logs -- rss-admin-ui
+npm run ops:compose:config
+npm run ops:compose:up -- --force-recreate rss-admin-ui
+npm run ops:compose:recreate
 npm run production:diagnose:redacted
 npm run verify:operator-ergonomics
+npm run verify:production-overlay-canonicalization
 ```
 
 MS-024A local rehearsal commands:

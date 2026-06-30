@@ -3,6 +3,16 @@ import os from "node:os";
 import path from "node:path";
 
 const args = process.argv.slice(2);
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(JSON.stringify({
+    status: "admin-auth-smoke-help",
+    usage: "node scripts/admin-auth-smoke.mjs [--endpoint URL|--base-url URL] [--login-smoke] [--receipt-file PATH]",
+    credential_policy: "credentials must be supplied only through ADMIN_AUTH_SMOKE_USERNAME and ADMIN_AUTH_SMOKE_PASSWORD",
+    output_policy: "diagnostics are redacted and do not print credential values"
+  }, null, 2));
+  process.exit(0);
+}
+
 const receiptFile = optionValue("--receipt-file") ?? process.env.ADMIN_AUTH_SMOKE_RECEIPT_FILE;
 const endpoint = optionValue("--endpoint") ?? optionValue("--base-url") ?? process.env.ADMIN_AUTH_SMOKE_BASE_URL ?? "http://127.0.0.1:8081";
 const baseUrl = normalizeBaseUrl(endpoint);
@@ -340,6 +350,7 @@ async function finish({ classification, mode, checks, cookie, exitCode }) {
     base_url: baseUrl.origin,
     checks,
     cookie,
+    diagnostic_classes: diagnosticClasses(classification),
     next_steps: nextSteps(classification),
     temp_cookie_jar_deleted: cookieJarDeleted,
     output: "redacted"
@@ -368,7 +379,14 @@ function nextSteps(classification) {
     case "STATUS_API_UPSTREAM_UNAVAILABLE":
       return ["status-api upstream is down, forbidden, or unreachable from the admin UI container", "verify backend-network service DNS or proven host-gateway reachability", ...common];
     case "AUTH_NOT_CONFIGURED_RESIDUAL":
-      return ["backend admin-auth env likely not loaded", "place backend admin-auth env in the backend API runtime, not only the frontend env", "run backend admin-auth config verifier with a redacted operator env file"];
+      return [
+        "backend admin-auth env likely not loaded",
+        "place backend admin-auth env in the backend API runtime, not only the frontend env",
+        "run backend admin-auth config verifier with a redacted operator env file",
+        "after operator rollback/config decision, recreate backend API/worker so the backend runtime sees admin-auth env",
+        "then recreate frontend admin UI with npm run ops:compose:up -- --force-recreate rss-admin-ui",
+        "rerun npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com"
+      ];
     case "ADMIN_AUTH_UPSTREAM_MISCONFIGURED":
     case "ADMIN_AUTH_ROUTE_UNAVAILABLE":
     case "LOGIN_ROUTE_UNAVAILABLE":
@@ -386,6 +404,18 @@ function nextSteps(classification) {
   }
 }
 
+function diagnosticClasses(classification) {
+  if (classification !== "AUTH_NOT_CONFIGURED_RESIDUAL") return [];
+  return [
+    "backend_admin_auth_mode_disabled_or_missing",
+    "backend_admin_username_missing_or_placeholder",
+    "backend_password_hash_missing_placeholder_or_invalid",
+    "backend_session_secret_missing_or_weak",
+    "backend_redis_or_session_dependency_unreachable",
+    "frontend_proxy_reachable_backend_auth_endpoint_reports_not_configured"
+  ];
+}
+
 function allowlistedReason(value) {
   const allowed = new Set([
     "authenticated",
@@ -397,6 +427,7 @@ function allowlistedReason(value) {
     "not_configured",
     "public_edge_upstream_rejected",
     "ready",
+    "upstream_dns_unresolved",
     "upstream_forbidden",
     "upstream_unavailable",
     "unauthenticated",

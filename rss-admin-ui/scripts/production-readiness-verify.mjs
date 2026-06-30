@@ -77,6 +77,10 @@ run("npm", ["run", "test:status-api-production-networking"], {
   env: { RSS_ADMIN_UI_TEST_IMAGE: image },
   timeoutMs: 600000
 });
+run("npm", ["run", "verify:production-overlay-canonicalization"], {
+  env: { RSS_ADMIN_UI_TEST_IMAGE: image },
+  timeoutMs: 600000
+});
 run("npm", ["run", "test:auth-session-sentinel"], {
   env: { RSS_ADMIN_UI_TEST_IMAGE: image },
   timeoutMs: 600000
@@ -102,6 +106,7 @@ console.log(
         "browser config excludes upstream origin and API base",
         "exact health route proxy security passes",
         "status-api production networking harness passes",
+        "production overlay canonicalization harness passes",
         "same-origin admin session sentinel fails closed",
         "same-origin admin auth proxy exact-route security passes",
         "root compose config passes with synthetic values",

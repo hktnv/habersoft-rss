@@ -140,6 +140,24 @@ async function assertServerClassification(label, serverOptions, env, expectedSta
     assert(result.json?.status === expectedStatus, `${label} classification mismatch`);
     assert(result.json?.temp_cookie_jar_deleted === true, `${label} temp cookie jar was not deleted`);
     assert(Array.isArray(result.json?.next_steps) && result.json.next_steps.length > 0, `${label} next steps missing`);
+    if (expectedStatus === "AUTH_NOT_CONFIGURED_RESIDUAL") {
+      const diagnosticClasses = result.json?.diagnostic_classes ?? [];
+      for (const diagnosticClass of [
+        "backend_admin_auth_mode_disabled_or_missing",
+        "backend_admin_username_missing_or_placeholder",
+        "backend_password_hash_missing_placeholder_or_invalid",
+        "backend_session_secret_missing_or_weak",
+        "backend_redis_or_session_dependency_unreachable",
+        "frontend_proxy_reachable_backend_auth_endpoint_reports_not_configured"
+      ]) {
+        assert(diagnosticClasses.includes(diagnosticClass), `${label} missing residual diagnostic class ${diagnosticClass}`);
+      }
+      assert(
+        result.json.next_steps.some((step) => /backend API\/worker/iu.test(step)) &&
+          result.json.next_steps.some((step) => /ops:compose:up/iu.test(step)),
+        `${label} residual next steps must point to backend activation then canonical frontend helper`
+      );
+    }
     assertSanitized(result.combinedOutput);
   } finally {
     await server.close();

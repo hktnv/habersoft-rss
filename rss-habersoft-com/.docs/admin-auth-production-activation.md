@@ -71,3 +71,11 @@ A future production activation milestone must be operator-authorized and must pr
 MS-023A-R2 local RC validation is not production evidence. It uses synthetic credentials, loopback/Docker networking, local PostgreSQL, local Redis, local JWKS fixture, same-origin frontend paths, and no production deployment. Rollback baseline and server-side deployment/configuration remain operator-managed.
 
 MS-024A adds redacted frontend smoke support for later operator evidence: `npm run auth-smoke:redacted` classifies session state by default, and optional `--login-smoke` uses `ADMIN_AUTH_SMOKE_USERNAME` and `ADMIN_AUTH_SMOKE_PASSWORD` environment variables only. Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw production response bodies into Git/chat/docs. No CORS broadening is part of the MS-024A package.
+
+MS-024C keeps that claim boundary and improves residual diagnostics only. If the frontend status proxy is reachable but `/admin-auth/session` returns `501 not_configured`, treat `AUTH_NOT_CONFIGURED_RESIDUAL` as backend runtime activation work. The redacted diagnostic classes are: backend admin-auth mode disabled or missing, backend admin username missing or placeholder, backend password hash missing/placeholder/invalid, backend session secret missing/weak, backend Redis/session dependency unreachable, or frontend proxy reachable while the backend auth endpoint reports not configured. The verifier command remains:
+
+```bash
+npm run admin-auth:verify-config -- --env-file <operator-backend-auth-env> --require-enabled
+```
+
+Backend API/worker recreate after env placement is an operator rollback/config decision and is not performed by Codex.

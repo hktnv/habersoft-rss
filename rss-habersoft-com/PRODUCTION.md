@@ -32,6 +32,14 @@ npm run production:diagnose:redacted
 
 If those files are absent, `npm run production:diagnose:redacted` reports the missing operator-owned files without reading or printing secret values. This is part of the MS-024B graduated guardrails policy: reduce harmless inspection friction without weakening backend secrets.
 
+MS-024C admin-auth residual boundary: when the frontend panel health and status routes are reachable but `/admin-auth/session` still returns `501 not_configured`, the next action is backend runtime admin-auth env activation, not frontend overlay trial-and-error. Validate the operator-owned backend env file with:
+
+```bash
+npm run admin-auth:verify-config -- --env-file <operator-backend-auth-env> --require-enabled
+```
+
+The redacted residual classes are backend auth mode disabled/missing, backend admin username missing/placeholder, backend password hash missing/placeholder/invalid, backend session secret missing/weak, Redis/session dependency unreachable, or frontend proxy reachable while the backend auth endpoint reports not configured. Backend API/worker recreate after env placement remains operator-managed under the rollback/config decision.
+
 Production source delivery icin tek gecerli akış:
 
 ```text

@@ -55,6 +55,7 @@ function assertRequiredFiles() {
     "scripts/operator-managed-production-package-verify.mjs",
     "scripts/production-upstream-contract-verify.mjs",
     "scripts/operator-ergonomics-verify.mjs",
+    "scripts/production-overlay-canonicalization-harness.mjs",
     "scripts/live-evidence-intake-verify.mjs",
     "scripts/status-api-upstream-remediation-harness.mjs",
     "scripts/production-mode-rc.mjs",
@@ -82,6 +83,9 @@ function assertPackageScript() {
   }
   if (pkg.scripts?.["verify:operator-ergonomics"] !== "node scripts/operator-ergonomics-verify.mjs") {
     failures.push("package.json missing verify:operator-ergonomics");
+  }
+  if (pkg.scripts?.["verify:production-overlay-canonicalization"] !== "node scripts/production-overlay-canonicalization-harness.mjs") {
+    failures.push("package.json missing verify:production-overlay-canonicalization");
   }
   if (pkg.scripts?.["test:status-api-upstream-remediation"] !== "node scripts/status-api-upstream-remediation-harness.mjs") {
     failures.push("package.json missing test:status-api-upstream-remediation");
@@ -144,6 +148,9 @@ function assertDocs() {
     "compose.backend-network.yaml",
     "test:status-api-production-networking",
     "verify:operator-ergonomics",
+    "verify:production-overlay-canonicalization",
+    "ops:compose:config",
+    "ops:compose:up",
     "graduated guardrails",
     "invalid_upstream_origin",
     "public_edge_upstream_rejected",

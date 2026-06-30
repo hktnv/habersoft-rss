@@ -1,8 +1,8 @@
 # Status API Production Networking Remediation
 
-Status: `MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED`.
+Status: `MS-024C_PRODUCTION_OVERLAY_CANONICALIZATION_READY_OPERATOR_RETEST_REQUIRED`.
 
-MS-023C is a repository-level remediation package for an operator-reported live install blocker. MS-023D records that the live status-api blocker is now resolved for the read-only status-dashboard transport. MS-024B adds graduated guardrails after the operator-reported latest recreate showed a restart-loop and generic auth-smoke failure. Codex did not mutate the live server, capture rollback baseline, read secrets, publish an image, create a Git tag, create a GitHub Release, or create a PR.
+MS-023C is a repository-level remediation package for an operator-reported live install blocker. MS-023D records that the live status-api blocker is now resolved for the read-only status-dashboard transport. MS-024B adds graduated guardrails after the operator-reported latest recreate showed a restart-loop and generic auth-smoke failure. MS-024C canonicalizes the backend-network overlay/helper path after the operator proved that plain `deploy/production/compose.yaml` can fail for service-DNS upstreams such as `main-service-api`. Codex did not mutate the live server, capture rollback baseline, read secrets, publish an image, create a Git tag, create a GitHub Release, or create a PR.
 
 The bounded live status is now `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`. Evidence source is `operator_reported` plus `codex_public_readonly_verified`. Authenticated admin-shell production acceptance remains pending because `/admin-auth/session` returns `501 not_configured`, classified as `AUTH_NOT_CONFIGURED_RESIDUAL`.
 
@@ -51,6 +51,8 @@ ADMIN_UI_AUTH_UPSTREAM_ORIGIN=https://rss-panel.habersoft.com
 
 Under MS-024B these anti-patterns no longer crash-loop the static admin UI. `/healthz` stays available, and the exact `/status-api/health/live`, `/status-api/health/ready`, and configured `/admin-auth/*` proxy routes return bounded JSON such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. This is graduated guardrails, not no guardrails.
 
+MS-024C adds one more distinction: backend service DNS without the backend-network overlay is an operator invocation error. The helper path blocks before recreate when `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` or `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` uses service DNS but `ADMIN_UI_BACKEND_DOCKER_NETWORK` is missing. Runtime proxy generation also resolves upstreams at request time, so if this mistake reaches a container, `/healthz`, `env-config.js`, and static assets remain available and exact proxy routes fail closed with redacted JSON `502` instead of hiding all diagnostics behind an Nginx startup crash.
+
 ## Supported Upstream Modes
 
 | Mode | Use when | Upstream |
@@ -66,7 +68,18 @@ The backend production Compose service name in this repository is `main-service-
 
 ## Preferred Backend-Network Application
 
-Use the base production compose file plus the backend-network overlay:
+Use the helper path as the recommended production path. It auto-includes the backend-network overlay when the backend Docker network is configured and blocks before a known bad recreate if service DNS is configured without the network:
+
+```bash
+cd /opt/habersoft-rss/rss-admin-ui
+npm run production:diagnose:redacted
+npm run ops:compose:config
+npm run ops:compose:up -- --force-recreate rss-admin-ui
+npm run ops:compose:ps
+npm run ops:compose:logs -- rss-admin-ui
+```
+
+The direct advanced equivalent uses the base production compose file plus the backend-network overlay:
 
 ```bash
 ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>
@@ -76,7 +89,7 @@ ADMIN_UI_AUTH_UPSTREAM_ORIGIN=http://<backend_service_or_alias>:3000
 docker compose --env-file <operator-env> \
   -f rss-admin-ui/deploy/production/compose.yaml \
   -f rss-admin-ui/deploy/production/compose.backend-network.yaml \
-  up -d --force-recreate
+  up -d --no-build --pull never --force-recreate rss-admin-ui
 ```
 
 For the repository's backend production Compose service, the expected service alias is:
@@ -87,6 +100,8 @@ ADMIN_UI_AUTH_UPSTREAM_ORIGIN=http://main-service-api:3000
 ```
 
 The operator must supply the actual Docker network name as `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`.
+
+Plain `deploy/production/compose.yaml` remains useful for static inspection, config rendering with safe defaults, and degraded/no-upstream local scenarios. It is not the complete production runtime invocation for service-DNS upstreams like `http://main-service-api:3000`.
 
 ## Host-Gateway Alternative
 
@@ -131,6 +146,8 @@ Evidence must be redacted and bounded. Record only status codes, safe cache/prox
 
 If `/admin-auth/session` returns HTTP `501` with `status=not_configured`, classify it as `AUTH_NOT_CONFIGURED_RESIDUAL`. That residual points to backend admin-auth runtime env placement, or to an unactivated frontend auth proxy, not to the already accepted health upstream.
 
+For MS-024C, the redacted residual diagnostic classes are: backend admin-auth mode disabled or missing, backend admin username missing or placeholder, backend password hash missing/placeholder/invalid, backend session secret missing/weak, backend Redis/session dependency unreachable, or frontend proxy reachable while the backend auth endpoint reports not configured. The next action is the backend admin-auth config verifier with an operator-owned backend env file, then operator-authorized backend API/worker recreate, then frontend helper recreate, then `auth-smoke:redacted`.
+
 ## Local Validation
 
 Run from `rss-admin-ui`:
@@ -138,6 +155,7 @@ Run from `rss-admin-ui`:
 ```bash
 npm run verify:production-upstream-contract
 npm run verify:operator-ergonomics
+npm run verify:production-overlay-canonicalization
 npm run test:status-api-production-networking
 npm run test:status-api-upstream-remediation
 ```

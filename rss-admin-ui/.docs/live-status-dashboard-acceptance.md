@@ -65,6 +65,8 @@ Those variables must be visible to the backend API runtime that serves `/admin-a
 
 Because the MS-023D public status-api checks pass, do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` to remediate `AUTH_NOT_CONFIGURED_RESIDUAL`.
 
+MS-024C clarifies the remaining production retest flow: use the frontend helper path with the backend-network overlay for service-DNS upstreams, then treat persistent `AUTH_NOT_CONFIGURED_RESIDUAL` as backend runtime admin-auth env activation. The redacted residual classes are backend auth mode disabled/missing, backend admin username missing/placeholder, backend password hash missing/placeholder/invalid, backend session secret missing/weak, backend Redis/session dependency unreachable, or frontend proxy reachable while the backend auth endpoint reports not configured.
+
 Next operator action for `/admin-auth/session -> 501 not_configured`:
 
 1. Verify `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` remains an internal backend origin reachable from the admin UI runtime.

@@ -63,6 +63,7 @@ function assertPackageScripts() {
     "verify:live-evidence-intake": "node scripts/live-evidence-intake-verify.mjs",
     "verify:admin-auth-not-configured-remediation": "node scripts/live-evidence-intake-verify.mjs",
     "verify:operator-ergonomics": "node scripts/operator-ergonomics-verify.mjs",
+    "verify:production-overlay-canonicalization": "node scripts/production-overlay-canonicalization-harness.mjs",
     "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs",
     "test:status-api-production-networking": "node scripts/status-api-upstream-remediation-harness.mjs"
   };
@@ -147,6 +148,11 @@ function assertEntrypointContract() {
   const runtimeTemplate = `${nginx}\n${entrypoint}`;
   for (const fragment of [
     "__ADMIN_UI_STATUS_ROUTES__",
+    "resolver 127.0.0.11 valid=10s ipv6=off;",
+    "set \\$status_api_upstream_origin",
+    "proxy_pass \\$status_api_upstream_origin/health/live?",
+    "proxy_pass \\$status_api_upstream_origin/health/ready?",
+    "set \\$admin_auth_upstream_origin",
     "proxy_intercept_errors on;",
     "error_page 401 403 = @status_api_upstream_forbidden;",
     "error_page 500 502 504 = @status_api_upstream_unavailable;",

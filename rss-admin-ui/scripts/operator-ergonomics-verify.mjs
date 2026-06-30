@@ -40,6 +40,10 @@ function assertPackageScripts() {
   const backendScripts = JSON.parse(readBackend("package.json")).scripts ?? {};
   const requiredFrontend = {
     "verify:operator-ergonomics": "node scripts/operator-ergonomics-verify.mjs",
+    "verify:production-overlay-canonicalization": "node scripts/production-overlay-canonicalization-harness.mjs",
+    "ops:compose:config": "node scripts/production-compose-ops.mjs config",
+    "ops:compose:up": "node scripts/production-compose-ops.mjs up",
+    "ops:compose:recreate": "node scripts/production-compose-ops.mjs recreate",
     "ops:compose:ps": "node scripts/production-compose-ops.mjs ps",
     "ops:compose:logs": "node scripts/production-compose-ops.mjs logs",
     "production:diagnose:redacted": "node scripts/production-compose-ops.mjs diagnose"
@@ -58,6 +62,7 @@ function assertPackageScripts() {
   for (const file of [
     "scripts/production-compose-ops.mjs",
     "scripts/operator-ergonomics-verify.mjs",
+    "scripts/production-overlay-canonicalization-harness.mjs",
     "../rss-habersoft-com/scripts/production-compose-ops.mjs"
   ]) {
     requireFile(path.resolve(frontendRoot, file), file);
@@ -90,13 +95,14 @@ function assertGraduatedRuntimeGuardrails() {
     "upstream_unavailable",
     "upstream_forbidden",
     "ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION",
+    "status_api_upstream_origin",
     "proxy_hide_header Access-Control-Allow-Origin;",
     "proxy_pass_request_headers off;",
     "proxy_pass_request_body off;"
   ]) {
     if (!entrypoint.includes(fragment)) failures.push(`entrypoint missing graduated guardrail fragment: ${fragment}`);
   }
-  for (const fragment of ["__ADMIN_UI_STATUS_ROUTES__", "__ADMIN_UI_AUTH_ROUTES__", "location = /healthz"]) {
+  for (const fragment of ["__ADMIN_UI_STATUS_ROUTES__", "__ADMIN_UI_AUTH_ROUTES__", "location = /healthz", "resolver 127.0.0.11"]) {
     if (!nginx.includes(fragment)) failures.push(`nginx template missing generated route fragment: ${fragment}`);
   }
 }
@@ -153,8 +159,11 @@ function assertDocs() {
     "graduated guardrails",
     "npm run ops:compose:ps",
     "npm run ops:compose:logs",
+    "npm run ops:compose:config",
+    "npm run ops:compose:up",
     "npm run production:diagnose:redacted",
     "npm run verify:operator-ergonomics",
+    "npm run verify:production-overlay-canonicalization",
     "habersoft-rss-frontend:latest",
     "operator-managed mutable local image default",
     "invalid_upstream_origin",

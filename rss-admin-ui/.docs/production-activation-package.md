@@ -1,8 +1,8 @@
 # Production Activation Package
 
-Status: `MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED`.
+Status: `MS-024C_PRODUCTION_OVERLAY_CANONICALIZATION_READY_OPERATOR_RETEST_REQUIRED`.
 
-MS-024A preserves MS-023D read-only production status-dashboard transport acceptance for the already operator-managed live admin UI surface and prepares the remaining authenticated-admin activation package. MS-024B adds operator ergonomics, classified auth-smoke diagnostics, and graduated guardrails for the operator-reported latest recreate blocker. This package preserves the no-secret, operator-managed production package, validates local production-mode release candidates with synthetic/local fixtures only, keeps proxy CORS-header hardening, improves backend admin-auth env-file validation, and adds redacted auth smoke tooling. It does not mutate production, capture rollback baseline, perform production deployment, publish a registry image, create a Git tag, create a GitHub Release, or create a PR.
+MS-024A preserves MS-023D read-only production status-dashboard transport acceptance for the already operator-managed live admin UI surface and prepares the remaining authenticated-admin activation package. MS-024B adds operator ergonomics, classified auth-smoke diagnostics, and graduated guardrails for the operator-reported latest recreate blocker. MS-024C canonicalizes the backend-network overlay/helper path for production service-DNS upstreams, prevents missing service DNS from hiding `/healthz`, and sharpens backend-auth residual diagnostics. This package preserves the no-secret, operator-managed production package, validates local production-mode release candidates with synthetic/local fixtures only, keeps proxy CORS-header hardening, improves backend admin-auth env-file validation, and adds redacted auth smoke tooling. It does not mutate production, capture rollback baseline, perform production deployment, publish a registry image, create a Git tag, create a GitHub Release, or create a PR.
 
 Rollback baseline is operator-managed. Server deployment/configuration is operator-managed. Codex-owned repository work is limited to templates, same-origin proxy configuration, local validation, and runbook guidance.
 
@@ -34,7 +34,7 @@ Backend admin auth variables are documented in `../rss-habersoft-com/.docs/admin
 
 Both upstream origins must be internal backend origins reachable from inside the admin UI proxy runtime. They must not be public Habersoft edge origins such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. In the production Docker bridge package they must also not use container-local or unspecified hosts such as `127.0.0.1`, `localhost`, `::1`, `[::1]`, or `0.0.0.0`. MS-024B uses graduated guardrails: the static frontend and `/healthz` start, while exact proxy routes return `502` with `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully. MS-024A/MS-024B do not broaden CORS; the status and auth proxy routes hide upstream `Access-Control-*` response headers from the browser.
 
-The secretless frontend operator template is `deploy/production/operator-managed.env.template`. The backend-only auth checklist is `deploy/production/backend-admin-auth.env.template`. Keep filled copies operator-owned and untracked. Preferred backend-network mode uses `deploy/production/compose.backend-network.yaml`, `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`, and service DNS such as `http://main-service-api:3000`. Host-gateway mode with `http://host.docker.internal:3200` is allowed only after an operator-run container-side reachability check proves that the backend port is reachable through host-gateway.
+The secretless frontend operator template is `deploy/production/operator-managed.env.template`. The backend-only auth checklist is `deploy/production/backend-admin-auth.env.template`. Keep filled copies operator-owned and untracked. Preferred backend-network mode uses `deploy/production/compose.backend-network.yaml`, `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`, and service DNS such as `http://main-service-api:3000`. For production Docker bridge service DNS, that overlay is canonical runtime input. Plain `deploy/production/compose.yaml` is inspection/degraded-only for that topology. Host-gateway mode with `http://host.docker.internal:3200` is allowed only after an operator-run container-side reachability check proves that the backend port is reachable through host-gateway.
 
 ## MS-023D Live Acceptance
 
@@ -60,7 +60,7 @@ npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
 ADMIN_AUTH_SMOKE_USERNAME=<operator-owned-username> ADMIN_AUTH_SMOKE_PASSWORD=<operator-owned-password> npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
 ```
 
-Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw response bodies into Git/chat/docs. The default mode performs session/status classification. Supplying both `ADMIN_AUTH_SMOKE_USERNAME` and `ADMIN_AUTH_SMOKE_PASSWORD` through environment variables enables login/session/logout smoke, stores the temporary cookie jar under `ADMIN_AUTH_SMOKE_TMP_DIR` when provided, deletes that jar, classifies failures such as endpoint down, `/healthz` unavailable, `AUTH_NOT_CONFIGURED_RESIDUAL`, auth upstream misconfiguration, invalid credentials, missing cookie, post-login session failure, and logout failure, and emits redacted next steps.
+Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw response bodies into Git/chat/docs. The default mode performs session/status classification. Supplying both `ADMIN_AUTH_SMOKE_USERNAME` and `ADMIN_AUTH_SMOKE_PASSWORD` through environment variables enables login/session/logout smoke, stores the temporary cookie jar under `ADMIN_AUTH_SMOKE_TMP_DIR` when provided, deletes that jar, classifies failures such as endpoint down, `/healthz` unavailable, `AUTH_NOT_CONFIGURED_RESIDUAL`, auth upstream misconfiguration, invalid credentials, missing cookie, post-login session failure, and logout failure, and emits redacted next steps. Under MS-024C, `AUTH_NOT_CONFIGURED_RESIDUAL` includes diagnostic classes for backend auth mode disabled/missing, backend username missing/placeholder, backend password hash missing/placeholder/invalid, backend session secret missing/weak, backend Redis/session dependency unavailable, and frontend proxy reachable while the backend auth endpoint reports not configured.
 
 ## Local RC Acceptance
 
@@ -76,6 +76,7 @@ npm run verify:live-evidence-intake
 npm run verify:admin-auth-not-configured-remediation
 npm run verify:ms024a-auth-enablement-package
 npm run test:admin-auth-smoke-redacted
+npm run verify:production-overlay-canonicalization
 npm run test:status-api-production-networking
 npm run test:status-api-upstream-remediation
 ```
@@ -101,25 +102,28 @@ The RC harness builds local backend/frontend images, starts PostgreSQL, Redis, t
 
 This local RC does not prove production activation. It is a release-candidate acceptance package for a later operator-authorized, operator-managed deployment.
 
-## MS-024B Operator Ergonomics Retest
+## MS-024C Production Overlay Retest
 
-MS-024B operator retest checklist lives in `../PRODUCTION.md`. The short flow is:
+MS-024C operator retest checklist lives in `../PRODUCTION.md`. The short flow is:
 
 ```bash
 git pull --ff-only origin main
 cd /opt/habersoft-rss/rss-admin-ui
-docker compose -f deploy/production/compose.yaml ps
+npm run production:diagnose:redacted
+npm run ops:compose:config
+npm run ops:compose:up -- --force-recreate rss-admin-ui
 npm run ops:compose:ps
 npm run ops:compose:logs -- rss-admin-ui
-npm run production:diagnose:redacted
 curl -fsS http://127.0.0.1:8081/healthz
+curl -i https://rss-panel.habersoft.com/status-api/health/live
 curl -i https://rss-panel.habersoft.com/status-api/health/ready
 curl -i https://rss-panel.habersoft.com/admin-auth/session
 ADMIN_AUTH_SMOKE_USERNAME="<redacted>" ADMIN_AUTH_SMOKE_PASSWORD="<redacted>" npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
 npm run verify:operator-ergonomics
+npm run verify:production-overlay-canonicalization
 ```
 
-This is no live acceptance claimed for the operator's latest recreate. The authenticated admin shell remains pending until redacted smoke evidence passes. If the frontend container may be down/restarting, run the ps/logs helpers first. If `invalid_upstream_origin` or `public_edge_upstream_rejected` appears, do not use 127.0.0.1 inside Docker bridge; use backend service alias via `compose.backend-network.yaml` or proven host-gateway reachability.
+This is no authenticated admin-shell acceptance claim. If the helper reports `backend_network_required_for_service_dns`, set `ADMIN_UI_BACKEND_DOCKER_NETWORK` in the operator-owned frontend env and rerun config before recreate. If `invalid_upstream_origin` or `public_edge_upstream_rejected` appears, do not use 127.0.0.1 or public edge hosts inside Docker bridge; use backend service alias via `compose.backend-network.yaml` or proven host-gateway reachability.
 
 ## Browser Safety Boundary
 

@@ -68,7 +68,7 @@ All items in this section are `OPERATOR_AUTHORIZED_FUTURE_TASK_ONLY`; none are a
 - `rss-panel.habersoft.com` remains planned, not active.
 - The edge should terminate TLS and route only to the admin UI loopback frontend port.
 - The admin UI container should bind only to loopback on the host-facing side.
-- The frontend container should reach the backend only through server-only `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`, expected to be backend-network service DNS or proven host-gateway selected by the operator. Public edge origins such as `https://rss.habersoft.com` and Docker bridge loopback/container-local origins such as `127.0.0.1`, `localhost`, `::1`, `[::1]`, or `0.0.0.0` are not valid admin UI proxy upstreams.
+- The frontend container should reach the backend only through server-only `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`, expected to be backend-network service DNS or proven host-gateway selected by the operator. Production Docker bridge service DNS requires `compose.backend-network.yaml` through the canonical helper path (`npm run ops:compose:config`, then `npm run ops:compose:up -- --force-recreate rss-admin-ui`) with `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`. Public edge origins such as `https://rss.habersoft.com` and Docker bridge loopback/container-local origins such as `127.0.0.1`, `localhost`, `::1`, `[::1]`, or `0.0.0.0` are not valid admin UI proxy upstreams.
 - The backend must not be changed to add CORS for the health dashboard.
 - TLS certificates, HTTP-to-HTTPS redirect, HSTS, access logging, error logging, firewall rules, and operational monitoring are future operator tasks.
 - Future activation must use an immutable image identity or an explicitly recorded local build identity policy accepted by the operator.

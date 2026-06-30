@@ -174,6 +174,7 @@ status_proxy_routes() {
       return 405;
     }
 
+    set \$status_api_upstream_origin "${origin}";
     add_header Cache-Control "no-store, no-cache, must-revalidate" always;
     set \$args "";
     proxy_method GET;
@@ -197,7 +198,7 @@ status_proxy_routes() {
     proxy_send_timeout 2s;
     proxy_read_timeout 4s;
     proxy_buffering off;
-    proxy_pass ${origin}/health/live?;
+    proxy_pass \$status_api_upstream_origin/health/live?;
   }
 
   location = /status-api/health/ready {
@@ -205,6 +206,7 @@ status_proxy_routes() {
       return 405;
     }
 
+    set \$status_api_upstream_origin "${origin}";
     add_header Cache-Control "no-store, no-cache, must-revalidate" always;
     set \$args "";
     proxy_method GET;
@@ -228,7 +230,7 @@ status_proxy_routes() {
     proxy_send_timeout 2s;
     proxy_read_timeout 4s;
     proxy_buffering off;
-    proxy_pass ${origin}/health/ready?;
+    proxy_pass \$status_api_upstream_origin/health/ready?;
   }
 
   location @status_api_upstream_forbidden {
@@ -352,6 +354,7 @@ auth_proxy_routes() {
       return 405 '{"configured":false,"authenticated":false,"reason":"method_not_allowed"}';
     }
 
+    set \$admin_auth_upstream_origin "${origin}";
     set \$args "";
     proxy_method GET;
     proxy_pass_request_headers off;
@@ -374,7 +377,7 @@ auth_proxy_routes() {
     proxy_send_timeout 2s;
     proxy_read_timeout 4s;
     proxy_buffering off;
-    proxy_pass ${origin}/admin-auth/session?;
+    proxy_pass \$admin_auth_upstream_origin/admin-auth/session?;
   }
 
   location = /admin-auth/login {
@@ -385,6 +388,7 @@ auth_proxy_routes() {
       return 405 '{"configured":false,"authenticated":false,"reason":"method_not_allowed"}';
     }
 
+    set \$admin_auth_upstream_origin "${origin}";
     set \$args "";
     proxy_pass_request_headers off;
     proxy_set_header Host \$proxy_host;
@@ -405,7 +409,7 @@ auth_proxy_routes() {
     proxy_send_timeout 2s;
     proxy_read_timeout 4s;
     proxy_buffering off;
-    proxy_pass ${origin}/admin-auth/login?;
+    proxy_pass \$admin_auth_upstream_origin/admin-auth/login?;
   }
 
   location = /admin-auth/logout {
@@ -415,6 +419,7 @@ auth_proxy_routes() {
       return 405 '{"configured":false,"authenticated":false,"reason":"method_not_allowed"}';
     }
 
+    set \$admin_auth_upstream_origin "${origin}";
     set \$args "";
     proxy_pass_request_headers off;
     proxy_set_header Host \$proxy_host;
@@ -435,7 +440,7 @@ auth_proxy_routes() {
     proxy_send_timeout 2s;
     proxy_read_timeout 4s;
     proxy_buffering off;
-    proxy_pass ${origin}/admin-auth/logout?;
+    proxy_pass \$admin_auth_upstream_origin/admin-auth/logout?;
   }
 
   location = /admin-auth {

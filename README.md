@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard transport with same-origin admin auth/session routes | `MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard transport with same-origin admin auth/session routes | `MS-024C_PRODUCTION_OVERLAY_CANONICALIZATION_READY_OPERATOR_RETEST_REQUIRED` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -70,6 +70,9 @@ npm run verify:live-evidence-intake
 npm run verify:admin-auth-not-configured-remediation
 npm run verify:ms024a-auth-enablement-package
 npm run verify:operator-ergonomics
+npm run verify:production-overlay-canonicalization
+npm run ops:compose:config
+npm run ops:compose:up -- --force-recreate rss-admin-ui
 npm run auth-smoke:redacted
 npm run ops:compose:ps
 npm run ops:compose:logs -- rss-admin-ui
@@ -99,6 +102,8 @@ MS-023D records operator-reported plus Codex public read-only verification that 
 MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR lands the admin-auth enablement package while preserving the MS-023D accepted status-dashboard result. MS-023D status-dashboard production transport remains accepted. MS-024A hardens same-origin `/status-api/*` and `/admin-auth/*` proxy routes so upstream CORS response headers are not surfaced to the browser, adds redacted operator auth smoke tooling, and improves backend admin-auth env-file validation with synthetic/local checks only. `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream; placing values only in `rss-admin-ui/.env.production` is insufficient because backend admin-auth values must be visible to the backend API service runtime. The remaining operator action is backend runtime admin-auth env placement and backend API restart/recreate under the operator rollback plan.
 
 MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED applies graduated guardrails after the operator-reported `admin-auth-smoke: fetch failed`, missing `RSS_ADMIN_UI_IMAGE` Compose interpolation blocker, and frontend restart-loop blocker. Frontend production Compose now supports harmless inspection without an env file by using `habersoft-rss-frontend:latest` as an operator-managed mutable local image default, while release verification still recommends an immutable image identity. Missing, invalid, public-edge, or container-loopback upstream origins no longer crash-loop the static admin UI; `/healthz` stays available and exact proxy routes return bounded JSON such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Authenticated admin shell remains pending, and no live acceptance claimed for the operator's latest recreate until redacted operator retest evidence is returned.
+
+MS-024C_PRODUCTION_OVERLAY_CANONICALIZATION_READY_OPERATOR_RETEST_REQUIRED canonicalizes the frontend production runtime path after the operator found that plain `deploy/production/compose.yaml` can restart-loop when `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000` is used without the backend Docker network overlay. For production Docker bridge service-DNS upstreams, the canonical admin UI invocation is the helper path, which uses `deploy/production/compose.yaml` plus `deploy/production/compose.backend-network.yaml` when `ADMIN_UI_BACKEND_DOCKER_NETWORK` is configured and blocks before recreate if a service-DNS upstream is configured without that network input. Plain frontend Compose remains valid for static inspection, config rendering with degraded/no-upstream defaults, and local/advanced scenarios that do not require backend service DNS. Runtime proxy generation now uses request-time upstream resolution so missing service DNS does not hide `/healthz`; exact proxy routes fail closed with bounded JSON. `AUTH_NOT_CONFIGURED_RESIDUAL` now points operators to backend runtime admin-auth env activation and redacted backend verifier steps, not frontend overlay trial-and-error.
 
 ## Root Docker Workflow
 
