@@ -1,10 +1,51 @@
 # Admin Operations Dashboard
 
-Status: `MS-025A_R1_ADMIN_API_PROXY_TEMPLATE_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED`.
+Status: `MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
 
-MS-025A adds the first authenticated read-only admin operations slice after the MS-024F operator-reported status/auth shell acceptance. It is a local repository package with synthetic acceptance coverage. It does not claim live production acceptance for the new operations dashboard; production deployment and retest remain operator-managed.
+MS-025A adds the first authenticated read-only admin operations slice after the MS-024F operator-reported status/auth shell acceptance. It is a local repository package with synthetic acceptance coverage. MS-025A-R2 records later operator-reported production acceptance for the read-only operations dashboard.
 
-MS-025A-R1 remediates the operator-reported follow-up where production sign-in and `/admin-auth/session` worked, but `/admin-api/operations/summary` returned HTTP 200 `text/html` with the SPA fallback. The reported container showed generated auth/status routes in `/tmp/nginx/conf.d/default.conf`, but no `/admin-api` route because the running frontend image's active template lacked the admin-api insertion marker. Codex did not contact production to re-check this evidence; the remediation is repository-local and synthetic.
+MS-025A-R1 remediates the operator-reported follow-up where production sign-in and `/admin-auth/session` worked, but `/admin-api/operations/summary` returned HTTP 200 `text/html` with the SPA fallback. The reported container showed generated auth/status routes in `/tmp/nginx/conf.d/default.conf`, but no `/admin-api` route because the running frontend image's active template lacked the admin-api insertion marker. Codex did not contact production to re-check that R1 evidence; the remediation is repository-local and synthetic.
+
+## MS-025A-R2 Operator-Reported Production Acceptance
+
+Bounded status: `MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
+
+Source type: `operator_reported`.
+
+Operator-reported evidence intake:
+
+- `GET /healthz -> 200 OK`;
+- `GET /status-api/health/live -> JSON 200`;
+- `GET /status-api/health/ready -> JSON 200`;
+- unauthenticated `GET /admin-api/operations/summary -> JSON 401`;
+- unknown `GET /admin-api/foo -> JSON 404`;
+- after browser sign-in, the Operations Overview screen displayed successfully;
+- after browser sign-in, JSON aggregate summary data loaded successfully;
+- `auth-smoke:redacted -> AUTH_CONFIGURED_UNAUTHENTICATED`;
+- logout returned the UI to locked / unauthenticated state.
+
+Meaning:
+
+- read-only operations dashboard production acceptance is closed;
+- admin-api production proxy/template remediation is accepted;
+- status dashboard production scope remains accepted;
+- authenticated admin shell production scope remains accepted;
+- No current MS-025A/R1 operator retest residual remains.
+
+Auth-smoke classification:
+
+- `AUTH_CONFIGURED_UNAUTHENTICATED` without credentials is an observation/sanity result, not a pending blocker;
+- Full authenticated acceptance for MS-025A-R2 is operator-reported from browser login plus operations dashboard load;
+- `AUTH_LOGIN_ATTEMPT_FAILED` remains a blocker when credentials are supplied and login fails;
+- future regression tests may still use credentialed smoke, but credentials must be environment variables only and must not be logged.
+
+Claim boundary:
+
+- Codex did not independently perform a credentialed production login;
+- No production deployment was performed by Codex;
+- no production mutation, real secret access, registry publication, Git tag, GitHub Release, or PR is claimed;
+- future business/admin write features are not accepted;
+- write/business features remain separate bounded milestones.
 
 ## Browser Contract
 
@@ -112,9 +153,9 @@ The harnesses prove disabled auth returns no metrics, unauthenticated sessions r
 
 `npm run test:admin-api-proxy-template` specifically proves the generated effective config contains `location = /admin-api/operations/summary`, contains JSON rejection routes for `/admin-api` and `/admin-api/*`, contains no unresolved template markers, orders all admin-api routes before `location /`, and returns JSON for unauthenticated, authenticated, wrong-method, unknown-path, no-auth-upstream, and unreachable-upstream cases. No tested `/admin-api/*` path may return `text/html` or the SPA root element.
 
-## Operator Retest Boundary
+## Regression Runbook After R2
 
-After an operator deploys a SHA containing MS-025A, retest with durable repository paths only:
+No current MS-025A/R1 operator retest residual remains. Future regression checks may still use durable repository paths only:
 
 ```bash
 cd /opt/habersoft-rss
@@ -138,6 +179,6 @@ docker compose \
   exec rss-admin-ui sh -lc 'nginx -T 2>&1 | grep -F "/admin-api/operations/summary" && ! grep -F "__ADMIN_UI_" /tmp/nginx/conf.d/default.conf'
 ```
 
-Then verify login, `GET /admin-auth/session`, unauthenticated and authenticated `GET /admin-api/operations/summary`, Operations Overview rendering, logout, and locked-after-logout behavior. Unauthenticated `/admin-api/operations/summary` should return bounded JSON `401` or the documented unauthenticated JSON class, not HTML. Report only redacted status classes and aggregate route status. Do not paste real admin credentials, cookies, session IDs, password hashes, session secrets, Redis keys, raw logs, raw response bodies, or production secret values into Git, docs, chat, or receipts.
+Then use `npm run auth-smoke:redacted`, browser login/logout sanity, and `/admin-api/operations/summary` unauthenticated and authenticated checks as practical regression checks. Unauthenticated `/admin-api/operations/summary` should return bounded JSON `401` or the documented unauthenticated JSON class, not HTML. `/admin-api/*` must remain JSON fail-closed before the SPA fallback, and unknown `/admin-api/*` must not fall back to `index.html`. Report only redacted status classes and aggregate route status. Do not paste real admin credentials, cookies, session IDs, password hashes, session secrets, Redis keys, raw logs, raw response bodies, or production secret values into Git, docs, chat, or receipts.
 
-MS-024F status/auth shell acceptance remains operator-reported. MS-025A production activation remains pending operator deploy/retest until a later evidence intake explicitly records it.
+MS-024F status/auth shell acceptance remains operator-reported. MS-025A-R2 records the read-only operations dashboard production acceptance by operator report. Durable operator-state receipt outside Git records the R2 closeout; temporary workplace paths are not durable operator artifacts.

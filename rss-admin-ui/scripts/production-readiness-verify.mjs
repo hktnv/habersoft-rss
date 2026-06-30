@@ -40,6 +40,7 @@ assertNoProductionContactEnv(productionComposeEnv);
 
 run("npm", ["run", "build"]);
 run("npm", ["run", "verify:admin-operations-dashboard"]);
+run("npm", ["run", "verify:production-operations-acceptance"]);
 run("docker", ["build", "-t", image, "."], { printOutput: false, timeoutMs: 600000 });
 console.log(JSON.stringify({ status: "docker-build-ok", image }));
 
@@ -110,6 +111,7 @@ console.log(
       checks: [
         "production build exists",
         "admin operations dashboard source/docs/proxy verifier passes",
+        "MS-025A-R2 operator-reported operations acceptance verifier passes",
         "docker image builds",
         "frontend production compose config passes without env file for inspection defaults",
         "missing upstream origin starts static runtime and fails closed at route level",

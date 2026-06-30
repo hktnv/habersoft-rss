@@ -1,8 +1,8 @@
 # Admin Operations Summary API
 
-Status: `MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+Status: `MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
 
-MS-025A adds the backend route for the first authenticated read-only admin operations dashboard slice. It is protected by the existing admin-auth session and is locally validated with synthetic credentials. It does not claim live production acceptance; operator deployment and retest remain separate.
+MS-025A adds the backend route for the first authenticated read-only admin operations dashboard slice. It is protected by the existing admin-auth session and is locally validated with synthetic credentials. MS-025A-R2 records later operator-reported production acceptance for this read-only route through the admin UI and proxy.
 
 ## Route
 
@@ -98,9 +98,39 @@ npm run test:production-mode-rc
 
 Run the frontend commands from `rss-admin-ui`.
 
-## Operator Retest Boundary
+## MS-025A-R2 Operator-Reported Production Acceptance
 
-After a SHA containing MS-025A is deployed by an operator, retest with durable production repository paths:
+Bounded status: `MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
+
+Source type: `operator_reported`.
+
+Operator-reported evidence:
+
+- `GET /healthz -> 200 OK`;
+- `GET /status-api/health/live -> JSON 200`;
+- `GET /status-api/health/ready -> JSON 200`;
+- unauthenticated `GET /admin-api/operations/summary -> JSON 401`;
+- unknown `GET /admin-api/foo -> JSON 404`;
+- after browser sign-in, the Operations Overview screen displayed successfully;
+- after browser sign-in, JSON aggregate summary data loaded successfully;
+- `auth-smoke:redacted -> AUTH_CONFIGURED_UNAUTHENTICATED`;
+- logout returned the UI to locked / unauthenticated state.
+
+Meaning:
+
+- read-only operations dashboard production acceptance is closed;
+- admin-api production proxy/template remediation is accepted;
+- status dashboard production scope remains accepted;
+- authenticated admin shell production scope remains accepted;
+- No current MS-025A/R1 operator retest residual remains.
+
+`AUTH_CONFIGURED_UNAUTHENTICATED` without credentials is an observation/sanity result, not a pending blocker. Full authenticated acceptance for MS-025A-R2 is operator-reported from browser login plus operations dashboard load. `AUTH_LOGIN_ATTEMPT_FAILED` remains a blocker when credentials are supplied and login fails. Future regression tests may still use credentialed smoke, but credentials must be environment variables only and must not be logged.
+
+Codex did not independently perform a credentialed production login, did not mutate production, did not read real credentials, and did not accept write/business features. Write/business features remain separate bounded milestones.
+
+## Regression Runbook
+
+For future regression checks, use durable production repository paths:
 
 ```bash
 cd /opt/habersoft-rss
@@ -113,4 +143,4 @@ npm run ops:compose:recreate
 npm run auth-smoke:redacted
 ```
 
-Then verify login, `GET /admin-auth/session`, `GET /admin-api/operations/summary`, the Operations Overview UI, logout, and locked-after-logout behavior. Report only redacted status classes and aggregate route status. Do not paste real credentials, cookies, session IDs, password hashes, session secrets, Redis keys, raw logs, raw response bodies, or production secret values into Git, docs, chat, or receipts.
+Then use `npm run auth-smoke:redacted`, browser login/logout sanity, and `/admin-api/operations/summary` unauthenticated and authenticated checks as practical regression checks. Report only redacted status classes and aggregate route status. Do not paste real credentials, cookies, session IDs, password hashes, session secrets, Redis keys, raw logs, raw response bodies, or production secret values into Git, docs, chat, or receipts. Durable operator-state receipt outside Git records the closeout; temporary workplace paths are not durable operator artifacts.

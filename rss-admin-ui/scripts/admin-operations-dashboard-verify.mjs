@@ -7,6 +7,7 @@ const repoRoot = path.resolve(frontendRoot, "..");
 const backendRoot = path.join(repoRoot, "rss-habersoft-com");
 const status = "MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED";
 const r1Status = "MS-025A_R1_ADMIN_API_PROXY_TEMPLATE_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED";
+const r2Status = "MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED";
 const route = "/admin-api/operations/summary";
 const failures = [];
 
@@ -29,12 +30,13 @@ console.log(
       status: "admin-operations-dashboard-verify-ok",
       milestone: status,
       remediation_milestone: r1Status,
+      production_acceptance_milestone: r2Status,
       route,
       same_origin: true,
       read_only: true,
       production_contact: false,
       real_secret_use: false,
-      operator_deploy_retest_required: true
+      operator_retest_residual_closed_operator_reported: true
     },
     null,
     2
@@ -287,16 +289,18 @@ function assertDocsContract() {
   for (const fragment of [
     status,
     r1Status,
+    r2Status,
     "MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED",
     route,
     "same-origin",
     "Path=/",
     "historical `/admin-auth`",
     "aggregate-only",
-    "operator deploy/retest",
-    "production deployment",
-    "No production deployment",
-    "no live production acceptance",
+    "operator-reported",
+    "read-only operations dashboard production acceptance is closed",
+    "admin-api production proxy/template remediation is accepted",
+    "No production deployment was performed by Codex",
+    "Codex did not independently perform a credentialed production login",
     "Tenant bearer",
     "Agent key",
     "Authorization",
@@ -312,7 +316,7 @@ function assertDocsContract() {
     "npm run test:admin-api-proxy-template",
     "/tmp/nginx/conf.d/default.conf",
     "nginx -T",
-    "source pull alone is not sufficient",
+    "source pull alone",
     "SPA HTML",
     "0.1.0-ms-017"
   ]) {
@@ -320,10 +324,10 @@ function assertDocsContract() {
   }
 
   for (const forbidden of [
-    /\bMS-025A\b[^\n]{0,120}\b(?:production|live)\s+acceptance\s+(?:accepted|passed|complete)\b/iu,
+    /\bMS-025A(?!-R2)\b[^\n]{0,120}\b(?:production|live)\s+acceptance\s+(?:accepted|passed|complete)\b/iu,
     /\bCodex (?:logged in|performed a credentialed login|used real admin credentials)\b/iu,
     /\bfeed\/user\/tenant management\s+(?:is|has been)\s+accepted\b/iu,
-    /\bproduction deployment\s+(?:was|is)\s+performed\b/iu
+    /\bCodex (?:deployed|restarted|recreated|mutated)\s+production\b/iu
   ]) {
     if (forbidden.test(docs)) failures.push(`docs contain forbidden MS-025A claim: ${forbidden}`);
   }

@@ -191,18 +191,20 @@ function assertRootDocs() {
       !frontendProduction.includes("MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED") &&
       !frontendProduction.includes("MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING") &&
       !frontendProduction.includes("MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED") &&
-      !frontendProduction.includes("MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED")) ||
+      !frontendProduction.includes("MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED") &&
+      !frontendProduction.includes("MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED")) ||
     !frontendProduction.includes("/admin-auth/session") ||
     !frontendProduction.includes("/admin-auth/login") ||
     !frontendProduction.includes("AUTH_NOT_CONFIGURED_RESIDUAL") ||
     !frontendProduction.includes("AUTH_CONFIGURED_UNAUTHENTICATED") ||
     !frontendProduction.includes("MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED") ||
     !frontendProduction.includes("MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED") ||
+    !frontendProduction.includes("MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED") ||
     !frontendProduction.includes("/admin-api/operations/summary") ||
     !frontendProduction.includes("operator-reported") ||
     !frontendProduction.includes("future business/admin write features are not accepted")
   ) {
-    failures.push("frontend production guide must state MS-022A auth foundation, historical MS-023D/MS-024E auth states, MS-024F operator-reported auth-shell acceptance, and MS-025A operations dashboard boundary");
+    failures.push("frontend production guide must state MS-022A auth foundation, historical MS-023D/MS-024E auth states, MS-024F operator-reported auth-shell acceptance, MS-025A operations dashboard boundary, and MS-025A-R2 operator-reported operations acceptance");
   }
   if (/byte-identical mirror/iu.test(rootProduction) || /operator mirror PRODUCTION\.md SHA-256/iu.test(rootProduction)) {
     failures.push("root production guide still claims old mirror contract");
