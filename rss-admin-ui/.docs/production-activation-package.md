@@ -1,8 +1,8 @@
 # Production Activation Package
 
-Status: `MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+Status: `MS-025A_R1_ADMIN_API_PROXY_TEMPLATE_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED`.
 
-MS-024A preserves MS-023D read-only production status-dashboard transport acceptance for the already operator-managed live admin UI surface and prepares the remaining authenticated-admin activation package. MS-024B adds operator ergonomics, classified auth-smoke diagnostics, and graduated guardrails for the operator-reported latest recreate blocker. MS-024C canonicalizes the backend-network overlay/helper path for production service-DNS upstreams, prevents missing service DNS from hiding `/healthz`, and sharpens backend-auth residual diagnostics. MS-024E records operator-reported evidence that backend admin-auth is configured and the frontend edge returns `AUTH_CONFIGURED_UNAUTHENTICATED` after `npm run ops:compose:recreate`. MS-024F records the operator-reported production retest statement that authenticated admin shell production acceptance is closed for the current implemented status/auth shell scope. MS-025A adds the protected read-only operations dashboard package locally and requires operator deploy/retest before any live production acceptance claim for `/admin-api/operations/summary`. This package preserves the no-secret, operator-managed production package, validates local production-mode release candidates with synthetic/local fixtures only, keeps proxy CORS-header hardening, improves backend admin-auth env-file validation, and keeps redacted auth smoke tooling as a regression/sanity tool. It does not mutate production, capture rollback baseline, perform production deployment, perform Codex credentialed login, publish a registry image, create a Git tag, create a GitHub Release, or create a PR.
+MS-024A preserves MS-023D read-only production status-dashboard transport acceptance for the already operator-managed live admin UI surface and prepares the remaining authenticated-admin activation package. MS-024B adds operator ergonomics, classified auth-smoke diagnostics, and graduated guardrails for the operator-reported latest recreate blocker. MS-024C canonicalizes the backend-network overlay/helper path for production service-DNS upstreams, prevents missing service DNS from hiding `/healthz`, and sharpens backend-auth residual diagnostics. MS-024E records operator-reported evidence that backend admin-auth is configured and the frontend edge returns `AUTH_CONFIGURED_UNAUTHENTICATED` after `npm run ops:compose:recreate`. MS-024F records the operator-reported production retest statement that authenticated admin shell production acceptance is closed for the current implemented status/auth shell scope. MS-025A adds the protected read-only operations dashboard package locally and requires operator deploy/retest before any live production acceptance claim for `/admin-api/operations/summary`. MS-025A-R1 remediates the operator-reported production proxy-template blocker by requiring generated Nginx config proof for `/tmp/nginx/conf.d/default.conf`, `nginx -T`, the exact admin-api summary route, and JSON fail-closed `/admin-api` fallback routes. Source pull alone is not sufficient for Nginx template or entrypoint changes; the operator must rebuild or update the frontend image before `npm run ops:compose:recreate` and retest. This package preserves the no-secret, operator-managed production package, validates local production-mode release candidates with synthetic/local fixtures only, keeps proxy CORS-header hardening, improves backend admin-auth env-file validation, and keeps redacted auth smoke tooling as a regression/sanity tool. It does not mutate production, capture rollback baseline, perform production deployment, perform Codex credentialed login, publish a registry image, create a Git tag, create a GitHub Release, or create a PR.
 
 Rollback baseline is operator-managed. Server deployment/configuration is operator-managed. Codex-owned repository work is limited to templates, same-origin proxy configuration, local validation, and runbook guidance.
 
@@ -82,6 +82,14 @@ MS-025A operations dashboard package:
 - excluded: raw feed URLs, entry content, tenant identifiers, raw logs, raw upstream bodies, upstream origins, cookies, password hashes, session secrets, Agent keys, Tenant tokens, and write controls;
 - production boundary: operator deploy/retest is still required before any live production acceptance statement for the operations dashboard.
 
+MS-025A-R1 admin-api proxy template remediation:
+
+- bounded status: `MS-025A_R1_ADMIN_API_PROXY_TEMPLATE_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED`;
+- local proof: `npm run test:admin-api-proxy-template` builds/runs the frontend image, inspects `/tmp/nginx/conf.d/default.conf`, captures `nginx -T`, and asserts that `location = /admin-api/operations/summary` appears before the SPA fallback;
+- fail-closed proof: exact `/admin-api`, unknown `/admin-api/*`, unauthenticated summary, unreachable upstream, and static no-auth-upstream cases return JSON rather than SPA HTML;
+- startup guardrail: unresolved `__ADMIN_UI_*__` markers or a missing admin-api route fail container startup before Nginx serves traffic;
+- production boundary: operator image rebuild/update plus frontend recreate and live retest remain required before any production acceptance statement for the operations dashboard.
+
 ## MS-024A Redacted Auth Smoke
 
 The repository provides `npm run auth-smoke:redacted` for operator-managed evidence collection:
@@ -110,6 +118,7 @@ npm run verify:ms024a-auth-enablement-package
 npm run verify:admin-operations-dashboard
 npm run test:admin-auth-smoke-redacted
 npm run test:admin-operations-proxy
+npm run test:admin-api-proxy-template
 npm run verify:production-overlay-canonicalization
 npm run test:status-api-production-networking
 npm run test:status-api-upstream-remediation
@@ -131,6 +140,7 @@ The RC harness builds local backend/frontend images, starts PostgreSQL, Redis, t
 - live-evidence intake docs preserve historical `AUTH_NOT_CONFIGURED_RESIDUAL`, classify MS-024E `AUTH_CONFIGURED_UNAUTHENTICATED`, and record MS-024F authenticated shell acceptance as operator-reported;
 - frontend runtime and backend admin-auth env templates remain separated;
 - unknown auth/status paths and wrong methods reject safely;
+- generated admin-api proxy template config contains the exact summary route, contains no unresolved admin UI markers, and rejects admin-api fallthroughs as JSON instead of SPA HTML;
 - browser static assets and runtime config do not contain upstream origins, password, password hash, session secret, Agent key, Tenant bearer token, or browser auth persistence calls;
 - harness containers, networks, and volumes are removed after validation.
 
@@ -145,9 +155,11 @@ git pull --ff-only origin main
 cd /opt/habersoft-rss/rss-admin-ui
 npm run production:diagnose:redacted
 npm run ops:compose:config
+# Rebuild or update the configured frontend image before recreate when nginx.conf or docker-entrypoint.sh changed.
 npm run ops:compose:recreate
 npm run ops:compose:ps
 npm run ops:compose:logs -- rss-admin-ui
+docker compose exec rss-admin-ui sh -lc 'nginx -T 2>&1 | grep -F "/admin-api/operations/summary" && ! grep -F "__ADMIN_UI_" /tmp/nginx/conf.d/default.conf'
 curl -fsS http://127.0.0.1:8081/healthz
 curl -i https://rss-panel.habersoft.com/status-api/health/live
 curl -i https://rss-panel.habersoft.com/status-api/health/ready
@@ -174,6 +186,7 @@ A later production activation receipt must include redacted evidence for:
 - `AUTH_CONFIGURED_UNAUTHENTICATED` for `/admin-auth/session` before login, or `AUTH_NOT_CONFIGURED_RESIDUAL` if it regresses to `501 not_configured`;
 - login/session/logout smoke as redacted regression/sanity evidence;
 - `/status-api/health/live` and `/status-api/health/ready` through the panel path;
+- generated frontend Nginx config contains `/admin-api/operations/summary`, contains no unresolved `__ADMIN_UI_` markers, and does not fall through to SPA HTML for `/admin-api`;
 - protected shell locked, unlocked, and locked-after-logout behavior;
 - no Agent/Tenant credential exposure;
 - rollback image/env identity;
@@ -183,6 +196,6 @@ A later production activation receipt must include redacted evidence for:
 
 Before any server mutation, the operator must capture rollback baseline and current-state evidence according to the backend/frontend runbooks. MS-023A-R2 does not capture or infer that baseline.
 
-The operator applies future runtime/config changes by selecting a Git SHA/image identity, placing real backend admin-auth values in the backend runtime env, placing frontend runtime values in the admin UI runtime env, selecting backend-network service DNS or proven host-gateway for the admin UI proxy, keeping the admin UI bound to loopback, and configuring the external edge separately. After backend API/image/network/admin-auth env recreate, run `npm run ops:compose:recreate` from `rss-admin-ui` before auth evidence. These instructions are human/operator-managed and are not executed by Codex in MS-024E or MS-024F.
+The operator applies future runtime/config changes by selecting a Git SHA/image identity, rebuilding or updating the configured frontend image when Nginx templates or the entrypoint change, placing real backend admin-auth values in the backend runtime env, placing frontend runtime values in the admin UI runtime env, selecting backend-network service DNS or proven host-gateway for the admin UI proxy, keeping the admin UI bound to loopback, and configuring the external edge separately. After backend API/image/network/admin-auth env recreate, run `npm run ops:compose:recreate` from `rss-admin-ui` before auth evidence. These instructions are human/operator-managed and are not executed by Codex in MS-024E, MS-024F, or MS-025A-R1.
 
 Read-only status-dashboard production transport is accepted in MS-023D. Backend admin auth configured unauthenticated evidence is operator-reported in MS-024E. Authenticated admin-shell production acceptance for the current implemented scope is accepted in MS-024F by operator report. Future business/admin write features remain separate bounded work.

@@ -90,6 +90,13 @@ run("npm", ["run", "test:auth-proxy"], {
   env: { RSS_ADMIN_UI_TEST_IMAGE: image },
   timeoutMs: 600000
 });
+run("npm", ["run", "test:admin-api-proxy-template"], {
+  env: {
+    RSS_ADMIN_UI_ADMIN_API_TEMPLATE_IMAGE: image,
+    RSS_ADMIN_UI_ADMIN_API_TEMPLATE_SKIP_BUILD: "true"
+  },
+  timeoutMs: 600000
+});
 run("npm", ["run", "test:admin-operations-proxy"], {
   env: { RSS_ADMIN_UI_TEST_IMAGE: image },
   timeoutMs: 600000
@@ -115,6 +122,7 @@ console.log(
         "production overlay canonicalization harness passes",
         "same-origin admin session sentinel fails closed",
         "same-origin admin auth proxy exact-route security passes",
+        "generated admin-api proxy template route proof passes",
         "same-origin admin operations summary proxy exact-route security passes",
         "root compose config passes with synthetic values",
         "frontend production compose config passes with synthetic values",

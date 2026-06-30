@@ -1,8 +1,8 @@
 # rss-admin-ui Production Guide
 
-Status: `MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+Status: `MS-025A_R1_ADMIN_API_PROXY_TEMPLATE_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED`.
 
-This guide owns the frontend delivery contract for `rss-admin-ui`. MS-022A adds a local/tested same-origin admin auth/session foundation on top of the protected shell foundation. MS-022B adds the secretless production activation package, local production-mode RC acceptance, and operator handoff docs for a later authorized milestone. MS-023A-R2 prepares the operator-managed production configuration/proxy package and runbook guidance. MS-023B remediates the operator-reported public-edge status-api upstream blocker. MS-023C remediates the operator-reported production Docker bridge container-loopback upstream misconfiguration. MS-023D records read-only live production status-dashboard transport acceptance and classifies admin auth as not configured. MS-024A prepares the operator auth enablement package and same-origin proxy hardening while production admin auth remained pending operator backend runtime changes. MS-024B adds operator ergonomics, auth-smoke diagnostics, and graduated guardrails after the operator-reported latest recreate blocker. MS-024C canonicalizes backend-network overlay usage for production service-DNS upstreams, adds no-crash request-time proxy resolution for missing service DNS, and points `AUTH_NOT_CONFIGURED_RESIDUAL` to backend runtime auth activation diagnostics. MS-024D lands the backend production Compose env mapping needed for that activation path. MS-024E records operator-reported configured unauthenticated auth-session evidence after frontend helper recreate. MS-024F records the operator-reported production retest statement that authenticated admin shell production acceptance is closed for the implemented status/auth shell scope at that time. MS-025A adds the first authenticated read-only admin operations dashboard package locally and leaves live deployment/retest operator-managed. No production deployment or credentialed login is performed by Codex.
+This guide owns the frontend delivery contract for `rss-admin-ui`. MS-022A adds a local/tested same-origin admin auth/session foundation on top of the protected shell foundation. MS-022B adds the secretless production activation package, local production-mode RC acceptance, and operator handoff docs for a later authorized milestone. MS-023A-R2 prepares the operator-managed production configuration/proxy package and runbook guidance. MS-023B remediates the operator-reported public-edge status-api upstream blocker. MS-023C remediates the operator-reported production Docker bridge container-loopback upstream misconfiguration. MS-023D records read-only live production status-dashboard transport acceptance and classifies admin auth as not configured. MS-024A prepares the operator auth enablement package and same-origin proxy hardening while production admin auth remained pending operator backend runtime changes. MS-024B adds operator ergonomics, auth-smoke diagnostics, and graduated guardrails after the operator-reported latest recreate blocker. MS-024C canonicalizes backend-network overlay usage for production service-DNS upstreams, adds no-crash request-time proxy resolution for missing service DNS, and points `AUTH_NOT_CONFIGURED_RESIDUAL` to backend runtime auth activation diagnostics. MS-024D lands the backend production Compose env mapping needed for that activation path. MS-024E records operator-reported configured unauthenticated auth-session evidence after frontend helper recreate. MS-024F records the operator-reported production retest statement that authenticated admin shell production acceptance is closed for the implemented status/auth shell scope at that time. MS-025A adds the first authenticated read-only admin operations dashboard package locally and leaves live deployment/retest operator-managed. MS-025A-R1 remediates the operator-reported admin-api proxy template/generated-config blocker by proving the generated route exists in `/tmp/nginx/conf.d/default.conf` and never falls through to SPA HTML. No production deployment or credentialed login is performed by Codex.
 
 Historical note: MS-020B supersedes the MS-020A `FOUNDATION_ONLY` state. `FOUNDATION_ONLY` is not the current frontend status token.
 
@@ -21,6 +21,8 @@ ADMIN_UI_ENVIRONMENT_NAME
 `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is server-only and optional. If absent, `/admin-auth/**` stays in the MS-021B static fail-closed not_configured mode. If present, only `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` are proxied to the configured origin. In production it must use an internal backend origin from the same topology decision as health, not the public backend edge. Unknown auth paths return `404`; wrong methods return `405`; query strings are stripped.
 
 MS-025A also maps `GET /admin-api/operations/summary` through `ADMIN_UI_AUTH_UPSTREAM_ORIGIN`. The route is exact allowlist only, GET-only, and read-only. Unknown `/admin-api/**` paths return safe `404`, non-GET methods return safe `405`, query strings are stripped, request bodies are not forwarded, and only `Cookie`, `Host`, and `Accept: application/json` are sent upstream. Authorization, Proxy-Authorization, Tenant bearer, Agent key, and custom credential-like headers are not forwarded. Upstream `Set-Cookie`, `WWW-Authenticate`, and `Access-Control-*` response headers are hidden on this data route.
+
+MS-025A-R1 records the operator-reported blocker where `/admin-api/operations/summary` returned HTTP 200 `text/html` with the SPA fallback because the running production frontend image's active template did not insert the admin-api generated route block. The active config path in this image is `/tmp/nginx/conf.d/default.conf`, included by `nginx -T`; `/etc/nginx/conf.d/default.conf` can be stock and irrelevant. The entrypoint now fails if generated config contains unresolved `__ADMIN_UI_*__` markers or lacks `location = /admin-api/operations/summary`, and the template contains JSON 404 routes for both `/admin-api` and `/admin-api/*` before the SPA fallback.
 
 MS-024B changes runtime failure handling from startup rejection to graduated guardrails. The static frontend, `/healthz`, and `env-config.js` start even when a server-only upstream is missing or invalid. Unsafe upstreams are still fail-closed at exact route boundaries: missing, malformed, public edge, or Docker bridge loopback upstreams return bounded JSON `502` with `invalid_upstream_origin` or `public_edge_upstream_rejected`; unreachable internal upstreams return `upstream_unavailable`; upstream `401/403` on status health returns `upstream_forbidden`; absent auth upstream preserves `501 not_configured`. Public edge and loopback upstreams do not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` can be used in strict synthetic checks if a startup failure is desired.
 
@@ -53,6 +55,19 @@ npm run ops:compose:logs -- rss-admin-ui
 ```
 
 The helper includes `compose.backend-network.yaml` when `ADMIN_UI_BACKEND_DOCKER_NETWORK` is configured. If `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` or `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` uses backend service DNS such as `http://main-service-api:3000` but the backend network is missing, the helper stops before recreate with redacted guidance. Plain `deploy/production/compose.yaml` remains valid for static inspection, config rendering, and degraded/no-upstream local scenarios; it is not the complete production runtime invocation for service-DNS upstreams.
+
+Pulling Git source is not enough when `nginx.conf` or `docker-entrypoint.sh` changes. The frontend runtime image must be rebuilt locally or `RSS_ADMIN_UI_IMAGE` must be updated to an image built from the remediated source before `npm run ops:compose:recreate`; otherwise Docker can recreate a container from an older template and `/admin-api/*` can still fall through to the SPA. Before UI retest, verify the running container's effective config:
+
+```bash
+cd /opt/habersoft-rss/rss-admin-ui
+docker compose \
+  --env-file .env.production \
+  -f deploy/production/compose.yaml \
+  -f deploy/production/compose.backend-network.yaml \
+  exec rss-admin-ui sh -lc 'nginx -T 2>&1 | grep -F "/admin-api/operations/summary" && ! grep -F "__ADMIN_UI_" /tmp/nginx/conf.d/default.conf'
+```
+
+If that check does not find `/admin-api/operations/summary`, rebuild/update the frontend image and recreate again before browser testing. HTML from `/admin-api/*` is a regression; expected unauthenticated output is bounded JSON `401` or the documented unauthenticated JSON class.
 
 Run `npm run ops:compose:recreate` after any backend API/image/network/admin-auth env recreate. Backend `--force-recreate` can leave the already-running frontend Nginx container with stale upstream/network references; status/auth proxy routes may return `502` or `auth_unavailable` until the frontend helper recreates the container with the backend-network overlay.
 
@@ -234,6 +249,7 @@ Local verification commands:
 
 ```bash
 npm run test:admin-operations-proxy
+npm run test:admin-api-proxy-template
 npm run verify:admin-operations-dashboard
 npm run test:fullstack
 npm run test:production-mode-rc
@@ -248,11 +264,23 @@ git pull --ff-only origin main
 # Run backend deployment/recreate under the backend guide and rollback plan if the API image/runtime changes.
 
 cd /opt/habersoft-rss/rss-admin-ui
+# Rebuild/update the configured frontend image first if nginx.conf or docker-entrypoint.sh changed.
 npm run ops:compose:recreate
 npm run auth-smoke:redacted
 ```
 
 Then the operator retests login, `/admin-auth/session`, `/admin-api/operations/summary`, the Operations Overview UI, logout, and locked-after-logout behavior. Report only redacted status classes and aggregate route status; do not paste credentials, cookies, session IDs, password hashes, session secrets, raw logs, or raw response bodies.
+
+After MS-025A-R1, the expected live retest shape is:
+
+```text
+/healthz -> ok
+/status-api/health/live -> JSON live
+/status-api/health/ready -> JSON ready/up dependency states
+unauthenticated /admin-api/operations/summary -> JSON 401 or documented unauthenticated JSON, not HTML
+authenticated Operations Overview -> JSON-backed aggregate summary rendered
+logout -> protected shell locked and /admin-api/operations/summary unauthenticated again
+```
 
 ## MS-024A Auth Enablement Package
 

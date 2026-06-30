@@ -104,6 +104,7 @@ function assertNoForbiddenPath(relative, text) {
     .replaceAll("C:\\Users\\EVO-MRDM\\Desktop\\habersoft-rss", "")
     .replaceAll("E:\\Codex\\rss-habersoft-com\\workplace\\", "")
     .replaceAll("/opt/habersoft-rss", "")
+    .replaceAll("/tmp/nginx/conf.d/default.conf", "")
     .replaceAll("/home/habersoft.com/rss-panel", "")
     .replaceAll("/home/habersoft.com/rss", "");
   const forbidden = [

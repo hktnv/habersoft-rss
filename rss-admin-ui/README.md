@@ -2,7 +2,7 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+Status: `MS-025A_R1_ADMIN_API_PROXY_TEMPLATE_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED`.
 
 ## Scope
 
@@ -61,6 +61,7 @@ Included through MS-025A:
 - authenticated read-only Operations Overview,
 - same-origin `GET /admin-api/operations/summary` client,
 - exact-route admin-api proxy harness,
+- generated Nginx admin-api proxy template harness,
 - local full-stack synthetic admin operations acceptance,
 - MS-025A admin operations dashboard verifier.
 
@@ -88,6 +89,7 @@ npm test
 npm run build
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
+npm run test:admin-api-proxy-template
 npm run test:admin-operations-proxy
 npm run test:admin-auth-smoke-redacted
 npm run test:proxy-security
@@ -132,6 +134,8 @@ ADMIN_UI_ENVIRONMENT_NAME
 
 MS-025A reuses `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` for the exact read-only admin-api route `GET /admin-api/operations/summary`. The frontend runtime does not add a third upstream variable. The route is GET-only, strips query forwarding, forwards only the browser's same-origin admin session cookie, hides upstream `Set-Cookie`, `WWW-Authenticate`, and CORS response headers, and returns bounded JSON for unauthenticated, unavailable, wrong-method, or unknown-path cases.
 
+MS-025A-R1 adds a generated-template regression harness for the operator-reported production blocker where the running frontend image lacked the admin-api marker in the active Nginx template and `/admin-api/operations/summary` fell through to `index.html`. The active generated config is `/tmp/nginx/conf.d/default.conf`; `/etc/nginx/conf.d/default.conf` may be stock or irrelevant. `npm run test:admin-api-proxy-template` proves the effective config contains `location = /admin-api/operations/summary`, contains JSON fallback routes for `/admin-api` and `/admin-api/*`, contains no unresolved `__ADMIN_UI_*__` markers, and returns JSON rather than SPA HTML for tested `/admin-api/*` requests.
+
 MS-024B changes the operator runtime posture to graduated guardrails. Missing, malformed, public-edge, or Docker bridge loopback upstreams no longer crash-loop the static frontend container. `/healthz` and the static app start, while exact proxy routes return bounded JSON with reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` remains available for strict synthetic checks.
 
 MS-024C adds the production overlay canonicalization layer. In production Docker bridge mode, backend service DNS such as `main-service-api` resolves only when the admin UI container is attached to the backend Docker network. For that topology, `compose.backend-network.yaml` is part of the canonical runtime invocation, not an optional remembered overlay. Use `npm run ops:compose:config` and `npm run ops:compose:recreate`; the helper includes the overlay when `ADMIN_UI_BACKEND_DOCKER_NETWORK` is configured and blocks before recreate with redacted guidance if a service-DNS upstream is configured without that network input. Plain `deploy/production/compose.yaml` remains useful for static inspection and degraded/no-upstream defaults, but it is not the complete production runtime path for `http://main-service-api:3000`.
@@ -170,6 +174,16 @@ Production activation of this MS-025A slice is pending operator deploy/retest. A
 ```bash
 cd /opt/habersoft-rss/rss-admin-ui
 npm run ops:compose:recreate
+```
+
+If Nginx template or entrypoint source changed, first rebuild or update the configured frontend image. A Git pull plus container recreate can still run an old image template. Before UI retest, the operator can verify the running container's effective route config with an operator-side command equivalent to:
+
+```bash
+docker compose \
+  --env-file .env.production \
+  -f deploy/production/compose.yaml \
+  -f deploy/production/compose.backend-network.yaml \
+  exec rss-admin-ui sh -lc 'nginx -T 2>&1 | grep -F "/admin-api/operations/summary" && ! grep -F "__ADMIN_UI_" /tmp/nginx/conf.d/default.conf'
 ```
 
 Then retest login, `/admin-auth/session`, `/admin-api/operations/summary`, logout, and the locked-after-logout state without pasting credentials, cookies, raw response bodies, or logs into Git/chat/docs.
@@ -232,6 +246,7 @@ MS-025A local rehearsal commands:
 docker build -t rss-admin-ui:ms023d-local .
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
+npm run test:admin-api-proxy-template
 npm run test:admin-operations-proxy
 npm run test:admin-auth-smoke-redacted
 npm run test:proxy-security

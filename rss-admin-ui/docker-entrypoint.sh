@@ -499,6 +499,7 @@ admin_api_proxy_routes() {
   cat <<EOF
   location = /admin-api/operations/summary {
     add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
 
     if (\$request_method != GET) {
       return 405 '{"status":"method_not_allowed","reason":"read_only_endpoint"}';
@@ -601,6 +602,18 @@ awk -v auth_block="$auth_routes" -v admin_api_block="$admin_api_routes" -v statu
   }
   { print }
 ' /tmp/nginx/templates/default.conf.template > /tmp/nginx/conf.d/default.conf
+
+if grep -Eq '__ADMIN_UI_[A-Z0-9_]+__' /tmp/nginx/conf.d/default.conf; then
+  fail "generated Nginx config contains unresolved admin UI template markers"
+fi
+
+if ! grep -Fq 'location = /admin-api/operations/summary' /tmp/nginx/conf.d/default.conf; then
+  fail "generated Nginx config is missing /admin-api/operations/summary"
+fi
+
+if ! grep -Fq 'location = /admin-api' /tmp/nginx/conf.d/default.conf || ! grep -Fq 'location ^~ /admin-api/' /tmp/nginx/conf.d/default.conf; then
+  fail "generated Nginx config is missing admin-api fallback rejection routes"
+fi
 
 nginx -t
 

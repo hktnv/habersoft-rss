@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status and operations dashboard with same-origin admin auth/session routes | `MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status and operations dashboard with same-origin admin auth/session routes | `MS-025A_R1_ADMIN_API_PROXY_TEMPLATE_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -56,6 +56,7 @@ npm test
 npm run build
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
+npm run test:admin-api-proxy-template
 npm run test:admin-operations-proxy
 npm run test:admin-auth-smoke-redacted
 npm run test:proxy-security
@@ -116,6 +117,8 @@ MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PE
 MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED records the latest operator statement that, after MS-024E delivery, production retest was performed and the authenticated admin shell was accepted in production. The accepted current scope is `/healthz`, same-origin `/status-api/health/*`, same-origin `/admin-auth/*`, and protected shell entry/exit behavior as implemented so far. The acceptance is operator-reported; no durable redacted `AUTHENTICATED_ADMIN_ACCEPTED` smoke receipt was already present in Git, and Codex did not independently log in. auth-smoke:redacted remains a redacted regression/sanity tool, not a pending acceptance blocker for this closed scope. Safety boundary: no production mutation, no Codex credentialed login, no real secret access, no registry, no Git tag, no GitHub Release, and no PR. No further `AUTH_NOT_CONFIGURED_RESIDUAL` or `AUTH_CONFIGURED_UNAUTHENTICATED` operator action remains for the current implemented admin-auth shell scope unless new contradictory evidence appears.
 
 MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED adds the first authenticated read-only admin business slice after the MS-024F shell acceptance: `GET /admin-api/operations/summary`, an Operations Overview panel, exact same-origin admin-api proxy routing, local full-stack synthetic acceptance, and `npm run verify:admin-operations-dashboard`. The route returns aggregate dependency, feed, entry, and ingestion counts only. It omits tenant identifiers, feed URLs, entry content, raw logs, upstream origins, cookies, secrets, Agent keys, Tenant tokens, and write controls. The admin session cookie is now scoped to `Path=/` so it authenticates both `/admin-auth/*` and `/admin-api/*`; login and logout clear the historical `Path=/admin-auth` cookie. Production deployment and live retest of this new operations dashboard remain operator-managed, and no MS-025A live production acceptance is claimed.
+
+MS-025A_R1_ADMIN_API_PROXY_TEMPLATE_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED remediates the operator-reported production blocker where `/admin-api/operations/summary` fell through to the SPA `index.html` because the running frontend image template did not insert the admin-api generated route block. The repository now includes `npm run test:admin-api-proxy-template`, which builds/runs the frontend image, inspects the effective generated Nginx config under `/tmp/nginx/conf.d/default.conf` and `nginx -T`, proves the route appears before the SPA fallback, proves `/admin-api` and `/admin-api/*` return JSON 404, and proves summary/unauth/unreachable cases return JSON rather than HTML. Operator retest still requires rebuilding or updating the frontend image before `npm run ops:compose:recreate`; source pull alone is not sufficient for Nginx template or entrypoint changes.
 
 ## Root Docker Workflow
 

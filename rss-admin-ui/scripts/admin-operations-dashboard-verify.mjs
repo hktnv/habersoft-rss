@@ -6,6 +6,7 @@ const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const repoRoot = path.resolve(frontendRoot, "..");
 const backendRoot = path.join(repoRoot, "rss-habersoft-com");
 const status = "MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED";
+const r1Status = "MS-025A_R1_ADMIN_API_PROXY_TEMPLATE_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED";
 const route = "/admin-api/operations/summary";
 const failures = [];
 
@@ -27,6 +28,7 @@ console.log(
     {
       status: "admin-operations-dashboard-verify-ok",
       milestone: status,
+      remediation_milestone: r1Status,
       route,
       same_origin: true,
       read_only: true,
@@ -50,6 +52,7 @@ function assertRequiredFiles() {
     "tests/app-shell.test.tsx",
     "tests/security-boundary.test.ts",
     "scripts/auth-proxy-harness.mjs",
+    "scripts/admin-api-proxy-template-harness.mjs",
     "scripts/admin-operations-dashboard-verify.mjs",
     ".docs/admin-operations-dashboard.md",
     "README.md",
@@ -70,6 +73,7 @@ function assertRequiredFiles() {
 function assertPackageScripts() {
   const scripts = JSON.parse(readFrontend("package.json")).scripts ?? {};
   const required = {
+    "test:admin-api-proxy-template": "node scripts/admin-api-proxy-template-harness.mjs",
     "test:admin-operations-proxy": "node scripts/auth-proxy-harness.mjs",
     "verify:admin-operations-dashboard": "node scripts/admin-operations-dashboard-verify.mjs",
     "test:fullstack": "node scripts/root-fullstack-acceptance.mjs",
@@ -210,14 +214,17 @@ function assertProxyContract() {
   const nginx = readFrontend("nginx.conf");
   const entrypoint = readFrontend("docker-entrypoint.sh");
   const harness = readFrontend("scripts/auth-proxy-harness.mjs");
+  const templateHarness = readFrontend("scripts/admin-api-proxy-template-harness.mjs");
   const runtime = `${nginx}\n${entrypoint}`;
 
   for (const fragment of [
     "__ADMIN_UI_ADMIN_API_ROUTES__",
+    "location = /admin-api",
     "location ^~ /admin-api/",
     "admin_api_static_routes",
     "admin_api_degraded_routes",
     "admin_api_proxy_routes",
+    "generated Nginx config is missing /admin-api/operations/summary",
     `location = ${route}`,
     "if (\\$request_method != GET)",
     "set \\$args \"\";",
@@ -245,6 +252,19 @@ function assertProxyContract() {
   ]) {
     if (!harness.includes(fragment)) failures.push(`admin operations proxy harness missing ${fragment}`);
   }
+
+  for (const fragment of [
+    "/tmp/nginx/conf.d/default.conf",
+    "nginx -T",
+    "location = /admin-api/operations/summary",
+    "location\\s*=\\s*\\/admin-api",
+    "location\\s*\\^~\\s*\\/admin-api\\/",
+    "fell through to SPA HTML",
+    "unreachable admin-api upstream summary",
+    "static no-auth-upstream admin-api summary"
+  ]) {
+    if (!templateHarness.includes(fragment)) failures.push(`admin-api proxy template harness missing ${fragment}`);
+  }
 }
 
 function assertDocsContract() {
@@ -266,6 +286,7 @@ function assertDocsContract() {
 
   for (const fragment of [
     status,
+    r1Status,
     "MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED",
     route,
     "same-origin",
@@ -288,6 +309,11 @@ function assertDocsContract() {
     "npm run ops:compose:recreate",
     "npm run verify:admin-operations-dashboard",
     "npm run test:admin-operations-proxy",
+    "npm run test:admin-api-proxy-template",
+    "/tmp/nginx/conf.d/default.conf",
+    "nginx -T",
+    "source pull alone is not sufficient",
+    "SPA HTML",
     "0.1.0-ms-017"
   ]) {
     if (!docs.includes(fragment)) failures.push(`docs missing MS-025A fragment: ${fragment}`);

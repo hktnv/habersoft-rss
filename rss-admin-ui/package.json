@@ -13,6 +13,7 @@
     "test": "vitest run --config vitest.config.ts",
     "test:auth-session-sentinel": "node scripts/auth-session-sentinel-harness.mjs",
     "test:auth-proxy": "node scripts/auth-proxy-harness.mjs",
+    "test:admin-api-proxy-template": "node scripts/admin-api-proxy-template-harness.mjs",
     "test:admin-operations-proxy": "node scripts/auth-proxy-harness.mjs",
     "test:admin-auth-smoke-redacted": "node scripts/admin-auth-smoke-harness.mjs",
     "test:proxy-security": "node scripts/proxy-security-harness.mjs",
