@@ -22,11 +22,13 @@ Admin auth provisioning helpers:
 npm run admin-auth:hash
 npm run admin-auth:secret
 npm run admin-auth:verify-config
+npm run production:admin-auth:diagnose:redacted -- --synthetic
+npm run production:admin-auth:compose:verify
 ```
 
 The helpers use the current PBKDF2 admin password hash contract, generate/validate session secrets, validate production-like admin auth config, and redact sensitive values by default. Real production secrets must remain outside Git and outside Codex control. See [.docs/admin-auth-production-activation.md](.docs/admin-auth-production-activation.md).
 
-MS-024C keeps authenticated admin-shell production acceptance pending. If the frontend panel reports `AUTH_NOT_CONFIGURED_RESIDUAL`, validate backend API runtime admin-auth env with `npm run admin-auth:verify-config -- --env-file <operator-backend-auth-env> --require-enabled`; do not place backend-only auth values only in the frontend/admin UI env.
+MS-024D keeps authenticated admin-shell production acceptance pending but lands the backend production runtime wiring required for the next operator retest. `deploy/production/compose.yaml` now explicitly maps backend admin-auth variables into `main-service-api`; the worker does not receive those values because worker runtime config does not consume admin auth. If the frontend panel reports `AUTH_NOT_CONFIGURED_RESIDUAL`, validate backend API runtime admin-auth env with `npm run admin-auth:verify-config -- --env-file <operator-backend-auth-env> --require-enabled`, run the redacted backend diagnostics above, and recreate `main-service-api` after operator-owned env placement. Do not place backend-only auth values only in the frontend/admin UI env.
 
 MS-018C operator-confirmed evidence'e gore `main-service` backend production'da aktiftir: internal/public live ve ready checks HTTP `200`, PostgreSQL/Redis/tenantAuth readiness `up`, API loopback upstream `127.0.0.1:3200`.
 

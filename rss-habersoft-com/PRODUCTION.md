@@ -18,6 +18,8 @@ Admin auth production activation details are documented in [.docs/admin-auth-pro
 npm run admin-auth:hash
 npm run admin-auth:secret
 npm run admin-auth:verify-config
+npm run production:admin-auth:diagnose:redacted -- --synthetic
+npm run production:admin-auth:compose:verify
 ```
 
 Real production password hashes and session secrets are operator-owned secret material and must not be committed to Git.
@@ -27,18 +29,21 @@ MS-024B backend operator ergonomics keeps production Compose secret and runtime 
 ```bash
 npm run ops:compose:ps
 npm run ops:compose:logs -- main-service-api
+npm run ops:compose:config
 npm run production:diagnose:redacted
 ```
 
 If those files are absent, `npm run production:diagnose:redacted` reports the missing operator-owned files without reading or printing secret values. This is part of the MS-024B graduated guardrails policy: reduce harmless inspection friction without weakening backend secrets.
 
-MS-024C admin-auth residual boundary: when the frontend panel health and status routes are reachable but `/admin-auth/session` still returns `501 not_configured`, the next action is backend runtime admin-auth env activation, not frontend overlay trial-and-error. Validate the operator-owned backend env file with:
+MS-024D admin-auth residual boundary: when the frontend panel health and status routes are reachable but `/admin-auth/session` still returns `501 not_configured`, the next action is backend API runtime admin-auth env activation, not frontend overlay trial-and-error. Production Compose now maps the admin-auth variables from the operator env files into `main-service-api`; it intentionally does not map them into `main-service-worker`. Validate the operator-owned backend env file with:
 
 ```bash
 npm run admin-auth:verify-config -- --env-file <operator-backend-auth-env> --require-enabled
+npm run production:admin-auth:diagnose:redacted -- --synthetic
+npm run production:admin-auth:compose:verify
 ```
 
-The redacted residual classes are backend auth mode disabled/missing, backend admin username missing/placeholder, backend password hash missing/placeholder/invalid, backend session secret missing/weak, Redis/session dependency unreachable, or frontend proxy reachable while the backend auth endpoint reports not configured. Backend API/worker recreate after env placement remains operator-managed under the rollback/config decision.
+The redacted residual classes are backend auth mode disabled/missing, backend admin username missing/placeholder, backend password hash missing/placeholder/invalid, backend session secret missing/weak, Redis/session dependency unreachable, or frontend proxy reachable while the backend auth endpoint reports not configured. For an admin-auth-only env activation, the affected backend service is `main-service-api`; `main-service-worker` does not consume admin auth and need not be recreated solely for this change. Standard backend image/shared-env rollouts can still recreate API and worker together under the operator rollback/config decision.
 
 Production source delivery icin tek gecerli akış:
 
@@ -358,7 +363,11 @@ Zorunlu operator ayarlari:
 - strong `POSTGRES_PASSWORD`
 - strong `TENANT_RATE_LIMIT_KEY_SECRET`
 - strong `AGENT_KEY`
+- `ADMIN_UI_AUTH_MODE=disabled` unless an operator-authorized `single_admin` activation is in progress
+- production `ADMIN_UI_*` admin-auth values only when `single_admin` is intentionally enabled
 - `MAIN_SERVICE_IMAGE` absent
+
+`ADMIN_UI_ADMIN_PASSWORD_HASH` uses the PBKDF2 format `pbkdf2-sha256$120000$<salt>$<digest>`. In `.env.production` consumed by Docker Compose, escape each literal `$` as `$$`; the backend verifiers accept the escaped file form, and Compose renders a single `$` inside `main-service-api`.
 
 `.env.production` Git'e commit edilmez. Gercek secret degerleri bu belgeye, issue'ya, commit'e veya receipt'e yazilmaz.
 
@@ -386,6 +395,8 @@ Production Compose context zorunlu olarak bu uc path ile baglanir. Bare `docker 
 docker compose --env-file "${SHARED_ENV}" --env-file "${IMAGE_ENV}" -f "${COMPOSE_FILE}" <subcommand>
 ```
 
+`--env-file` only supplies interpolation values to Docker Compose. A variable reaches a container only when the target service lists it under `environment:`. The production Compose file explicitly passes admin-auth variables to `main-service-api` and intentionally omits them from `main-service-worker`.
+
 Compose config dogrulama:
 
 ```bash
@@ -394,6 +405,8 @@ docker compose \
   --env-file "${IMAGE_ENV}" \
   -f "${COMPOSE_FILE}" \
   config
+
+npm run production:admin-auth:compose:verify
 ```
 
 Data servislerini baslat:
@@ -424,6 +437,16 @@ docker compose \
   --env-file "${IMAGE_ENV}" \
   -f "${COMPOSE_FILE}" \
   up -d --force-recreate main-service-api main-service-worker
+```
+
+Admin-auth-only env activation minimum recreate:
+
+```bash
+docker compose \
+  --env-file "${SHARED_ENV}" \
+  --env-file "${IMAGE_ENV}" \
+  -f "${COMPOSE_FILE}" \
+  up -d --force-recreate main-service-api
 ```
 
 Mevcut model bes servistir: `postgres`, `redis`, `migrate`, `main-service-api`, `main-service-worker`. `migrate` finite roldur. API container portu `3000` dinler ve host tarafinda yalniz loopback'e baglanir. Worker HTTP portu yayinlamaz. PostgreSQL ve Redis host portu yayinlamaz.

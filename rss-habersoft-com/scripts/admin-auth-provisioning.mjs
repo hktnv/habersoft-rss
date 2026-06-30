@@ -307,7 +307,7 @@ function verifyAdminPasswordHash(password, encodedHash) {
 }
 
 function parseAdminPasswordHash(encodedHash) {
-  const [algorithm, iterationsText, saltText, digestText, ...extra] = encodedHash.split("$");
+  const [algorithm, iterationsText, saltText, digestText, ...extra] = normalizeComposeEscapedPasswordHash(encodedHash).split("$");
   if (
     algorithm !== ADMIN_PASSWORD_HASH_ALGORITHM ||
     iterationsText === undefined ||
@@ -330,6 +330,10 @@ function parseAdminPasswordHash(encodedHash) {
 function isAdminPasswordHashFormat(value) {
   if (value === undefined || value === "") return false;
   return parseAdminPasswordHash(value) !== undefined;
+}
+
+function normalizeComposeEscapedPasswordHash(value) {
+  return value.replaceAll("$$", "$");
 }
 
 function parseBoolean(value, defaultValue, name, issues) {

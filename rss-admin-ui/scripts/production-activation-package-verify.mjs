@@ -78,9 +78,9 @@ function assertPackageScripts() {
     "test:production-mode-rc": "node scripts/production-mode-rc.mjs"
   };
   const requiredBackend = {
-    "admin-auth:hash": "node scripts/admin-auth-provisioning.mjs hash",
-    "admin-auth:secret": "node scripts/admin-auth-provisioning.mjs secret",
-    "admin-auth:verify-config": "node scripts/admin-auth-provisioning.mjs verify-config"
+    "admin-auth:hash": "node -- scripts/admin-auth-provisioning.mjs hash",
+    "admin-auth:secret": "node -- scripts/admin-auth-provisioning.mjs secret",
+    "admin-auth:verify-config": "node -- scripts/admin-auth-provisioning.mjs verify-config"
   };
 
   for (const [name, command] of Object.entries(requiredFrontend)) {

@@ -6,6 +6,16 @@ const args = parseArgs(process.argv.slice(2));
 const envFile = args["env-file"];
 const runtimeImageEnv = args["runtime-image-env"];
 const composeFile = args["compose-file"] ?? "deploy/production/compose.yaml";
+const adminAuthEnvNames = [
+  "ADMIN_UI_AUTH_MODE",
+  "ADMIN_UI_ADMIN_USERNAME",
+  "ADMIN_UI_ADMIN_PASSWORD_HASH",
+  "ADMIN_UI_SESSION_SECRET",
+  "ADMIN_UI_SESSION_TTL_SECONDS",
+  "ADMIN_UI_SESSION_COOKIE_NAME",
+  "ADMIN_UI_SESSION_COOKIE_SECURE",
+  "ADMIN_UI_SESSION_REDIS_PREFIX"
+];
 
 if (envFile === undefined) {
   fail("production:compose:verify requires --env-file <path>");
@@ -27,7 +37,7 @@ assertYes(composeText.includes("127.0.0.1:${API_HOST_PORT"), "production API mus
 const composeEnvArgs = runtimeImageEnv === undefined ? ["--env-file", envFile] : ["--env-file", envFile, "--env-file", runtimeImageEnv];
 const quiet = spawnSync("docker", ["compose", ...composeEnvArgs, "-f", composeFile, "config", "--quiet"], {
   stdio: "inherit",
-  shell: process.platform === "win32"
+  shell: false
 });
 if (quiet.status !== 0) {
   process.exit(quiet.status ?? 1);
@@ -35,7 +45,7 @@ if (quiet.status !== 0) {
 
 const json = spawnSync("docker", ["compose", ...composeEnvArgs, "-f", composeFile, "config", "--format", "json"], {
   encoding: "utf8",
-  shell: process.platform === "win32"
+  shell: false
 });
 if (json.status !== 0) {
   process.stderr.write(json.stderr);
@@ -52,11 +62,25 @@ assertYes(Object.keys(config.services["main-service-worker"].ports ?? {}).length
 assertYes(Object.keys(config.services.postgres.ports ?? {}).length === 0, "postgres must not publish ports");
 assertYes(Object.keys(config.services.redis.ports ?? {}).length === 0, "redis must not publish ports");
 assertYes((config.services["main-service-api"].ports ?? []).some((port) => port.host_ip === "127.0.0.1"), "API must publish only on 127.0.0.1");
+const apiEnv = normalizeEnvironment(config.services["main-service-api"].environment);
+const workerEnv = normalizeEnvironment(config.services["main-service-worker"].environment);
+for (const name of adminAuthEnvNames) {
+  assertYes(Object.hasOwn(apiEnv, name), `API service must receive ${name}`);
+  assertNo(Object.hasOwn(workerEnv, name), `worker service must not receive ${name}`);
+}
+assertYes(
+  apiEnv.ADMIN_UI_AUTH_MODE === "disabled" || apiEnv.ADMIN_UI_AUTH_MODE === "single_admin",
+  "API admin-auth mode must render as disabled or single_admin"
+);
+if (apiEnv.ADMIN_UI_AUTH_MODE === "single_admin") {
+  assertYes(isAdminPasswordHashFormat(apiEnv.ADMIN_UI_ADMIN_PASSWORD_HASH), "API admin password hash must render without Compose interpolation loss");
+  assertYes(Buffer.byteLength(apiEnv.ADMIN_UI_SESSION_SECRET ?? "", "utf8") >= 32, "API admin session secret must render without Compose interpolation loss");
+}
 
 console.log("production-compose-verify: ok");
 
 function run(command, commandArgs) {
-  const result = spawnSync(command, commandArgs, { stdio: "inherit", shell: process.platform === "win32" });
+  const result = spawnSync(command, commandArgs, { stdio: "inherit", shell: false });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
@@ -83,6 +107,39 @@ function assertYes(condition, message) {
 
 function assertNo(condition, message) {
   assertYes(!condition, message);
+}
+
+function normalizeEnvironment(environment) {
+  if (Array.isArray(environment)) {
+    return Object.fromEntries(
+      environment.map((entry) => {
+        const separator = String(entry).indexOf("=");
+        return separator === -1
+          ? [String(entry), ""]
+          : [String(entry).slice(0, separator), String(entry).slice(separator + 1)];
+      })
+    );
+  }
+
+  return environment ?? {};
+}
+
+function isAdminPasswordHashFormat(value) {
+  const [algorithm, iterationsText, saltText, digestText, ...extra] = String(value ?? "").replaceAll("$$", "$").split("$");
+  if (
+    algorithm !== "pbkdf2-sha256" ||
+    iterationsText === undefined ||
+    saltText === undefined ||
+    digestText === undefined ||
+    extra.length > 0
+  ) {
+    return false;
+  }
+
+  const iterations = Number(iterationsText);
+  const salt = Buffer.from(saltText, "base64url");
+  const digest = Buffer.from(digestText, "base64url");
+  return Number.isInteger(iterations) && iterations >= 100000 && salt.length >= 16 && digest.length >= 32;
 }
 
 function fail(message) {

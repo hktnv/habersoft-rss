@@ -82,6 +82,7 @@ requireExplicitSecret("TENANT_RATE_LIMIT_KEY_SECRET", 32);
 requireExplicitSecret("AGENT_KEY", 32);
 assert(env.LOG_LEVEL === "debug" || env.LOG_LEVEL === "info" || env.LOG_LEVEL === "warn" || env.LOG_LEVEL === "error", "LOG_LEVEL is invalid");
 assert(!Object.hasOwn(env, "APP_ENV") || env.APP_ENV === "production", "APP_ENV may only be production in production env files");
+validateOptionalAdminAuth();
 
 if (failures.length > 0) {
   for (const failure of failures) {
@@ -163,6 +164,98 @@ function requireExplicitSecret(name, minBytes) {
   assert(Buffer.byteLength(value, "utf8") >= minBytes, `${name} must be at least ${minBytes} UTF-8 bytes`);
   assert(!/replace_with|local_only|change_me|example|placeholder|<|>/iu.test(value), `${name} must be explicit and not a placeholder`);
   assert(value.trim() === value, `${name} must not include leading or trailing whitespace`);
+}
+
+function validateOptionalAdminAuth() {
+  const mode = env.ADMIN_UI_AUTH_MODE === undefined || env.ADMIN_UI_AUTH_MODE.trim() === ""
+    ? "disabled"
+    : env.ADMIN_UI_AUTH_MODE.trim();
+
+  if (mode !== "disabled" && mode !== "single_admin") {
+    failures.push("ADMIN_UI_AUTH_MODE must be disabled or single_admin");
+    return;
+  }
+
+  if (mode === "disabled") {
+    return;
+  }
+
+  const username = env.ADMIN_UI_ADMIN_USERNAME ?? "";
+  const passwordHash = env.ADMIN_UI_ADMIN_PASSWORD_HASH ?? "";
+  const sessionSecret = env.ADMIN_UI_SESSION_SECRET ?? "";
+  const ttl = env.ADMIN_UI_SESSION_TTL_SECONDS ?? "3600";
+  const cookieName = env.ADMIN_UI_SESSION_COOKIE_NAME === undefined || env.ADMIN_UI_SESSION_COOKIE_NAME.trim() === ""
+    ? "habersoft_admin_session"
+    : env.ADMIN_UI_SESSION_COOKIE_NAME;
+  const cookieSecure = env.ADMIN_UI_SESSION_COOKIE_SECURE === undefined || env.ADMIN_UI_SESSION_COOKIE_SECURE.trim() === ""
+    ? "true"
+    : env.ADMIN_UI_SESSION_COOKIE_SECURE;
+  const redisPrefix = env.ADMIN_UI_SESSION_REDIS_PREFIX === undefined || env.ADMIN_UI_SESSION_REDIS_PREFIX.trim() === ""
+    ? "admin_auth:production"
+    : env.ADMIN_UI_SESSION_REDIS_PREFIX;
+
+  if (username === "" || isPlaceholderLike(username) || username.trim() !== username || containsAsciiControlCharacter(username)) {
+    failures.push("ADMIN_UI_ADMIN_USERNAME must be explicit and contain only visible characters");
+  }
+
+  if (passwordHash === "" || isPlaceholderLike(passwordHash) || !isAdminPasswordHashFormat(passwordHash)) {
+    failures.push("ADMIN_UI_ADMIN_PASSWORD_HASH must use the pbkdf2-sha256 encoded hash format and must not be a placeholder");
+  }
+
+  if (
+    sessionSecret === "" ||
+    isPlaceholderLike(sessionSecret) ||
+    Buffer.byteLength(sessionSecret, "utf8") < 32 ||
+    containsAsciiControlCharacter(sessionSecret)
+  ) {
+    failures.push("ADMIN_UI_SESSION_SECRET must be explicit, non-placeholder, and at least 32 UTF-8 bytes");
+  }
+
+  if (!/^[1-9][0-9]*$/u.test(ttl) || Number(ttl) < 1) {
+    failures.push("ADMIN_UI_SESSION_TTL_SECONDS must be a positive integer");
+  }
+
+  if (!/^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$/u.test(cookieName)) {
+    failures.push("ADMIN_UI_SESSION_COOKIE_NAME may contain only letters, digits, underscore, and hyphen");
+  }
+
+  if (cookieSecure !== "true") {
+    failures.push("ADMIN_UI_SESSION_COOKIE_SECURE must be true in production");
+  }
+
+  if (!/^[a-z0-9:_-]+$/u.test(redisPrefix)) {
+    failures.push("ADMIN_UI_SESSION_REDIS_PREFIX may contain only lowercase letters, digits, colon, underscore, and hyphen");
+  }
+}
+
+function isAdminPasswordHashFormat(value) {
+  const [algorithm, iterationsText, saltText, digestText, ...extra] = value.replaceAll("$$", "$").split("$");
+  if (
+    algorithm !== "pbkdf2-sha256" ||
+    iterationsText === undefined ||
+    saltText === undefined ||
+    digestText === undefined ||
+    extra.length > 0
+  ) {
+    return false;
+  }
+
+  const iterations = Number(iterationsText);
+  const salt = Buffer.from(saltText, "base64url");
+  const digest = Buffer.from(digestText, "base64url");
+  return Number.isInteger(iterations) && iterations >= 100000 && salt.length >= 16 && digest.length >= 32;
+}
+
+function isPlaceholderLike(value) {
+  const trimmed = value.trim();
+  return (
+    /^<[^>]+>$/u.test(trimmed) ||
+    /\b(?:operator-provided|operator-generated|replace_with|placeholder|changeme|todo|local_only|change_me)\b/iu.test(trimmed)
+  );
+}
+
+function containsAsciiControlCharacter(value) {
+  return /[\u0000-\u001f\u007f]/u.test(value);
 }
 
 function assert(condition, message) {

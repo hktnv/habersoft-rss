@@ -1,8 +1,8 @@
 # Admin Auth Production Operator Handoff
 
-Status: `MS-024C_PRODUCTION_OVERLAY_CANONICALIZATION_READY_OPERATOR_RETEST_REQUIRED`.
+Status: `MS-024D_BACKEND_ADMIN_AUTH_RUNTIME_ENV_WIRING_READY_OPERATOR_RETEST_REQUIRED`.
 
-This handoff is for the remaining operator-authorized authenticated admin activation milestone. MS-023D accepts only the read-only status-dashboard production transport, and MS-023D status-dashboard production transport remains accepted in MS-024A. MS-024B is repository remediation for the operator-reported latest recreate/auth-smoke blocker. MS-024C removes the remaining overlay trial-and-error by making the helper path canonical for service-DNS upstreams and by keeping `/healthz` available if service DNS is unresolved at runtime. It does not activate production admin auth, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, does not capture rollback baseline, and does not collect real production credentials.
+This handoff is for the remaining operator-authorized authenticated admin activation milestone. MS-023D accepts only the read-only status-dashboard production transport, and MS-023D status-dashboard production transport remains accepted in MS-024A. MS-024B is repository remediation for the operator-reported latest recreate/auth-smoke blocker. MS-024C removes the remaining overlay trial-and-error by making the helper path canonical for service-DNS upstreams and by keeping `/healthz` available if service DNS is unresolved at runtime. MS-024D lands backend production Compose env wiring for `main-service-api` and redacted/synthetic verification helpers. It does not activate production admin auth, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, does not capture rollback baseline, and does not collect real production credentials.
 
 ## Authority Checklist
 
@@ -47,7 +47,7 @@ MS-024C helper guardrails mean backend service DNS such as `http://main-service-
 
 MS-023D evidence already accepts `/healthz`, `/status-api/health/live`, and `/status-api/health/ready`. If `/admin-auth/session` returns HTTP `501 not_configured`, do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`. Verify backend runtime admin-auth env placement from `deploy/production/backend-admin-auth.env.template`, then restart/recreate the backend API under the operator rollback plan.
 
-MS-024A clarification: `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. Placing values only in `rss-admin-ui/.env.production` is insufficient; backend-only auth variables must be applied to the backend API service runtime. Validate the backend env file with `npm run admin-auth:verify-config -- --env-file <path> --require-enabled` before backend API restart/recreate.
+MS-024D clarification: `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. Placing values only in `rss-admin-ui/.env.production` is insufficient; backend-only auth variables must be applied to the backend API service runtime. Production Compose now maps those variables into `main-service-api` and intentionally omits them from `main-service-worker`. Validate the backend env file with `npm run admin-auth:verify-config -- --env-file <path> --require-enabled` before backend API restart/recreate.
 
 Use backend helpers from `rss-habersoft-com`:
 
@@ -55,6 +55,8 @@ Use backend helpers from `rss-habersoft-com`:
 npm run admin-auth:hash
 npm run admin-auth:secret
 npm run admin-auth:verify-config
+npm run production:admin-auth:diagnose:redacted -- --synthetic
+npm run production:admin-auth:compose:verify
 ```
 
 The helpers redact generated values by default. Use sensitive output only in a controlled operator terminal and move the value directly into the operator-owned secret store. Never commit real values.
@@ -95,7 +97,7 @@ docker compose \
   up -d --no-build --pull never --force-recreate rss-admin-ui
 ```
 
-This checklist is no live acceptance claimed for authenticated admin shell. The authenticated admin shell remains pending until redacted login/session/logout smoke passes.
+This checklist is no live acceptance claimed for authenticated admin shell. The authenticated admin shell remains pending until operator-owned backend env activation, `main-service-api` recreate, and redacted login/session/logout smoke passes.
 
 ## Activation Evidence Checklist
 
