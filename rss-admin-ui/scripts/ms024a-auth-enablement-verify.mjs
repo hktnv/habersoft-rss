@@ -98,12 +98,13 @@ function assertPackageScripts() {
 function assertProxyCorsHardening() {
   const nginx = readFrontend("nginx.conf");
   const entrypoint = readFrontend("docker-entrypoint.sh");
+  const runtimeTemplate = `${nginx}\n${entrypoint}`;
   const proxyHarness = readFrontend("scripts/proxy-security-harness.mjs");
   const authHarness = readFrontend("scripts/auth-proxy-harness.mjs");
 
   for (const header of corsHeaders) {
     const directive = `proxy_hide_header ${header};`;
-    if (countOccurrences(nginx, directive) < 2) failures.push(`nginx status proxy missing ${directive}`);
+    if (countOccurrences(runtimeTemplate, directive) < 2) failures.push(`runtime status proxy missing ${directive}`);
     if (countOccurrences(entrypoint, directive) < 3) failures.push(`admin auth proxy template missing ${directive}`);
     if (!proxyHarness.includes(header) || !authHarness.includes(header)) {
       failures.push(`harnesses do not exercise hidden CORS header ${header}`);

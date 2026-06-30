@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard transport with same-origin admin auth/session routes | `MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status dashboard transport with same-origin admin auth/session routes | `MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -69,7 +69,11 @@ npm run verify:production-upstream-contract
 npm run verify:live-evidence-intake
 npm run verify:admin-auth-not-configured-remediation
 npm run verify:ms024a-auth-enablement-package
+npm run verify:operator-ergonomics
 npm run auth-smoke:redacted
+npm run ops:compose:ps
+npm run ops:compose:logs -- rss-admin-ui
+npm run production:diagnose:redacted
 npm run verify:auth-boundary
 npm audit --omit=dev
 ```
@@ -93,6 +97,8 @@ MS-023B remediates the operator-reported `/status-api/health/ready` public-edge 
 MS-023D records operator-reported plus Codex public read-only verification that `https://rss-panel.habersoft.com/healthz`, `/status-api/health/live`, and `/status-api/health/ready` are production-active for the read-only status dashboard transport. `/admin-auth/session` still returns HTTP `501` with `status=not_configured`, classified as `AUTH_NOT_CONFIGURED_RESIDUAL`. That residual is not a blocker for read-only status-dashboard closure, but it blocks authenticated admin-shell production acceptance. The next operator action is backend runtime admin-auth env placement and backend API restart/recreate under the operator rollback plan, not continued changes to `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`.
 
 MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR lands the admin-auth enablement package while preserving the MS-023D accepted status-dashboard result. MS-023D status-dashboard production transport remains accepted. MS-024A hardens same-origin `/status-api/*` and `/admin-auth/*` proxy routes so upstream CORS response headers are not surfaced to the browser, adds redacted operator auth smoke tooling, and improves backend admin-auth env-file validation with synthetic/local checks only. `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream; placing values only in `rss-admin-ui/.env.production` is insufficient because backend admin-auth values must be visible to the backend API service runtime. The remaining operator action is backend runtime admin-auth env placement and backend API restart/recreate under the operator rollback plan.
+
+MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED applies graduated guardrails after the operator-reported `admin-auth-smoke: fetch failed`, missing `RSS_ADMIN_UI_IMAGE` Compose interpolation blocker, and frontend restart-loop blocker. Frontend production Compose now supports harmless inspection without an env file by using `habersoft-rss-frontend:latest` as an operator-managed mutable local image default, while release verification still recommends an immutable image identity. Missing, invalid, public-edge, or container-loopback upstream origins no longer crash-loop the static admin UI; `/healthz` stays available and exact proxy routes return bounded JSON such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Authenticated admin shell remains pending, and no live acceptance claimed for the operator's latest recreate until redacted operator retest evidence is returned.
 
 ## Root Docker Workflow
 

@@ -62,6 +62,7 @@ function assertPackageScripts() {
     "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs",
     "verify:live-evidence-intake": "node scripts/live-evidence-intake-verify.mjs",
     "verify:admin-auth-not-configured-remediation": "node scripts/live-evidence-intake-verify.mjs",
+    "verify:operator-ergonomics": "node scripts/operator-ergonomics-verify.mjs",
     "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs",
     "test:status-api-production-networking": "node scripts/status-api-upstream-remediation-harness.mjs"
   };
@@ -129,9 +130,13 @@ function assertEntrypointContract() {
   for (const fragment of [
     "rss.habersoft.com",
     "rss-panel.habersoft.com",
-    "must be an internal backend origin",
     "container-local or unspecified loopback host",
     "backend-network service DNS",
+    "invalid_upstream_origin",
+    "public_edge_upstream_rejected",
+    "status_degraded_routes",
+    "auth_degraded_routes",
+    "ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION",
     "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN",
     "ADMIN_UI_AUTH_UPSTREAM_ORIGIN"
   ]) {
@@ -139,7 +144,9 @@ function assertEntrypointContract() {
   }
 
   const nginx = readFrontend("nginx.conf");
+  const runtimeTemplate = `${nginx}\n${entrypoint}`;
   for (const fragment of [
+    "__ADMIN_UI_STATUS_ROUTES__",
     "proxy_intercept_errors on;",
     "error_page 401 403 = @status_api_upstream_forbidden;",
     "error_page 500 502 504 = @status_api_upstream_unavailable;",
@@ -147,16 +154,22 @@ function assertEntrypointContract() {
     "location @status_api_upstream_unavailable",
     "\"reason\":\"upstream_forbidden\"",
     "\"reason\":\"upstream_unavailable\"",
+    "\"reason\":\"${reason}\"",
     "proxy_pass_request_headers off;",
     "proxy_pass_request_body off;",
     "proxy_hide_header Set-Cookie;",
     "proxy_hide_header WWW-Authenticate;"
   ]) {
-    if (!nginx.includes(fragment)) failures.push(`nginx missing upstream remediation fragment: ${fragment}`);
+    if (!runtimeTemplate.includes(fragment)) failures.push(`runtime proxy template missing upstream remediation fragment: ${fragment}`);
   }
 }
 
 function assertComposeExamples() {
+  const inspection = run("docker", ["compose", "-f", path.join("deploy", "production", "compose.yaml"), "config", "--quiet"], {
+    cwd: frontendRoot
+  });
+  if (inspection.status !== 0) failures.push("production compose did not render without env file for inspection defaults");
+
   for (const origin of safeInternalExamples) {
     const result = run("docker", ["compose", "-f", path.join("deploy", "production", "compose.yaml"), "config", "--quiet"], {
       cwd: frontendRoot,
@@ -243,6 +256,11 @@ function assertDocsContract() {
     "npm run verify:production-upstream-contract",
     "npm run verify:live-evidence-intake",
     "npm run verify:admin-auth-not-configured-remediation",
+    "npm run verify:operator-ergonomics",
+    "npm run ops:compose:ps",
+    "graduated guardrails",
+    "invalid_upstream_origin",
+    "public_edge_upstream_rejected",
     "npm run test:status-api-production-networking",
     "npm run test:status-api-upstream-remediation",
     "Authenticated admin-shell production acceptance remains pending"

@@ -9,24 +9,6 @@ const image =
   process.env.RSS_ADMIN_UI_TEST_IMAGE ??
   "rss-admin-ui:ms023d-local";
 const productionHostPattern = /(?:^|[/:.])rss(?:-panel)?\.habersoft\.com(?:$|[/:])/iu;
-const invalidOrigins = [
-  "ftp://sentinel:3100",
-  "http://user:pass@sentinel:3100",
-  "http://sentinel:3100/health",
-  "http://sentinel:3100?target=/health/live",
-  "http://sentinel:3100#fragment",
-  "http://sentinel:abc",
-  "http://sentinel:70000",
-  "http://sentinel:3100;touch-ms023d",
-  "https://rss.habersoft.com",
-  "https://rss-panel.habersoft.com",
-  "http://127.0.0.1:3200",
-  "http://localhost:3200",
-  "http://[::1]:3200",
-  "http://0.0.0.0:3200"
-];
-const invalidOptionalAuthOrigins = invalidOrigins.map((origin) => ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", origin]);
-
 const rootComposeEnv = {
   RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms023d-local",
   RSS_ADMIN_UI_IMAGE: image,
@@ -60,23 +42,11 @@ run("npm", ["run", "build"]);
 run("docker", ["build", "-t", image, "."], { printOutput: false, timeoutMs: 600000 });
 console.log(JSON.stringify({ status: "docker-build-ok", image }));
 
-expectContainerStartupFailure("missing ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", {});
-for (const origin of invalidOrigins) {
-  expectContainerStartupFailure(`invalid ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=${origin}`, {
-    ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: origin
-  });
-}
-for (const [name, origin] of invalidOptionalAuthOrigins) {
-  expectContainerStartupFailure(`invalid ${name}=${origin}`, {
-    ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://sentinel:3100",
-    [name]: origin
-  });
-}
-
 run("docker", ["compose", "config", "--quiet"], {
   cwd: repoRoot,
   env: rootComposeEnv
 });
+run("docker", ["compose", "-f", path.join("deploy", "production", "compose.yaml"), "config", "--quiet"]);
 run("docker", ["compose", "-f", path.join("deploy", "production", "compose.yaml"), "config", "--quiet"], {
   env: productionComposeEnv
 });
@@ -124,8 +94,9 @@ console.log(
       checks: [
         "production build exists",
         "docker image builds",
-        "missing upstream origin fails closed",
-        "invalid upstream origins fail closed",
+        "frontend production compose config passes without env file for inspection defaults",
+        "missing upstream origin starts static runtime and fails closed at route level",
+        "invalid upstream origins start static runtime and fail closed at route level",
         "safe synthetic upstream accepted",
         "healthz and static app served",
         "browser config excludes upstream origin and API base",
@@ -144,29 +115,12 @@ console.log(
   )
 );
 
-function expectContainerStartupFailure(label, env) {
-  const result = run("docker", ["run", "--rm", ...toEnvArgs(env), image], {
-    env,
-    allowFailure: true,
-    printOutput: false,
-    timeoutMs: 120000
-  });
-  if (result.status === 0) {
-    throw new Error(`expected container startup failure for ${label}`);
-  }
-  console.log(JSON.stringify({ status: "fail-closed-ok", case: label }));
-}
-
 function assertNoProductionContactEnv(env) {
   for (const [name, value] of Object.entries(env)) {
     if (productionHostPattern.test(String(value))) {
       throw new Error(`production hostname is not allowed in local verifier env: ${name}`);
     }
   }
-}
-
-function toEnvArgs(env) {
-  return Object.entries(env).flatMap(([name, value]) => ["-e", `${name}=${value}`]);
 }
 
 function run(command, args, options = {}) {

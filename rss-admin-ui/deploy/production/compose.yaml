@@ -2,13 +2,13 @@ name: rss-admin-ui-production
 
 services:
   rss-admin-ui:
-    image: ${RSS_ADMIN_UI_IMAGE:?RSS_ADMIN_UI_IMAGE is required and must be immutable}
+    image: ${RSS_ADMIN_UI_IMAGE:-habersoft-rss-frontend:latest}
     environment:
-      ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: ${ADMIN_UI_HEALTH_UPSTREAM_ORIGIN:?ADMIN_UI_HEALTH_UPSTREAM_ORIGIN is required}
+      ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: ${ADMIN_UI_HEALTH_UPSTREAM_ORIGIN:-}
       ADMIN_UI_AUTH_UPSTREAM_ORIGIN: ${ADMIN_UI_AUTH_UPSTREAM_ORIGIN:-}
-      ADMIN_UI_ENVIRONMENT_NAME: ${ADMIN_UI_ENVIRONMENT_NAME:?ADMIN_UI_ENVIRONMENT_NAME is required}
+      ADMIN_UI_ENVIRONMENT_NAME: ${ADMIN_UI_ENVIRONMENT_NAME:-production}
     ports:
-      - "127.0.0.1:${ADMIN_UI_HOST_PORT:?ADMIN_UI_HOST_PORT is required}:8080"
+      - "127.0.0.1:${ADMIN_UI_HOST_PORT:-8081}:8080"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

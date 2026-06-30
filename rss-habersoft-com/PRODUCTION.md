@@ -22,6 +22,16 @@ npm run admin-auth:verify-config
 
 Real production password hashes and session secrets are operator-owned secret material and must not be committed to Git.
 
+MS-024B backend operator ergonomics keeps production Compose secret and runtime image protections intact. Backend Compose still requires the real operator `.env.production` and `deploy/runtime-image.env`; those values must not be defaulted in Git. For inspection, use helpers that auto-locate the standard env files without printing them:
+
+```bash
+npm run ops:compose:ps
+npm run ops:compose:logs -- main-service-api
+npm run production:diagnose:redacted
+```
+
+If those files are absent, `npm run production:diagnose:redacted` reports the missing operator-owned files without reading or printing secret values. This is part of the MS-024B graduated guardrails policy: reduce harmless inspection friction without weakening backend secrets.
+
 Production source delivery icin tek gecerli akış:
 
 ```text

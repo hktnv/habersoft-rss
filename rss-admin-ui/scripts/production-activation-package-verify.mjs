@@ -21,6 +21,7 @@ const requiredFiles = [
   "scripts/production-activation-package-verify.mjs",
   "scripts/operator-managed-production-package-verify.mjs",
   "scripts/production-upstream-contract-verify.mjs",
+  "scripts/operator-ergonomics-verify.mjs",
   "scripts/live-evidence-intake-verify.mjs",
   "scripts/status-api-upstream-remediation-harness.mjs",
   ".docs/status-api-upstream-remediation.md",
@@ -67,6 +68,7 @@ function assertPackageScripts() {
     "verify:production-activation-package": "node scripts/production-activation-package-verify.mjs",
     "verify:operator-managed-production-package": "node scripts/operator-managed-production-package-verify.mjs",
     "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs",
+    "verify:operator-ergonomics": "node scripts/operator-ergonomics-verify.mjs",
     "verify:live-evidence-intake": "node scripts/live-evidence-intake-verify.mjs",
     "verify:admin-auth-not-configured-remediation": "node scripts/live-evidence-intake-verify.mjs",
     "test:status-api-upstream-remediation": "node scripts/status-api-upstream-remediation-harness.mjs",
@@ -143,6 +145,11 @@ function assertDocsBoundary() {
     "verify:admin-auth-not-configured-remediation",
     "verify:production-upstream-contract",
     "test:status-api-production-networking",
+    "verify:operator-ergonomics",
+    "graduated guardrails",
+    "npm run ops:compose:ps",
+    "invalid_upstream_origin",
+    "public_edge_upstream_rejected",
     "test:status-api-upstream-remediation"
   ];
   for (const fragment of required) {

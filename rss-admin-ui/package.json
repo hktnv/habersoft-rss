@@ -26,7 +26,11 @@
     "verify:live-evidence-intake": "node scripts/live-evidence-intake-verify.mjs",
     "verify:admin-auth-not-configured-remediation": "node scripts/live-evidence-intake-verify.mjs",
     "verify:ms024a-auth-enablement-package": "node scripts/ms024a-auth-enablement-verify.mjs",
+    "verify:operator-ergonomics": "node scripts/operator-ergonomics-verify.mjs",
     "auth-smoke:redacted": "node scripts/admin-auth-smoke.mjs",
+    "ops:compose:ps": "node scripts/production-compose-ops.mjs ps",
+    "ops:compose:logs": "node scripts/production-compose-ops.mjs logs",
+    "production:diagnose:redacted": "node scripts/production-compose-ops.mjs diagnose",
     "verify:auth-boundary": "node scripts/auth-boundary-verify.mjs"
   },
   "dependencies": {

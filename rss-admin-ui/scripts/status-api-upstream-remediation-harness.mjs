@@ -7,12 +7,10 @@ const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const defaultImage = "rss-admin-ui:ms023d-local";
 const image = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? defaultImage;
 const suffix = randomUUID().slice(0, 8);
-const network = `rss-admin-ui-ms023d-networking-${suffix}`;
-const publicEdgeName = `rss-admin-ui-ms023d-public-edge-${suffix}`;
-const internalBackendName = `rss-admin-ui-ms023d-internal-backend-${suffix}`;
-const publicFrontendName = `rss-admin-ui-ms023d-public-runtime-${suffix}`;
-const unreachableFrontendName = `rss-admin-ui-ms023d-unreachable-runtime-${suffix}`;
-const internalFrontendName = `rss-admin-ui-ms023d-internal-runtime-${suffix}`;
+const network = `rss-admin-ui-ms024b-networking-${suffix}`;
+const internalBackendName = `rss-admin-ui-ms024b-internal-backend-${suffix}`;
+const forbiddenBackendName = `rss-admin-ui-ms024b-forbidden-backend-${suffix}`;
+const frontendName = `rss-admin-ui-ms024b-runtime-${suffix}`;
 const sensitiveHeaders = {
   authorization: false,
   cookie: false,
@@ -23,16 +21,46 @@ const sensitiveHeaders = {
 try {
   ensureImage();
   docker(["network", "create", network]);
-  startSentinel(publicEdgeName, "public-edge", "public-edge");
-  startSentinel(internalBackendName, "internal-backend", "internal-backend");
-  await waitForContainerHttp(publicEdgeName, "http://127.0.0.1:3100/__records");
+  startSentinel(internalBackendName, "internal-backend", "internal");
+  startSentinel(forbiddenBackendName, "forbidden-backend", "forbidden");
   await waitForContainerHttp(internalBackendName, "http://127.0.0.1:3100/__records");
+  await waitForContainerHttp(forbiddenBackendName, "http://127.0.0.1:3100/__records");
 
-  assertKnownPublicEdgeHostnamesRejected();
-  assertLoopbackHostnamesRejected();
-  const publicEdge = await runPublicEdgeScenario();
-  const unreachable = await runUnreachableScenario();
-  const internal = await runInternalScenario();
+  const missing = await runDegradedStatusScenario("missing-health-upstream", {}, "invalid_upstream_origin");
+  const loopback = await runDegradedStatusScenario(
+    "loopback-health-upstream",
+    { ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://127.0.0.1:3200" },
+    "invalid_upstream_origin"
+  );
+  const publicEdge = await runDegradedStatusScenario(
+    "public-edge-health-upstream",
+    { ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "https://rss.habersoft.com" },
+    "public_edge_upstream_rejected"
+  );
+  const unreachable = await runDegradedStatusScenario(
+    "unreachable-health-upstream",
+    { ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://internal-backend:3999" },
+    "upstream_unavailable"
+  );
+  const forbidden = await runDegradedStatusScenario(
+    "forbidden-health-upstream",
+    { ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://forbidden-backend:3100" },
+    "upstream_forbidden"
+  );
+  const internal = await runInternalStatusScenario();
+  const authStatic = await runAuthScenario("auth-static-not-configured", {}, 501, "not_configured");
+  const authLoopback = await runAuthScenario(
+    "auth-loopback-degraded",
+    { ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "http://127.0.0.1:3200" },
+    502,
+    "invalid_upstream_origin"
+  );
+  const authPublicEdge = await runAuthScenario(
+    "auth-public-edge-degraded",
+    { ADMIN_UI_AUTH_UPSTREAM_ORIGIN: "https://rss-panel.habersoft.com" },
+    502,
+    "public_edge_upstream_rejected"
+  );
 
   console.log(
     JSON.stringify(
@@ -40,11 +68,17 @@ try {
         status: "status-api-production-networking-harness-ok",
         image,
         network,
-        known_public_edge_startup_rejected: true,
-        loopback_startup_rejected: true,
-        public_edge_scenario: publicEdge,
+        invalid_upstreams_start_static_runtime: true,
+        healthz_available_in_degraded_mode: true,
+        missing_upstream_scenario: missing,
+        loopback_upstream_scenario: loopback,
+        public_edge_upstream_scenario: publicEdge,
         unreachable_upstream_scenario: unreachable,
+        forbidden_upstream_scenario: forbidden,
         internal_upstream_scenario: internal,
+        auth_static_scenario: authStatic,
+        auth_loopback_scenario: authLoopback,
+        auth_public_edge_scenario: authPublicEdge,
         production_contact: false,
         output: "redacted"
       },
@@ -53,11 +87,9 @@ try {
     )
   );
 } finally {
-  docker(["rm", "-f", publicFrontendName], { allowFailure: true });
-  docker(["rm", "-f", unreachableFrontendName], { allowFailure: true });
-  docker(["rm", "-f", internalFrontendName], { allowFailure: true });
-  docker(["rm", "-f", publicEdgeName], { allowFailure: true });
+  docker(["rm", "-f", frontendName], { allowFailure: true });
   docker(["rm", "-f", internalBackendName], { allowFailure: true });
+  docker(["rm", "-f", forbiddenBackendName], { allowFailure: true });
   docker(["network", "rm", network], { allowFailure: true });
 }
 
@@ -80,182 +112,103 @@ function startSentinel(name, alias, mode) {
   ]);
 }
 
-function assertKnownPublicEdgeHostnamesRejected() {
-  for (const [name, value, extraEnv] of [
-    ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "https://rss.habersoft.com", []],
-    ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", "https://rss.habersoft.com", ["-e", "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3100"]],
-    ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "https://rss-panel.habersoft.com", []],
-    ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", "https://rss-panel.habersoft.com", ["-e", "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3100"]]
-  ]) {
-    const result = docker(["run", "--rm", "--network", network, ...extraEnv, "-e", `${name}=${value}`, image], {
-      allowFailure: true,
-      timeoutMs: 120000
-    });
-    assert(result.status !== 0, `${name} public edge hostname was not rejected at startup`);
-    assert(/internal backend origin/iu.test(result.stderr), `${name} rejection did not explain internal upstream requirement`);
-  }
-}
+async function runDegradedStatusScenario(label, env, expectedReason) {
+  await withFrontend(label, env, async () => {
+    const results = runFrontendRequests();
+    assert(results.healthz.status === 200 && results.healthz.body.trim() === "ok", `${label} /healthz failed`);
+    assert(results.env.status === 200, `${label} env-config.js failed`);
+    assert(!/internal-backend|forbidden-backend|rss\.habersoft\.com|rss-panel\.habersoft\.com|127\.0\.0\.1:3200/iu.test(results.env.body), `${label} upstream leaked into env-config.js`);
 
-function assertLoopbackHostnamesRejected() {
-  for (const [name, value, extraEnv] of [
-    ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "http://127.0.0.1:3200", []],
-    ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", "http://127.0.0.1:3200", ["-e", "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3100"]],
-    ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "http://localhost:3200", []],
-    ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", "http://localhost:3200", ["-e", "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3100"]],
-    ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "http://[::1]:3200", []],
-    ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", "http://[::1]:3200", ["-e", "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3100"]],
-    ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "http://0.0.0.0:3200", []],
-    ["ADMIN_UI_AUTH_UPSTREAM_ORIGIN", "http://0.0.0.0:3200", ["-e", "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3100"]]
-  ]) {
-    const result = docker(["run", "--rm", "--network", network, ...extraEnv, "-e", `${name}=${value}`, image], {
-      allowFailure: true,
-      timeoutMs: 120000
-    });
-    assert(result.status !== 0, `${name} loopback/container-local hostname was not rejected at startup`);
-    assert(/container-local|loopback|backend-network service DNS/iu.test(result.stderr), `${name} rejection did not explain production Docker bridge loopback requirement`);
-  }
-}
-
-async function runPublicEdgeScenario() {
-  docker([
-    "run",
-    "-d",
-    "--name",
-    publicFrontendName,
-    "--network",
-    network,
-    "--network-alias",
-    "frontend",
-    "-e",
-    "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://public-edge:3100",
-    "-e",
-    "ADMIN_UI_ENVIRONMENT_NAME=status-api-upstream-blocked-repro",
-    image
-  ]);
-  await waitForFrontend();
-  docker(["exec", publicFrontendName, "nginx", "-t"]);
-
-  const results = runFrontendRequests();
-  assert(results.healthz.status === 200 && results.healthz.body.trim() === "ok", "public-edge scenario /healthz failed");
-  assert(results.env.status === 200, "public-edge scenario env-config.js failed");
-  assert(!results.env.body.includes("public-edge:3100"), "public-edge upstream leaked into env-config.js");
-  assert(results.live.status === 502, "public-edge live response was not converted to a bounded failure");
-  assert(results.ready.status === 502, "public-edge ready response was not converted to a bounded failure");
-  assert(results.query.status === 502, "public-edge query response was not converted to a bounded failure");
-  for (const result of [results.live, results.ready, results.query]) {
-    assert(result.body.includes('"reason":"upstream_forbidden"'), "bounded public-edge failure reason missing");
-    assert(!/diagnostic|public edge|forbidden by public edge/iu.test(result.body), "raw public-edge diagnostic leaked");
-    assert(result.headers.setCookie === null, "public-edge Set-Cookie leaked");
-    assert(result.headers.wwwAuthenticate === null, "public-edge WWW-Authenticate leaked");
-    assert(/no-store/iu.test(result.headers.cacheControl ?? ""), "public-edge status response is cacheable");
-  }
-
-  const records = sentinelRecords(publicEdgeName);
-  assert(records.length === 3, `expected 3 public-edge upstream records, got ${records.length}`);
-  assert(records.filter((record) => record.path === "/health/live").length === 2, "public-edge live mapping mismatch");
-  assert(records.filter((record) => record.path === "/health/ready").length === 1, "public-edge ready mapping mismatch");
-  assertSafeHealthRecords(records);
-
-  docker(["rm", "-f", publicFrontendName], { allowFailure: true });
-  return {
-    public_edge_403_reproduced_as_safe_failure: true,
-    browser_statuses: {
-      live: results.live.status,
-      ready: results.ready.status
-    },
-    upstream_records: records.length
-  };
-}
-
-async function runUnreachableScenario() {
-  docker([
-    "run",
-    "-d",
-    "--name",
-    unreachableFrontendName,
-    "--network",
-    network,
-    "--network-alias",
-    "frontend",
-    "-e",
-    "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3999",
-    "-e",
-    "ADMIN_UI_ENVIRONMENT_NAME=status-api-upstream-unreachable",
-    image
-  ]);
-  await waitForFrontend();
-  docker(["exec", unreachableFrontendName, "nginx", "-t"]);
-
-  const results = runFrontendRequests();
-  assert(results.healthz.status === 200 && results.healthz.body.trim() === "ok", "unreachable scenario /healthz failed");
-  assert(results.env.status === 200, "unreachable scenario env-config.js failed");
-  assert(!results.env.body.includes("internal-backend:3999"), "unreachable upstream leaked into env-config.js");
-  assert(results.live.status === 502, "unreachable live response was not converted to a bounded failure");
-  assert(results.ready.status === 502, "unreachable ready response was not converted to a bounded failure");
-  assert(results.query.status === 502, "unreachable query response was not converted to a bounded failure");
-  for (const result of [results.live, results.ready, results.query]) {
-    assert(result.body.includes('"reason":"upstream_unavailable"'), "bounded unreachable failure reason missing");
-    assert(!/Bad Gateway|connect\(\)|internal-backend|3999|nginx/iu.test(result.body), "raw unreachable upstream diagnostic leaked");
-    assert(result.headers.setCookie === null, "unreachable Set-Cookie leaked");
-    assert(result.headers.wwwAuthenticate === null, "unreachable WWW-Authenticate leaked");
-    assert(/no-store/iu.test(result.headers.cacheControl ?? ""), "unreachable status response is cacheable");
-  }
-
-  docker(["rm", "-f", unreachableFrontendName], { allowFailure: true });
-  return {
-    upstream_unreachable_reproduced_as_safe_failure: true,
-    browser_statuses: {
-      live: results.live.status,
-      ready: results.ready.status
+    for (const result of [results.live, results.ready, results.query]) {
+      assert(result.status === 502, `${label} status route did not fail closed`);
+      assert(result.body.includes(`"reason":"${expectedReason}"`), `${label} bounded reason mismatch`);
+      assert(!/Bad Gateway|connect\(\)|internal-backend|forbidden-backend|rss\.habersoft\.com|127\.0\.0\.1|nginx/iu.test(result.body), `${label} leaked raw upstream diagnostic`);
+      assert(result.headers.setCookie === null, `${label} Set-Cookie leaked`);
+      assert(result.headers.wwwAuthenticate === null, `${label} WWW-Authenticate leaked`);
+      assert(/no-store/iu.test(result.headers.cacheControl ?? ""), `${label} status response is cacheable`);
     }
+  });
+
+  return {
+    reason: expectedReason,
+    healthz: 200,
+    status_api: 502
   };
 }
 
-async function runInternalScenario() {
+async function runInternalStatusScenario() {
+  await withFrontend(
+    "internal-status-upstream",
+    { ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://internal-backend:3100" },
+    async () => {
+      const results = runFrontendRequests();
+      assert(results.healthz.status === 200 && results.healthz.body.trim() === "ok", "internal scenario /healthz failed");
+      assert(results.env.status === 200, "internal scenario env-config.js failed");
+      assert(!results.env.body.includes("internal-backend:3100"), "internal upstream leaked into env-config.js");
+      assert(results.live.status === 200 && results.live.json?.status === "live", "internal live response failed");
+      assert(results.ready.status === 200 && results.ready.json?.status === "ready", "internal ready response failed");
+      assert(results.ready.json?.dependencies?.postgres === "up", "internal ready postgres mismatch");
+      assert(results.ready.json?.dependencies?.redis === "up", "internal ready redis mismatch");
+      assert(results.ready.json?.dependencies?.tenantAuth === "up", "internal ready tenantAuth mismatch");
+      assert(results.live.headers.setCookie === null, "internal Set-Cookie leaked");
+      assert(results.ready.headers.wwwAuthenticate === null, "internal WWW-Authenticate leaked");
+      assert(/no-store/iu.test(results.ready.headers.cacheControl ?? ""), "internal ready response is cacheable");
+      assertNoCorsHeaders(results.live.headers, "internal live route");
+      assertNoCorsHeaders(results.ready.headers, "internal ready route");
+
+      const records = sentinelRecords(internalBackendName);
+      assert(records.length === 3, `expected 3 internal upstream records, got ${records.length}`);
+      assert(records.filter((record) => record.path === "/health/live").length === 2, "internal live mapping mismatch");
+      assert(records.filter((record) => record.path === "/health/ready").length === 1, "internal ready mapping mismatch");
+      assertSafeHealthRecords(records);
+    }
+  );
+
+  return {
+    internal_live_status: 200,
+    internal_ready_status: 200,
+    upstream_records: 3
+  };
+}
+
+async function runAuthScenario(label, env, expectedStatus, expectedReason) {
+  await withFrontend(
+    label,
+    { ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://internal-backend:3100", ...env },
+    async () => {
+      const result = runSingleFrontendRequest("/admin-auth/session");
+      assert(result.status === expectedStatus, `${label} status mismatch`);
+      assert(result.body.includes(`"reason":"${expectedReason}"`), `${label} reason mismatch`);
+      assert(!/rss\.habersoft\.com|rss-panel\.habersoft\.com|127\.0\.0\.1|Bad Gateway|nginx/iu.test(result.body), `${label} leaked raw diagnostic`);
+      assert(/no-store/iu.test(result.headers.cacheControl ?? ""), `${label} response is cacheable`);
+    }
+  );
+  return {
+    session_status: expectedStatus,
+    reason: expectedReason
+  };
+}
+
+async function withFrontend(label, env, callback) {
+  docker(["rm", "-f", frontendName], { allowFailure: true });
   docker([
     "run",
     "-d",
     "--name",
-    internalFrontendName,
+    frontendName,
     "--network",
     network,
     "--network-alias",
     "frontend",
     "-e",
-    "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://internal-backend:3100",
-    "-e",
-    "ADMIN_UI_ENVIRONMENT_NAME=status-api-upstream-remediated",
+    `ADMIN_UI_ENVIRONMENT_NAME=${label}`,
+    ...Object.entries(env).flatMap(([name, value]) => ["-e", `${name}=${value}`]),
     image
   ]);
   await waitForFrontend();
-  docker(["exec", internalFrontendName, "nginx", "-t"]);
-
-  const results = runFrontendRequests();
-  assert(results.healthz.status === 200 && results.healthz.body.trim() === "ok", "internal scenario /healthz failed");
-  assert(results.env.status === 200, "internal scenario env-config.js failed");
-  assert(!results.env.body.includes("internal-backend:3100"), "internal upstream leaked into env-config.js");
-  assert(results.live.status === 200 && results.live.json?.status === "live", "internal live response failed");
-  assert(results.ready.status === 200 && results.ready.json?.status === "ready", "internal ready response failed");
-  assert(results.ready.json?.dependencies?.postgres === "up", "internal ready postgres mismatch");
-  assert(results.ready.json?.dependencies?.redis === "up", "internal ready redis mismatch");
-  assert(results.ready.json?.dependencies?.tenantAuth === "up", "internal ready tenantAuth mismatch");
-  assert(results.live.headers.setCookie === null, "internal Set-Cookie leaked");
-  assert(results.ready.headers.wwwAuthenticate === null, "internal WWW-Authenticate leaked");
-  assert(/no-store/iu.test(results.ready.headers.cacheControl ?? ""), "internal ready response is cacheable");
-
-  const records = sentinelRecords(internalBackendName);
-  assert(records.length === 3, `expected 3 internal upstream records, got ${records.length}`);
-  assert(records.filter((record) => record.path === "/health/live").length === 2, "internal live mapping mismatch");
-  assert(records.filter((record) => record.path === "/health/ready").length === 1, "internal ready mapping mismatch");
-  assertSafeHealthRecords(records);
-
-  docker(["rm", "-f", internalFrontendName], { allowFailure: true });
-  return {
-    internal_live_status: results.live.status,
-    internal_ready_status: results.ready.status,
-    readiness: results.ready.json?.dependencies,
-    upstream_records: records.length
-  };
+  docker(["exec", frontendName, "nginx", "-t"]);
+  await callback();
+  docker(["rm", "-f", frontendName], { allowFailure: true });
 }
 
 function runFrontendRequests() {
@@ -273,7 +226,13 @@ function runFrontendRequests() {
         headers: {
           cacheControl: response.headers.get("cache-control"),
           setCookie: response.headers.get("set-cookie"),
-          wwwAuthenticate: response.headers.get("www-authenticate")
+          wwwAuthenticate: response.headers.get("www-authenticate"),
+          accessControlAllowOrigin: response.headers.get("access-control-allow-origin"),
+          accessControlAllowCredentials: response.headers.get("access-control-allow-credentials"),
+          accessControlAllowHeaders: response.headers.get("access-control-allow-headers"),
+          accessControlAllowMethods: response.headers.get("access-control-allow-methods"),
+          accessControlExposeHeaders: response.headers.get("access-control-expose-headers"),
+          accessControlMaxAge: response.headers.get("access-control-max-age")
         }
       };
     }
@@ -292,6 +251,22 @@ function runFrontendRequests() {
       query: await request("/status-api/health/live?target=/health/ready", { headers: sensitiveHeaders })
     };
     console.log(JSON.stringify(results));
+  `);
+}
+
+function runSingleFrontendRequest(pathname) {
+  return runJsonInNetwork(`
+    const response = await fetch("http://frontend:8080${pathname}");
+    const body = await response.text();
+    console.log(JSON.stringify({
+      status: response.status,
+      body,
+      headers: {
+        cacheControl: response.headers.get("cache-control"),
+        setCookie: response.headers.get("set-cookie"),
+        wwwAuthenticate: response.headers.get("www-authenticate")
+      }
+    }));
   `);
 }
 
@@ -409,10 +384,11 @@ function sentinelProgram() {
 
         response.setHeader("Set-Cookie", "upstream=redacted; HttpOnly");
         response.setHeader("WWW-Authenticate", "Bearer realm=redacted");
-        if (mode === "public-edge") {
+        emitCorsHeaders(response);
+        if (mode === "forbidden") {
           response.statusCode = 403;
           response.setHeader("Content-Type", "text/plain");
-          response.end("forbidden by public edge diagnostic - should not reach browser");
+          response.end("forbidden by upstream diagnostic - should not reach browser");
           return;
         }
 
@@ -433,6 +409,15 @@ function sentinelProgram() {
       });
     });
     server.listen(3100, "0.0.0.0");
+
+    function emitCorsHeaders(response) {
+      response.setHeader("Access-Control-Allow-Origin", "https://evil.invalid");
+      response.setHeader("Access-Control-Allow-Credentials", "true");
+      response.setHeader("Access-Control-Allow-Headers", "authorization,cookie,x-agent-key");
+      response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE");
+      response.setHeader("Access-Control-Expose-Headers", "set-cookie,www-authenticate");
+      response.setHeader("Access-Control-Max-Age", "86400");
+    }
   `;
 }
 
@@ -445,12 +430,23 @@ function docker(args, options = {}) {
   });
 
   if (!options.allowFailure && result.status !== 0) {
-    throw new Error(
-      `docker ${args.join(" ")} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`
-    );
+    throw new Error(`docker ${args.join(" ")} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   }
 
   return result;
+}
+
+function assertNoCorsHeaders(headers, label) {
+  for (const [name, value] of Object.entries({
+    "Access-Control-Allow-Origin": headers.accessControlAllowOrigin,
+    "Access-Control-Allow-Credentials": headers.accessControlAllowCredentials,
+    "Access-Control-Allow-Headers": headers.accessControlAllowHeaders,
+    "Access-Control-Allow-Methods": headers.accessControlAllowMethods,
+    "Access-Control-Expose-Headers": headers.accessControlExposeHeaders,
+    "Access-Control-Max-Age": headers.accessControlMaxAge
+  })) {
+    assert(value === null, `${label} relayed upstream ${name}`);
+  }
 }
 
 function assert(condition, message) {

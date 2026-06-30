@@ -1,8 +1,8 @@
 # rss-admin-ui Production Guide
 
-Status: `MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR`.
+Status: `MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED`.
 
-This guide owns the frontend delivery contract for `rss-admin-ui`. MS-022A adds a local/tested same-origin admin auth/session foundation on top of the protected shell foundation. MS-022B adds the secretless production activation package, local production-mode RC acceptance, and operator handoff docs for a later authorized milestone. MS-023A-R2 prepares the operator-managed production configuration/proxy package and runbook guidance. MS-023B remediates the operator-reported public-edge status-api upstream blocker. MS-023C remediates the operator-reported production Docker bridge container-loopback upstream misconfiguration. MS-023D records read-only live production status-dashboard transport acceptance and classifies admin auth as not configured. MS-024A prepares the operator auth enablement package and same-origin proxy hardening while production admin auth remains pending operator backend runtime changes. No production deployment is performed by Codex.
+This guide owns the frontend delivery contract for `rss-admin-ui`. MS-022A adds a local/tested same-origin admin auth/session foundation on top of the protected shell foundation. MS-022B adds the secretless production activation package, local production-mode RC acceptance, and operator handoff docs for a later authorized milestone. MS-023A-R2 prepares the operator-managed production configuration/proxy package and runbook guidance. MS-023B remediates the operator-reported public-edge status-api upstream blocker. MS-023C remediates the operator-reported production Docker bridge container-loopback upstream misconfiguration. MS-023D records read-only live production status-dashboard transport acceptance and classifies admin auth as not configured. MS-024A prepares the operator auth enablement package and same-origin proxy hardening while production admin auth remains pending operator backend runtime changes. MS-024B adds operator ergonomics, auth-smoke diagnostics, and graduated guardrails after the operator-reported latest recreate blocker. No production deployment is performed by Codex.
 
 Historical note: MS-020B supersedes the MS-020A `FOUNDATION_ONLY` state. `FOUNDATION_ONLY` is not the current frontend status token.
 
@@ -20,6 +20,8 @@ ADMIN_UI_ENVIRONMENT_NAME
 
 `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is server-only and optional. If absent, `/admin-auth/**` stays in the MS-021B static fail-closed not_configured mode. If present, only `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` are proxied to the configured origin. In production it must use an internal backend origin from the same topology decision as health, not the public backend edge. Unknown auth paths return `404`; wrong methods return `405`; query strings are stripped.
 
+MS-024B changes runtime failure handling from startup rejection to graduated guardrails. The static frontend, `/healthz`, and `env-config.js` start even when a server-only upstream is missing or invalid. Unsafe upstreams are still fail-closed at exact route boundaries: missing, malformed, public edge, or Docker bridge loopback upstreams return bounded JSON `502` with `invalid_upstream_origin` or `public_edge_upstream_rejected`; unreachable internal upstreams return `upstream_unavailable`; upstream `401/403` on status health returns `upstream_forbidden`; absent auth upstream preserves `501 not_configured`. Public edge and loopback upstreams do not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` can be used in strict synthetic checks if a startup failure is desired.
+
 The read-only dashboard observes only same-origin `GET /status-api/health/live` and `GET /status-api/health/ready`, mapped by the frontend runtime to backend `/health/live` and `/health/ready`. It uses no `Authorization` header, no cookie credential, no bearer or Tenant token, no Agent key, no browser persistence, and no write method. The full transport contract is [.docs/same-origin-health-transport.md](.docs/same-origin-health-transport.md).
 
 The future production activation data classification, authority record template, edge/server requirements, and post-deploy evidence checklist are [.docs/production-activation-readiness.md](.docs/production-activation-readiness.md). The operator-managed production package, live status-dashboard acceptance, status-api production networking runbook, and operator handoff are [.docs/production-activation-package.md](.docs/production-activation-package.md), [.docs/live-status-dashboard-acceptance.md](.docs/live-status-dashboard-acceptance.md), [.docs/status-api-upstream-remediation.md](.docs/status-api-upstream-remediation.md), and [.docs/admin-auth-production-operator-handoff.md](.docs/admin-auth-production-operator-handoff.md). MS-023D status transport is accepted; authenticated admin-shell production acceptance remains blocked by `AUTH_NOT_CONFIGURED_RESIDUAL`.
@@ -34,7 +36,7 @@ For MS-024A, placing values only in `rss-admin-ui/.env.production` is insufficie
 
 ## Image Contract
 
-The production template in [`deploy/production/compose.yaml`](deploy/production/compose.yaml) expects an immutable `RSS_ADMIN_UI_IMAGE` value, server-only origins, a non-secret `ADMIN_UI_ENVIRONMENT_NAME`, and loopback-only host port `8081`. Preferred backend-network mode adds [`deploy/production/compose.backend-network.yaml`](deploy/production/compose.backend-network.yaml) and requires operator-provided `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`. The secretless frontend runtime env template is [`deploy/production/operator-managed.env.template`](deploy/production/operator-managed.env.template). Backend auth env placement is documented separately in [`deploy/production/backend-admin-auth.env.template`](deploy/production/backend-admin-auth.env.template). Filled copies are operator-owned runtime secrets/config and must not be committed.
+The production template in [`deploy/production/compose.yaml`](deploy/production/compose.yaml) accepts `habersoft-rss-frontend:latest` as an operator-managed mutable local image default only so harmless inspection commands such as `ps` and `config` work without an env file. Release candidates should still provide an immutable `RSS_ADMIN_UI_IMAGE` value through operator env. Server-only origins, a non-secret `ADMIN_UI_ENVIRONMENT_NAME`, and loopback-only host port `8081` also have inspection-safe defaults. Preferred backend-network mode adds [`deploy/production/compose.backend-network.yaml`](deploy/production/compose.backend-network.yaml) and requires operator-provided `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>`. The secretless frontend runtime env template is [`deploy/production/operator-managed.env.template`](deploy/production/operator-managed.env.template). Backend auth env placement is documented separately in [`deploy/production/backend-admin-auth.env.template`](deploy/production/backend-admin-auth.env.template). Filled copies are operator-owned runtime secrets/config and must not be committed.
 
 ## Deployment Boundary
 
@@ -125,6 +127,7 @@ npm run verify:production-readiness
 npm run verify:production-activation-package
 npm run verify:operator-managed-production-package
 npm run verify:production-upstream-contract
+npm run verify:operator-ergonomics
 npm run verify:live-evidence-intake
 npm run verify:admin-auth-not-configured-remediation
 npm run verify:ms024a-auth-enablement-package
@@ -136,6 +139,45 @@ npm run verify:auth-boundary
 npm run test:auth-session-sentinel
 npm run test:auth-proxy
 ```
+
+## MS-024B operator retest checklist
+
+Bounded status: `MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED`.
+
+This is repository remediation only. The status-dashboard scope was accepted in MS-023D, but the operator-reported latest recreate introduced a new auth/runtime blocker; no live acceptance claimed here. The authenticated admin shell remains pending until redacted auth smoke passes live.
+
+Policy: graduated guardrails. Inspection should be easy, diagnostics should be clear, static frontend should not crash-loop for upstream mistakes, unsafe upstream traffic must still fail closed, and secrets remain protected.
+
+```bash
+git pull --ff-only origin main
+
+# Frontend inspection should be simple and redacted.
+cd /opt/habersoft-rss/rss-admin-ui
+docker compose -f deploy/production/compose.yaml ps
+docker compose -f deploy/production/compose.yaml --env-file .env.production ps
+docker compose -f deploy/production/compose.yaml --env-file .env.production logs --tail=120 rss-admin-ui
+npm run ops:compose:ps
+npm run ops:compose:logs -- rss-admin-ui
+npm run production:diagnose:redacted
+
+# Recreate if operator chooses; Codex must not execute this.
+docker compose --env-file .env.production \
+  -f deploy/production/compose.yaml \
+  -f deploy/production/compose.backend-network.yaml \
+  up -d --force-recreate rss-admin-ui
+
+curl -fsS http://127.0.0.1:8081/healthz
+curl -i https://rss-panel.habersoft.com/status-api/health/ready
+curl -i https://rss-panel.habersoft.com/admin-auth/session
+
+ADMIN_AUTH_SMOKE_USERNAME="<redacted>" \
+ADMIN_AUTH_SMOKE_PASSWORD="<redacted>" \
+npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
+
+npm run verify:operator-ergonomics
+```
+
+If the frontend is restarting, first check Compose ps/logs, entrypoint diagnostics, upstream origin contract, and `/healthz`. If `/admin-auth/session` returns `501 not_configured`, backend admin-auth env likely is not loaded in the backend API runtime. If proxy routes return `502` with `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`, fix the frontend server-only upstream contract. Do not use 127.0.0.1 inside Docker bridge; use backend service alias through `compose.backend-network.yaml` or proven host-gateway reachability.
 
 ## Rollback Boundary
 

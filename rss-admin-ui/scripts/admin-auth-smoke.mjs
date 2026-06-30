@@ -3,12 +3,14 @@ import os from "node:os";
 import path from "node:path";
 
 const args = process.argv.slice(2);
-const loginSmoke = args.includes("--login-smoke");
 const receiptFile = optionValue("--receipt-file") ?? process.env.ADMIN_AUTH_SMOKE_RECEIPT_FILE;
-const baseUrl = normalizeBaseUrl(process.env.ADMIN_AUTH_SMOKE_BASE_URL ?? "http://127.0.0.1:8081");
+const endpoint = optionValue("--endpoint") ?? optionValue("--base-url") ?? process.env.ADMIN_AUTH_SMOKE_BASE_URL ?? "http://127.0.0.1:8081";
+const baseUrl = normalizeBaseUrl(endpoint);
 const timeoutMs = Number(process.env.ADMIN_AUTH_SMOKE_TIMEOUT_MS ?? "5000");
 const username = process.env.ADMIN_AUTH_SMOKE_USERNAME;
 const password = process.env.ADMIN_AUTH_SMOKE_PASSWORD;
+const credentialsProvided = username !== undefined || password !== undefined;
+const loginSmoke = args.includes("--login-smoke") || (username !== undefined && username !== "" && password !== undefined && password !== "");
 
 if (args.some((arg) => arg.startsWith("--username") || arg.startsWith("--password"))) {
   fail("credentials must be supplied through ADMIN_AUTH_SMOKE_USERNAME and ADMIN_AUTH_SMOKE_PASSWORD, not command-line arguments");
@@ -18,83 +20,164 @@ if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 30000) {
   fail("ADMIN_AUTH_SMOKE_TIMEOUT_MS must be an integer between 1000 and 30000");
 }
 
+if ((loginSmoke || credentialsProvided) && (username === undefined || username === "" || password === undefined || password === "")) {
+  fail("login smoke requires ADMIN_AUTH_SMOKE_USERNAME and ADMIN_AUTH_SMOKE_PASSWORD");
+}
+
 let jarDir;
 let cookieJarDeleted = false;
 
+await main();
+
+async function main() {
 try {
   const tempBase = process.env.ADMIN_AUTH_SMOKE_TMP_DIR ?? os.tmpdir();
   await mkdir(tempBase, { recursive: true });
   jarDir = await mkdtemp(path.join(tempBase, "rss-admin-auth-smoke-"));
   const jarFile = path.join(jarDir, "cookie.jar");
-
-  if (loginSmoke && (username === undefined || username === "" || password === undefined || password === "")) {
-    throw new Error("login smoke requires ADMIN_AUTH_SMOKE_USERNAME and ADMIN_AUTH_SMOKE_PASSWORD");
-  }
-
   const checks = [];
-  const firstSession = await requestJson("GET", "/admin-auth/session");
-  checks.push(summarizeResponse("GET /admin-auth/session", firstSession));
-
-  let classification = classifySession(firstSession);
   let cookieSummary = { login_set_cookie: "not-run" };
 
-  if (loginSmoke && classification !== "AUTH_NOT_CONFIGURED_RESIDUAL") {
-    const login = await requestJson("POST", "/admin-auth/login", {
-      "content-type": "application/json"
-    }, JSON.stringify({ username, password }));
-    checks.push(summarizeResponse("POST /admin-auth/login", login));
-    cookieSummary = summarizeSetCookie(login.headers.get("set-cookie"));
-
-    const cookieHeader = cookieHeaderFromSetCookie(login.headers.get("set-cookie"));
-    if (cookieHeader !== "") await writeFile(jarFile, cookieHeader, { encoding: "utf8", mode: 0o600 });
-
-    const authenticatedSession = await requestJson("GET", "/admin-auth/session", {
-      cookie: await readCookieJar(jarFile)
+  const healthz = await requestText("GET", "/healthz");
+  checks.push(summarizeResponse("GET /healthz", healthz));
+  if (!healthz.ok) {
+    await finish({
+      classification: "ENDPOINT_UNREACHABLE",
+      mode: smokeMode(),
+      checks,
+      cookie: cookieSummary,
+      exitCode: 2
     });
-    checks.push(summarizeResponse("GET /admin-auth/session after login", authenticatedSession));
-
-    const logout = await requestJson("POST", "/admin-auth/logout", {
-      cookie: await readCookieJar(jarFile)
+    return;
+  }
+  if (healthz.httpStatus !== 200 || healthz.text.trim() !== "ok") {
+    await finish({
+      classification: "HEALTHZ_UNAVAILABLE",
+      mode: smokeMode(),
+      checks,
+      cookie: cookieSummary,
+      exitCode: 2
     });
-    checks.push(summarizeResponse("POST /admin-auth/logout", logout));
-
-    await writeFile(jarFile, "", { encoding: "utf8", mode: 0o600 });
-    const afterLogout = await requestJson("GET", "/admin-auth/session");
-    checks.push(summarizeResponse("GET /admin-auth/session after logout", afterLogout));
-
-    classification = classifyLoginProgression(login, authenticatedSession, logout, afterLogout);
+    return;
   }
 
-  await cleanupCookieJar();
+  const ready = await requestJson("GET", "/status-api/health/ready");
+  checks.push(summarizeResponse("GET /status-api/health/ready", ready));
+  const statusApiClassification = classifyStatusApi(ready);
+  if (statusApiClassification !== undefined) {
+    await finish({
+      classification: statusApiClassification,
+      mode: smokeMode(),
+      checks,
+      cookie: cookieSummary,
+      exitCode: 2
+    });
+    return;
+  }
 
-  const output = {
-    status: classification,
-    mode: loginSmoke ? "login-smoke" : "session-classification",
-    base_url: baseUrl.origin,
+  const firstSession = await requestJson("GET", "/admin-auth/session");
+  checks.push(summarizeResponse("GET /admin-auth/session", firstSession));
+  const sessionClassification = classifySession(firstSession);
+  if (sessionClassification !== "AUTH_CONFIGURED_UNAUTHENTICATED") {
+    await finish({
+      classification: sessionClassification,
+      mode: smokeMode(),
+      checks,
+      cookie: cookieSummary,
+      exitCode: sessionClassification === "AUTH_CONFIGURED_ALREADY_AUTHENTICATED" && !loginSmoke ? 0 : 2
+    });
+    return;
+  }
+
+  if (!loginSmoke) {
+    await finish({
+      classification: sessionClassification,
+      mode: smokeMode(),
+      checks,
+      cookie: cookieSummary,
+      exitCode: 0
+    });
+    return;
+  }
+
+  const login = await requestJson(
+    "POST",
+    "/admin-auth/login",
+    {
+      "content-type": "application/json"
+    },
+    JSON.stringify({ username, password })
+  );
+  checks.push(summarizeResponse("POST /admin-auth/login", login));
+  cookieSummary = summarizeSetCookie(login.headers?.get("set-cookie") ?? null);
+  const loginClassification = classifyLogin(login, cookieSummary);
+  if (loginClassification !== "LOGIN_ACCEPTED_COOKIE_PRESENT") {
+    await finish({
+      classification: loginClassification,
+      mode: smokeMode(),
+      checks,
+      cookie: cookieSummary,
+      exitCode: 2
+    });
+    return;
+  }
+
+  const cookieHeader = cookieHeaderFromSetCookie(login.headers.get("set-cookie"));
+  if (cookieHeader !== "") await writeFile(jarFile, cookieHeader, { encoding: "utf8", mode: 0o600 });
+
+  const authenticatedSession = await requestJson("GET", "/admin-auth/session", {
+    cookie: await readCookieJar(jarFile)
+  });
+  checks.push(summarizeResponse("GET /admin-auth/session after login", authenticatedSession));
+  if (!authenticatedSession.ok || authenticatedSession.httpStatus !== 200 || authenticatedSession.json?.authenticated !== true) {
+    await finish({
+      classification: "SESSION_AFTER_LOGIN_NOT_AUTHENTICATED",
+      mode: smokeMode(),
+      checks,
+      cookie: cookieSummary,
+      exitCode: 2
+    });
+    return;
+  }
+
+  const logout = await requestJson("POST", "/admin-auth/logout", {
+    cookie: await readCookieJar(jarFile)
+  });
+  checks.push(summarizeResponse("POST /admin-auth/logout", logout));
+  if (!logout.ok || logout.httpStatus !== 200) {
+    await finish({
+      classification: "LOGOUT_FAILED",
+      mode: smokeMode(),
+      checks,
+      cookie: cookieSummary,
+      exitCode: 2
+    });
+    return;
+  }
+
+  await writeFile(jarFile, "", { encoding: "utf8", mode: 0o600 });
+  const afterLogout = await requestJson("GET", "/admin-auth/session");
+  checks.push(summarizeResponse("GET /admin-auth/session after logout", afterLogout));
+  const logoutAccepted = afterLogout.ok && afterLogout.httpStatus === 200 && afterLogout.json?.authenticated === false;
+  await finish({
+    classification: logoutAccepted ? "LOGOUT_ACCEPTED_SESSION_CLEARED" : "LOGOUT_FAILED",
+    mode: smokeMode(),
     checks,
     cookie: cookieSummary,
-    temp_cookie_jar_deleted: cookieJarDeleted,
-    output: "redacted"
-  };
-
-  if (receiptFile !== undefined && receiptFile !== "") {
-    await mkdir(path.dirname(path.resolve(receiptFile)), { recursive: true });
-    await writeFile(receiptFile, `${JSON.stringify(output, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-  }
-
-  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-  if (loginSmoke && classification !== "LOGOUT_ACCEPTED_SESSION_CLEARED") process.exitCode = 2;
+    exitCode: logoutAccepted ? 0 : 2
+  });
 } catch (error) {
   await cleanupCookieJar();
   if (error instanceof Error) fail(error.message);
   fail("unexpected admin auth smoke failure");
+}
 }
 
 function optionValue(name) {
   const index = args.indexOf(name);
   if (index === -1) return undefined;
   const value = args[index + 1];
-  if (value === undefined || value.startsWith("--")) fail(`${name} requires a path`);
+  if (value === undefined || value.startsWith("--")) fail(`${name} requires a value`);
   return value;
 }
 
@@ -103,69 +186,120 @@ function normalizeBaseUrl(value) {
   try {
     parsed = new URL(value);
   } catch {
-    fail("ADMIN_AUTH_SMOKE_BASE_URL must be an absolute URL");
+    fail("ADMIN_AUTH_SMOKE_BASE_URL/--endpoint must be an absolute URL");
   }
-  if (!["http:", "https:"].includes(parsed.protocol)) fail("ADMIN_AUTH_SMOKE_BASE_URL must use http or https");
-  if (parsed.username !== "" || parsed.password !== "") fail("ADMIN_AUTH_SMOKE_BASE_URL must not include userinfo");
+  if (!["http:", "https:"].includes(parsed.protocol)) fail("ADMIN_AUTH_SMOKE_BASE_URL/--endpoint must use http or https");
+  if (parsed.username !== "" || parsed.password !== "") fail("ADMIN_AUTH_SMOKE_BASE_URL/--endpoint must not include userinfo");
   parsed.pathname = "/";
   parsed.search = "";
   parsed.hash = "";
   return parsed;
 }
 
-async function requestJson(method, pathname, headers = {}, body = undefined) {
-  const url = new URL(pathname, baseUrl);
-  const response = await fetch(url, {
-    method,
-    headers: {
-      accept: "application/json",
-      ...dropEmptyHeaders(headers)
-    },
-    body,
-    redirect: "manual",
-    signal: AbortSignal.timeout(timeoutMs)
-  });
+async function requestText(method, pathname, headers = {}, body = undefined) {
+  const response = await request(method, pathname, headers, body);
+  if (!response.ok) return response;
+  return { ...response, text: response.text };
+}
 
-  const text = await response.text();
+async function requestJson(method, pathname, headers = {}, body = undefined) {
+  const response = await request(method, pathname, headers, body);
+  if (!response.ok) return response;
   let json = null;
   try {
-    json = text === "" ? null : JSON.parse(text);
+    json = response.text === "" ? null : JSON.parse(response.text);
   } catch {
     json = null;
   }
+  return { ...response, json };
+}
 
-  return { response, json, headers: response.headers };
+async function request(method, pathname, headers = {}, body = undefined) {
+  const url = new URL(pathname, baseUrl);
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: {
+        accept: "application/json",
+        ...dropEmptyHeaders(headers)
+      },
+      body,
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    return {
+      ok: true,
+      httpStatus: response.status,
+      text: await response.text(),
+      headers: response.headers
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      httpStatus: "none",
+      transport_error: error instanceof DOMException && error.name === "TimeoutError" ? "timeout" : "endpoint_unreachable",
+      reason: "request_failed",
+      headers: null,
+      text: ""
+    };
+  }
 }
 
 function summarizeResponse(label, result) {
+  if (!result.ok) {
+    return {
+      label,
+      http_status: "none",
+      transport_error: result.transport_error,
+      reason: result.reason
+    };
+  }
+
   return {
     label,
-    http_status: result.response.status,
+    http_status: result.httpStatus,
     configured: typeof result.json?.configured === "boolean" ? result.json.configured : "unknown",
     authenticated: typeof result.json?.authenticated === "boolean" ? result.json.authenticated : "unknown",
-    status: typeof result.json?.status === "string" ? result.json.status : "none",
-    reason: typeof result.json?.reason === "string" ? result.json.reason : "none"
+    status: typeof result.json?.status === "string" ? allowlistedReason(result.json.status) : "none",
+    reason: typeof result.json?.reason === "string" ? allowlistedReason(result.json.reason) : "none"
   };
 }
 
+function classifyStatusApi(result) {
+  if (!result.ok) return "STATUS_API_ROUTE_UNAVAILABLE";
+  if (result.httpStatus === 502) {
+    const reason = allowlistedReason(result.json?.reason);
+    if (reason === "invalid_upstream_origin" || reason === "public_edge_upstream_rejected") return "STATUS_API_UPSTREAM_MISCONFIGURED";
+    if (reason === "upstream_unavailable" || reason === "upstream_forbidden") return "STATUS_API_UPSTREAM_UNAVAILABLE";
+    return "STATUS_API_ROUTE_UNAVAILABLE";
+  }
+  if ([404, 405].includes(result.httpStatus)) return "STATUS_API_ROUTE_UNAVAILABLE";
+  return undefined;
+}
+
 function classifySession(result) {
-  if (result.response.status === 501 || result.json?.status === "not_configured" || result.json?.reason === "not_configured") {
+  if (!result.ok) return "ADMIN_AUTH_ROUTE_UNAVAILABLE";
+  if (result.httpStatus === 501 || result.json?.status === "not_configured" || result.json?.reason === "not_configured") {
     return "AUTH_NOT_CONFIGURED_RESIDUAL";
   }
-  if (result.response.status === 200 && result.json?.configured === true && result.json?.authenticated === false) {
+  if (result.httpStatus === 502) return "ADMIN_AUTH_UPSTREAM_MISCONFIGURED";
+  if ([404, 405, 503].includes(result.httpStatus)) return "ADMIN_AUTH_ROUTE_UNAVAILABLE";
+  if (result.httpStatus === 200 && result.json?.configured === true && result.json?.authenticated === false) {
     return "AUTH_CONFIGURED_UNAUTHENTICATED";
+  }
+  if (result.httpStatus === 200 && result.json?.configured === true && result.json?.authenticated === true) {
+    return "AUTH_CONFIGURED_ALREADY_AUTHENTICATED";
   }
   return "AUTH_SMOKE_FAILED";
 }
 
-function classifyLoginProgression(login, authenticatedSession, logout, afterLogout) {
-  if (login.response.status !== 200 || login.json?.authenticated !== true) return "AUTH_SMOKE_FAILED";
-  if (authenticatedSession.response.status !== 200 || authenticatedSession.json?.authenticated !== true) return "AUTH_SMOKE_FAILED";
-  if (logout.response.status !== 200) return "AUTH_SMOKE_FAILED";
-  if (afterLogout.response.status === 200 && afterLogout.json?.authenticated === false) {
-    return "LOGOUT_ACCEPTED_SESSION_CLEARED";
-  }
-  return "AUTH_SMOKE_FAILED";
+function classifyLogin(result, cookieSummary) {
+  if (!result.ok) return "LOGIN_ROUTE_UNAVAILABLE";
+  if (result.httpStatus === 401 || result.httpStatus === 403 || result.json?.reason === "invalid_credentials") return "INVALID_CREDENTIALS";
+  if ([404, 405, 501, 502, 503].includes(result.httpStatus)) return "LOGIN_ROUTE_UNAVAILABLE";
+  if (result.httpStatus !== 200 || result.json?.authenticated !== true) return "INVALID_CREDENTIALS";
+  if (cookieSummary.login_set_cookie !== "present") return "COOKIE_NOT_ESTABLISHED";
+  return "LOGIN_ACCEPTED_COOKIE_PRESENT";
 }
 
 function summarizeSetCookie(setCookie) {
@@ -196,6 +330,83 @@ async function readCookieJar(file) {
 
 function dropEmptyHeaders(headers) {
   return Object.fromEntries(Object.entries(headers).filter(([, value]) => value !== ""));
+}
+
+async function finish({ classification, mode, checks, cookie, exitCode }) {
+  await cleanupCookieJar();
+  const output = {
+    status: classification,
+    mode,
+    base_url: baseUrl.origin,
+    checks,
+    cookie,
+    next_steps: nextSteps(classification),
+    temp_cookie_jar_deleted: cookieJarDeleted,
+    output: "redacted"
+  };
+
+  if (receiptFile !== undefined && receiptFile !== "") {
+    await mkdir(path.dirname(path.resolve(receiptFile)), { recursive: true });
+    await writeFile(receiptFile, `${JSON.stringify(output, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  }
+
+  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+  process.exitCode = exitCode;
+}
+
+function nextSteps(classification) {
+  const common = [
+    "run npm run ops:compose:ps from rss-admin-ui",
+    "run npm run ops:compose:logs -- rss-admin-ui from rss-admin-ui"
+  ];
+  switch (classification) {
+    case "ENDPOINT_UNREACHABLE":
+    case "HEALTHZ_UNAVAILABLE":
+      return ["frontend container may be down/restarting", ...common, "check the edge route to the admin UI loopback port"];
+    case "STATUS_API_UPSTREAM_MISCONFIGURED":
+      return ["admin UI health upstream is misconfigured", "do not use 127.0.0.1 inside Docker bridge; use backend service alias or proven host-gateway", ...common];
+    case "STATUS_API_UPSTREAM_UNAVAILABLE":
+      return ["status-api upstream is down, forbidden, or unreachable from the admin UI container", "verify backend-network service DNS or proven host-gateway reachability", ...common];
+    case "AUTH_NOT_CONFIGURED_RESIDUAL":
+      return ["backend admin-auth env likely not loaded", "place backend admin-auth env in the backend API runtime, not only the frontend env", "run backend admin-auth config verifier with a redacted operator env file"];
+    case "ADMIN_AUTH_UPSTREAM_MISCONFIGURED":
+    case "ADMIN_AUTH_ROUTE_UNAVAILABLE":
+    case "LOGIN_ROUTE_UNAVAILABLE":
+      return ["admin UI auth upstream misconfigured or unavailable", "do not use 127.0.0.1 inside Docker bridge; use backend service alias or proven host-gateway", ...common];
+    case "INVALID_CREDENTIALS":
+      return ["invalid credentials or wrong configured admin username", "verify the operator-provided username and password without pasting secrets into logs"];
+    case "COOKIE_NOT_ESTABLISHED":
+      return ["login succeeded but session cookie was not established", "check backend Set-Cookie attributes and same-origin /admin-auth edge routing"];
+    case "SESSION_AFTER_LOGIN_NOT_AUTHENTICATED":
+      return ["cookie/session not established or backend session store unavailable", "check Redis and backend admin-auth session configuration"];
+    case "LOGOUT_FAILED":
+      return ["logout failed or session was not cleared", "check backend /admin-auth/logout and session store behavior"];
+    default:
+      return common;
+  }
+}
+
+function allowlistedReason(value) {
+  const allowed = new Set([
+    "authenticated",
+    "auth_unavailable",
+    "invalid_credentials",
+    "invalid_upstream_origin",
+    "logged_out",
+    "method_not_allowed",
+    "not_configured",
+    "public_edge_upstream_rejected",
+    "ready",
+    "upstream_forbidden",
+    "upstream_unavailable",
+    "unauthenticated",
+    "unavailable"
+  ]);
+  return typeof value === "string" && allowed.has(value) ? value : "none";
+}
+
+function smokeMode() {
+  return loginSmoke ? "login-smoke" : "session-classification";
 }
 
 async function cleanupCookieJar() {

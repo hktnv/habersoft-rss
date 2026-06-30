@@ -54,6 +54,7 @@ function assertRequiredFiles() {
     "docker-entrypoint.sh",
     "scripts/operator-managed-production-package-verify.mjs",
     "scripts/production-upstream-contract-verify.mjs",
+    "scripts/operator-ergonomics-verify.mjs",
     "scripts/live-evidence-intake-verify.mjs",
     "scripts/status-api-upstream-remediation-harness.mjs",
     "scripts/production-mode-rc.mjs",
@@ -78,6 +79,9 @@ function assertPackageScript() {
   }
   if (pkg.scripts?.["verify:admin-auth-not-configured-remediation"] !== "node scripts/live-evidence-intake-verify.mjs") {
     failures.push("package.json missing verify:admin-auth-not-configured-remediation");
+  }
+  if (pkg.scripts?.["verify:operator-ergonomics"] !== "node scripts/operator-ergonomics-verify.mjs") {
+    failures.push("package.json missing verify:operator-ergonomics");
   }
   if (pkg.scripts?.["test:status-api-upstream-remediation"] !== "node scripts/status-api-upstream-remediation-harness.mjs") {
     failures.push("package.json missing test:status-api-upstream-remediation");
@@ -139,6 +143,11 @@ function assertDocs() {
     "ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>",
     "compose.backend-network.yaml",
     "test:status-api-production-networking",
+    "verify:operator-ergonomics",
+    "graduated guardrails",
+    "invalid_upstream_origin",
+    "public_edge_upstream_rejected",
+    "npm run ops:compose:ps",
     "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED"
   ]) {
     if (!docs.includes(fragment)) failures.push(`docs missing ${fragment}`);
@@ -216,6 +225,7 @@ function assertSecretlessTemplate() {
 function assertProxyContract() {
   const nginx = readFrontend("nginx.conf");
   const entrypoint = readFrontend("docker-entrypoint.sh");
+  const runtimeTemplate = `${nginx}\n${entrypoint}`;
   for (const fragment of [
     "location = /status-api/health/live",
     "location = /status-api/health/ready",
@@ -226,7 +236,7 @@ function assertProxyContract() {
     "proxy_hide_header WWW-Authenticate;",
     "add_header Cache-Control \"no-store, no-cache, must-revalidate\" always;"
   ]) {
-    if (!nginx.includes(fragment)) failures.push(`nginx health proxy missing ${fragment}`);
+    if (!runtimeTemplate.includes(fragment)) failures.push(`runtime health proxy missing ${fragment}`);
   }
 
   for (const fragment of [
@@ -248,6 +258,11 @@ function assertProxyContract() {
 }
 
 function assertComposeTemplates() {
+  const inspectionCompose = run("docker", ["compose", "-f", path.join("deploy", "production", "compose.yaml"), "config", "--quiet"], {
+    cwd: frontendRoot
+  });
+  if (inspectionCompose.status !== 0) failures.push("frontend production compose template failed without env file inspection defaults");
+
   const frontendCompose = run("docker", ["compose", "-f", path.join("deploy", "production", "compose.yaml"), "config", "--quiet"], {
     cwd: frontendRoot,
     env: {

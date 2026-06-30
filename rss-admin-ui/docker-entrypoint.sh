@@ -6,13 +6,27 @@ fail() {
   exit 1
 }
 
+VALIDATED_ORIGIN=""
+VALIDATED_ORIGIN_REASON=""
+
+set_origin_rejection() {
+  VALIDATED_ORIGIN=""
+  VALIDATED_ORIGIN_REASON="$1"
+}
+
 validate_origin() {
   name="$1"
   origin="$2"
   allow_empty="$3"
 
-  if [ "$origin" = "" ] && [ "$allow_empty" = "true" ]; then
-    printf '%s' ""
+  VALIDATED_ORIGIN=""
+  VALIDATED_ORIGIN_REASON=""
+
+  if [ "$origin" = "" ]; then
+    if [ "$allow_empty" = "true" ]; then
+      return
+    fi
+    set_origin_rejection "invalid_upstream_origin"
     return
   fi
 
@@ -26,19 +40,22 @@ validate_origin() {
       upstream_scheme="https://"
       ;;
     *)
-      fail "$name must be an absolute http(s) origin"
+      set_origin_rejection "invalid_upstream_origin"
+      return
       ;;
   esac
 
   case "$origin" in
     *[[:space:]]*|*\"*|*\'*|*\\*|*\`*|*'$'*|*';'*|*'{'*|*'}'*|*'|'*|*'&'*|*'<'*|*'>'*)
-      fail "$name contains unsafe characters"
+      set_origin_rejection "invalid_upstream_origin"
+      return
       ;;
   esac
 
   case "$upstream_rest" in
     *@*|*'?'*|*'#'*)
-      fail "$name must not include userinfo, query, or fragment"
+      set_origin_rejection "invalid_upstream_origin"
+      return
       ;;
   esac
 
@@ -50,7 +67,8 @@ validate_origin() {
 
   case "$upstream_rest" in
     ""|*/*)
-      fail "$name must be an origin without a path"
+      set_origin_rejection "invalid_upstream_origin"
+      return
       ;;
   esac
 
@@ -61,17 +79,20 @@ validate_origin() {
       upstream_port="${upstream_rest##*:}"
       case "$upstream_port" in
         ""|*[!0-9]*)
-          fail "$name port must be numeric"
+          set_origin_rejection "invalid_upstream_origin"
+          return
           ;;
       esac
       if [ "$upstream_port" -lt 1 ] || [ "$upstream_port" -gt 65535 ]; then
-        fail "$name port must be between 1 and 65535"
+        set_origin_rejection "invalid_upstream_origin"
+        return
       fi
       ;;
   esac
 
   if [ "$upstream_host" = "" ]; then
-    fail "$name must include a host"
+    set_origin_rejection "invalid_upstream_origin"
+    return
   fi
 
   upstream_host_lc="$(printf '%s' "$upstream_host" | tr '[:upper:]' '[:lower:]')"
@@ -85,17 +106,143 @@ validate_origin() {
 
   case "$upstream_host_check" in
     rss.habersoft.com|rss.habersoft.com.|rss-panel.habersoft.com|rss-panel.habersoft.com.)
-      fail "$name must be an internal backend origin reachable from the admin UI proxy runtime, not a public Habersoft edge hostname"
+      # Public Habersoft edge hostnames are rejected before proxying. This keeps
+      # the boundary fail-closed without crash-looping the static diagnostics.
+      set_origin_rejection "public_edge_upstream_rejected"
+      return
       ;;
   esac
 
   case "$upstream_host_check" in
     localhost|localhost.|127.*|0.0.0.0|0.0.0.0.|0|::|::1|0:0:0:0:0:0:0:0|0:0:0:0:0:0:0:1)
-      fail "$name must not use a container-local or unspecified loopback host in the admin UI production Docker bridge runtime; use backend-network service DNS or proven host-gateway reachability"
+      # container-local or unspecified loopback host values are invalid in the
+      # admin UI production Docker bridge runtime; use backend-network service DNS
+      # or proven host-gateway reachability.
+      set_origin_rejection "invalid_upstream_origin"
+      return
       ;;
   esac
 
-  printf '%s' "${upstream_scheme}${upstream_rest}"
+  VALIDATED_ORIGIN="${upstream_scheme}${upstream_rest}"
+}
+
+strict_origin_guard() {
+  name="$1"
+  reason="$2"
+
+  if [ "$reason" = "" ]; then
+    return
+  fi
+
+  if [ "${ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION:-}" = "true" ]; then
+    fail "$name strict validation failed: $reason"
+  fi
+
+  printf '%s\n' "rss-admin-ui entrypoint: $name degraded: $reason" >&2
+}
+
+status_degraded_routes() {
+  reason="$1"
+  cat <<EOF
+  location = /status-api/health/live {
+    if (\$request_method != GET) {
+      return 405;
+    }
+
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+    return 502 '{"status":"unavailable","reason":"${reason}"}';
+  }
+
+  location = /status-api/health/ready {
+    if (\$request_method != GET) {
+      return 405;
+    }
+
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+    return 502 '{"status":"unavailable","reason":"${reason}"}';
+  }
+EOF
+}
+
+status_proxy_routes() {
+  origin="$1"
+  cat <<EOF
+  location = /status-api/health/live {
+    if (\$request_method != GET) {
+      return 405;
+    }
+
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    set \$args "";
+    proxy_method GET;
+    proxy_pass_request_headers off;
+    proxy_pass_request_body off;
+    proxy_set_header Host \$proxy_host;
+    proxy_set_header Accept "application/json";
+    proxy_set_header Content-Length "";
+    proxy_hide_header Set-Cookie;
+    proxy_hide_header WWW-Authenticate;
+    proxy_hide_header Access-Control-Allow-Origin;
+    proxy_hide_header Access-Control-Allow-Credentials;
+    proxy_hide_header Access-Control-Allow-Headers;
+    proxy_hide_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Expose-Headers;
+    proxy_hide_header Access-Control-Max-Age;
+    proxy_intercept_errors on;
+    error_page 401 403 = @status_api_upstream_forbidden;
+    error_page 500 502 504 = @status_api_upstream_unavailable;
+    proxy_connect_timeout 2s;
+    proxy_send_timeout 2s;
+    proxy_read_timeout 4s;
+    proxy_buffering off;
+    proxy_pass ${origin}/health/live?;
+  }
+
+  location = /status-api/health/ready {
+    if (\$request_method != GET) {
+      return 405;
+    }
+
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    set \$args "";
+    proxy_method GET;
+    proxy_pass_request_headers off;
+    proxy_pass_request_body off;
+    proxy_set_header Host \$proxy_host;
+    proxy_set_header Accept "application/json";
+    proxy_set_header Content-Length "";
+    proxy_hide_header Set-Cookie;
+    proxy_hide_header WWW-Authenticate;
+    proxy_hide_header Access-Control-Allow-Origin;
+    proxy_hide_header Access-Control-Allow-Credentials;
+    proxy_hide_header Access-Control-Allow-Headers;
+    proxy_hide_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Expose-Headers;
+    proxy_hide_header Access-Control-Max-Age;
+    proxy_intercept_errors on;
+    error_page 401 403 = @status_api_upstream_forbidden;
+    error_page 500 502 504 = @status_api_upstream_unavailable;
+    proxy_connect_timeout 2s;
+    proxy_send_timeout 2s;
+    proxy_read_timeout 4s;
+    proxy_buffering off;
+    proxy_pass ${origin}/health/ready?;
+  }
+
+  location @status_api_upstream_forbidden {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+    return 502 '{"status":"unavailable","reason":"upstream_forbidden"}';
+  }
+
+  location @status_api_upstream_unavailable {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+    return 502 '{"status":"unavailable","reason":"upstream_unavailable"}';
+  }
+EOF
 }
 
 auth_static_routes() {
@@ -132,6 +279,55 @@ auth_static_routes() {
     }
 
     return 501 '{"configured":false,"status":"not_configured","authenticated":false,"reason":"not_configured","message":"Admin authentication is not configured."}';
+  }
+
+  location = /admin-auth {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    return 404;
+  }
+
+  location ^~ /admin-auth/ {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    return 404;
+  }
+EOF
+}
+
+auth_degraded_routes() {
+  reason="$1"
+  cat <<EOF
+  location = /admin-auth/session {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+
+    if (\$request_method != GET) {
+      return 405 '{"configured":false,"authenticated":false,"reason":"method_not_allowed"}';
+    }
+
+    set \$args "";
+    return 502 '{"configured":false,"authenticated":false,"reason":"${reason}"}';
+  }
+
+  location = /admin-auth/login {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+
+    if (\$request_method != POST) {
+      return 405 '{"configured":false,"authenticated":false,"reason":"method_not_allowed"}';
+    }
+
+    return 502 '{"configured":false,"authenticated":false,"reason":"${reason}"}';
+  }
+
+  location = /admin-auth/logout {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+
+    if (\$request_method != POST) {
+      return 405 '{"configured":false,"authenticated":false,"reason":"method_not_allowed"}';
+    }
+
+    return 502 '{"configured":false,"authenticated":false,"reason":"${reason}"}';
   }
 
   location = /admin-auth {
@@ -264,8 +460,15 @@ health_upstream_origin="${ADMIN_UI_HEALTH_UPSTREAM_ORIGIN:-}"
 auth_upstream_origin="${ADMIN_UI_AUTH_UPSTREAM_ORIGIN:-}"
 environment_name="${ADMIN_UI_ENVIRONMENT_NAME:-container}"
 
-normalized_health_upstream_origin="$(validate_origin "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN" "$health_upstream_origin" "false")"
-normalized_auth_upstream_origin="$(validate_origin "ADMIN_UI_AUTH_UPSTREAM_ORIGIN" "$auth_upstream_origin" "true")"
+validate_origin "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN" "$health_upstream_origin" "false"
+normalized_health_upstream_origin="$VALIDATED_ORIGIN"
+health_upstream_rejection="$VALIDATED_ORIGIN_REASON"
+strict_origin_guard "ADMIN_UI_HEALTH_UPSTREAM_ORIGIN" "$health_upstream_rejection"
+
+validate_origin "ADMIN_UI_AUTH_UPSTREAM_ORIGIN" "$auth_upstream_origin" "true"
+normalized_auth_upstream_origin="$VALIDATED_ORIGIN"
+auth_upstream_rejection="$VALIDATED_ORIGIN_REASON"
+strict_origin_guard "ADMIN_UI_AUTH_UPSTREAM_ORIGIN" "$auth_upstream_rejection"
 
 if [ ! -z "$environment_name" ] && ! printf '%s' "$environment_name" | grep -Eq '^[A-Za-z0-9._ -]{1,64}$'; then
   fail "ADMIN_UI_ENVIRONMENT_NAME must be a non-secret label using letters, digits, spaces, dot, underscore, or hyphen"
@@ -277,24 +480,31 @@ window.__RSS_ADMIN_UI_CONFIG__ = {
 };
 EOF
 
-if [ "$normalized_auth_upstream_origin" = "" ]; then
+if [ "$health_upstream_rejection" = "" ]; then
+  status_routes="$(status_proxy_routes "$normalized_health_upstream_origin")"
+else
+  status_routes="$(status_degraded_routes "$health_upstream_rejection")"
+fi
+
+if [ "$auth_upstream_rejection" != "" ]; then
+  auth_routes="$(auth_degraded_routes "$auth_upstream_rejection")"
+elif [ "$normalized_auth_upstream_origin" = "" ]; then
   auth_routes="$(auth_static_routes)"
 else
   auth_routes="$(auth_proxy_routes "$normalized_auth_upstream_origin")"
 fi
 
-sed "s#__ADMIN_UI_HEALTH_UPSTREAM_ORIGIN__#${normalized_health_upstream_origin}#g" \
-  /tmp/nginx/templates/default.conf.template > /tmp/nginx/conf.d/default.conf.tmp
-
-awk -v block="$auth_routes" '
+awk -v auth_block="$auth_routes" -v status_block="$status_routes" '
   /__ADMIN_UI_AUTH_ROUTES__/ {
-    print block
+    print auth_block
+    next
+  }
+  /__ADMIN_UI_STATUS_ROUTES__/ {
+    print status_block
     next
   }
   { print }
-' /tmp/nginx/conf.d/default.conf.tmp > /tmp/nginx/conf.d/default.conf
-
-rm /tmp/nginx/conf.d/default.conf.tmp
+' /tmp/nginx/templates/default.conf.template > /tmp/nginx/conf.d/default.conf
 
 nginx -t
 

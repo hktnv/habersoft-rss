@@ -1,8 +1,8 @@
 # Admin Auth Production Operator Handoff
 
-Status: `MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR`.
+Status: `MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED`.
 
-This handoff is for the remaining operator-authorized authenticated admin activation milestone. MS-023D accepts only the read-only status-dashboard production transport, and MS-023D status-dashboard production transport remains accepted in MS-024A. MS-024A prepares the admin-auth enablement package but does not activate production admin auth, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, does not capture rollback baseline, and does not collect real production credentials.
+This handoff is for the remaining operator-authorized authenticated admin activation milestone. MS-023D accepts only the read-only status-dashboard production transport, and MS-023D status-dashboard production transport remains accepted in MS-024A. MS-024B is repository remediation for the operator-reported latest recreate/auth-smoke blocker: it improves operator ergonomics, auth-smoke diagnostics, and graduated guardrails. It does not activate production admin auth, does not publish a registry image, does no production deployment, creates no Git tag, creates no GitHub Release, does not capture rollback baseline, and does not collect real production credentials.
 
 ## Authority Checklist
 
@@ -41,6 +41,8 @@ ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>
 
 Do not set either upstream to public edge origins such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. In the admin UI production Docker bridge package, do not set either upstream to `127.0.0.1`, `localhost`, `::1`, `[::1]`, or `0.0.0.0`; that is a container-loopback upstream misconfiguration. Prefer backend-network service DNS with `ADMIN_UI_BACKEND_DOCKER_NETWORK=<backend_docker_network_name>` and `http://<backend_service_or_alias>:3000`, for example `http://main-service-api:3000`. Use `http://host.docker.internal:3200` only after an operator-run container-side reachability check proves host-gateway access.
 
+MS-024B graduated guardrails mean these bad upstream values should not crash-loop the static frontend anymore. `/healthz` remains available, while exact proxy routes return bounded JSON reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully.
+
 MS-023D evidence already accepts `/healthz`, `/status-api/health/live`, and `/status-api/health/ready`. If `/admin-auth/session` returns HTTP `501 not_configured`, do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`. Verify backend runtime admin-auth env placement from `deploy/production/backend-admin-auth.env.template`, then restart/recreate the backend API under the operator rollback plan.
 
 MS-024A clarification: `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. Placing values only in `rss-admin-ui/.env.production` is insufficient; backend-only auth variables must be applied to the backend API service runtime. Validate the backend env file with `npm run admin-auth:verify-config -- --env-file <path> --require-enabled` before backend API restart/recreate.
@@ -58,11 +60,28 @@ The helpers redact generated values by default. Use sensitive output only in a c
 Use the redacted frontend smoke helper after backend env placement:
 
 ```bash
-ADMIN_AUTH_SMOKE_BASE_URL=https://rss-panel.habersoft.com npm run auth-smoke:redacted
-ADMIN_AUTH_SMOKE_BASE_URL=https://rss-panel.habersoft.com ADMIN_AUTH_SMOKE_USERNAME=<operator-owned-username> ADMIN_AUTH_SMOKE_PASSWORD=<operator-owned-password> npm run auth-smoke:redacted -- --login-smoke
+npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
+ADMIN_AUTH_SMOKE_USERNAME=<operator-owned-username> ADMIN_AUTH_SMOKE_PASSWORD=<operator-owned-password> npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
 ```
 
-Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw production response bodies into chat, Git, docs, or receipts. MS-024A validation commands are `npm run test:admin-auth-smoke-redacted` and `npm run verify:ms024a-auth-enablement-package`. No CORS broadening is part of the activation package.
+Do not paste real admin credentials, cookies, password hashes, session secrets, Redis keys, raw logs, or raw production response bodies into chat, Git, docs, or receipts. MS-024B auth-smoke classifies endpoint down, `/healthz` unavailable, status-api upstream unavailable/misconfigured, backend admin-auth env not loaded, auth upstream misconfigured, invalid credentials, missing cookie, post-login session failure, and logout failure with redacted next steps. MS-024A/MS-024B validation commands are `npm run test:admin-auth-smoke-redacted`, `npm run verify:ms024a-auth-enablement-package`, and `npm run verify:operator-ergonomics`. No CORS broadening is part of the activation package.
+
+## MS-024B operator retest checklist
+
+```bash
+git pull --ff-only origin main
+cd /opt/habersoft-rss/rss-admin-ui
+docker compose -f deploy/production/compose.yaml ps
+npm run ops:compose:ps
+npm run ops:compose:logs -- rss-admin-ui
+npm run production:diagnose:redacted
+curl -fsS http://127.0.0.1:8081/healthz
+curl -i https://rss-panel.habersoft.com/status-api/health/ready
+curl -i https://rss-panel.habersoft.com/admin-auth/session
+ADMIN_AUTH_SMOKE_USERNAME="<redacted>" ADMIN_AUTH_SMOKE_PASSWORD="<redacted>" npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
+```
+
+This checklist is no live acceptance claimed for the operator's latest recreate. The authenticated admin shell remains pending until redacted login/session/logout smoke passes.
 
 ## Activation Evidence Checklist
 

@@ -1,10 +1,12 @@
 # Status API Production Networking Remediation
 
-Status: `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`.
+Status: `MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED`.
 
-MS-023C is a repository-level remediation package for an operator-reported live install blocker. MS-023D records that the live status-api blocker is now resolved for the read-only status-dashboard transport. Codex did not mutate the live server, capture rollback baseline, read secrets, publish an image, create a Git tag, create a GitHub Release, or create a PR.
+MS-023C is a repository-level remediation package for an operator-reported live install blocker. MS-023D records that the live status-api blocker is now resolved for the read-only status-dashboard transport. MS-024B adds graduated guardrails after the operator-reported latest recreate showed a restart-loop and generic auth-smoke failure. Codex did not mutate the live server, capture rollback baseline, read secrets, publish an image, create a Git tag, create a GitHub Release, or create a PR.
 
 The bounded live status is now `MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED`. Evidence source is `operator_reported` plus `codex_public_readonly_verified`. Authenticated admin-shell production acceptance remains pending because `/admin-auth/session` returns `501 not_configured`, classified as `AUTH_NOT_CONFIGURED_RESIDUAL`.
+
+MS-024B does not claim the latest live recreate is healthy. It is no live acceptance claimed until the operator retests. The authenticated admin shell remains pending.
 
 ## MS-023D Accepted Result
 
@@ -46,6 +48,8 @@ ADMIN_UI_AUTH_UPSTREAM_ORIGIN=https://rss.habersoft.com
 ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=https://rss-panel.habersoft.com
 ADMIN_UI_AUTH_UPSTREAM_ORIGIN=https://rss-panel.habersoft.com
 ```
+
+Under MS-024B these anti-patterns no longer crash-loop the static admin UI. `/healthz` stays available, and the exact `/status-api/health/live`, `/status-api/health/ready`, and configured `/admin-auth/*` proxy routes return bounded JSON such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. This is graduated guardrails, not no guardrails.
 
 ## Supported Upstream Modes
 
@@ -133,13 +137,28 @@ Run from `rss-admin-ui`:
 
 ```bash
 npm run verify:production-upstream-contract
+npm run verify:operator-ergonomics
 npm run test:status-api-production-networking
 npm run test:status-api-upstream-remediation
 ```
 
 The verifier rejects public Habersoft edge upstreams and Docker bridge loopback/unspecified upstreams, accepts the documented service DNS and proven host-gateway forms, checks the backend-network overlay structurally, and confirms browser source/build output does not expose upstream origins.
 
-The local harness simulates public-edge `403`, container-loopback startup rejection, unreachable upstream `502`, and backend-network service-alias success. It proves health remains credential-free, query strings and request bodies are not forwarded, upstream `Set-Cookie` / `WWW-Authenticate` are not relayed, raw upstream diagnostics are not exposed, and successful upstream health JSON is not masked.
+The local harness simulates public-edge `403`, container-loopback route degradation, unreachable upstream `502`, and backend-network service-alias success. It proves `/healthz` remains available in degraded mode, health remains credential-free, query strings and request bodies are not forwarded, upstream `Set-Cookie` / `WWW-Authenticate` are not relayed, raw upstream diagnostics are not exposed, and successful upstream health JSON is not masked.
+
+## MS-024B Operator Retest
+
+Use the MS-024B operator retest checklist in `../PRODUCTION.md`. Short commands:
+
+```bash
+docker compose -f deploy/production/compose.yaml ps
+npm run ops:compose:ps
+npm run ops:compose:logs -- rss-admin-ui
+npm run production:diagnose:redacted
+npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
+```
+
+`habersoft-rss-frontend:latest` is an operator-managed mutable local image default for inspection only. Release candidates should still use an immutable `RSS_ADMIN_UI_IMAGE`.
 
 ## Claim Boundary
 

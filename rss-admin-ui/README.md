@@ -2,7 +2,7 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR`.
+Status: `MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED`.
 
 ## Scope
 
@@ -34,6 +34,10 @@ Included through MS-024A:
 - auth proxy runtime harness,
 - auth proxy upstream CORS response-header stripping,
 - redacted admin auth smoke tool and local harness,
+- classified redacted admin auth smoke diagnostics,
+- operator Compose ps/logs/diagnose helpers,
+- graduated guardrails for unsafe upstream origins,
+- route-level degraded JSON responses for invalid upstream configuration,
 - local full-stack auth acceptance harness,
 - secretless admin auth production activation package,
 - local production-mode RC acceptance harness,
@@ -49,6 +53,7 @@ Included through MS-024A:
 - backend admin-auth env placement template,
 - `AUTH_NOT_CONFIGURED_RESIDUAL` remediation verifier,
 - MS-024A auth enablement package verifier.
+- MS-024B operator ergonomics verifier.
 
 Not included:
 
@@ -85,6 +90,10 @@ npm run verify:production-upstream-contract
 npm run verify:live-evidence-intake
 npm run verify:admin-auth-not-configured-remediation
 npm run verify:ms024a-auth-enablement-package
+npm run verify:operator-ergonomics
+npm run ops:compose:ps
+npm run ops:compose:logs -- rss-admin-ui
+npm run production:diagnose:redacted
 npm run verify:auth-boundary
 npm audit --omit=dev
 ```
@@ -102,6 +111,8 @@ ADMIN_UI_ENVIRONMENT_NAME
 `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` is server-only and must be an absolute HTTP(S) internal backend origin without userinfo, path, query, or fragment. It must be reachable from inside the admin UI proxy runtime and must not be a public edge hostname such as `https://rss.habersoft.com` or `https://rss-panel.habersoft.com`. In the production Docker bridge package it must also not use `127.0.0.1`, `localhost`, `::1`, `[::1]`, or `0.0.0.0`; those names refer to the admin UI container or an unspecified local address, not the backend host loopback. No secret belongs in the frontend bundle or runtime config. The dashboard does not render the upstream origin; it shows only the non-secret environment label and current browser-observed health state.
 
 `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is also server-only and optional. When absent, `/admin-auth/**` stays in static fail-closed mode. When present, only `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` are proxied upstream. When enabled in production it must use the same internal backend origin class as health, not the public backend edge.
+
+MS-024B changes the operator runtime posture to graduated guardrails. Missing, malformed, public-edge, or Docker bridge loopback upstreams no longer crash-loop the static frontend container. `/healthz` and the static app start, while exact proxy routes return bounded JSON with reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` remains available for strict synthetic checks.
 
 Backend admin-auth variables such as `ADMIN_UI_AUTH_MODE`, `ADMIN_UI_ADMIN_USERNAME`, `ADMIN_UI_ADMIN_PASSWORD_HASH`, `ADMIN_UI_SESSION_SECRET`, and `ADMIN_UI_SESSION_COOKIE_SECURE` are consumed by the backend API runtime, not by the frontend/admin UI runtime. Passing those backend-only variables only to the frontend/admin UI Compose command does not enable backend auth.
 
@@ -130,6 +141,8 @@ MS-023D records operator-reported plus Codex public read-only verification that 
 
 MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR keeps that live status-dashboard result accepted and prepares the remaining authenticated-admin activation package. MS-023D status-dashboard production transport remains accepted. The same-origin status/auth proxies now hide upstream `Access-Control-*` response headers; authenticated admin activation still requires backend admin-auth values in the backend API service runtime. `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. Placing values only in `rss-admin-ui/.env.production` is insufficient; use `deploy/production/backend-admin-auth.env.template` for the backend runtime and restart/recreate the backend API under the operator rollback plan after placement. Redacted local/operator smoke support is available through `npm run auth-smoke:redacted`, with real credentials supplied only by environment variables and never by command-line arguments.
 
+MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED responds to the operator-reported `admin-auth-smoke: fetch failed`, frontend Compose interpolation failure, and restart-loop blocker. Frontend production Compose uses `habersoft-rss-frontend:latest` only as an operator-managed mutable local image default so `docker compose -f deploy/production/compose.yaml ps` and `config` can inspect without an env file. Release candidates should still use an immutable image identity in operator env. The authenticated admin shell remains pending; no live acceptance claimed for the latest operator recreate until redacted retest evidence is returned.
+
 ## Docker
 
 Local image build:
@@ -145,6 +158,15 @@ Container health endpoint:
 ```
 
 Local root Compose publishes the UI on loopback port `8081`.
+
+Operator inspection helpers:
+
+```bash
+npm run ops:compose:ps
+npm run ops:compose:logs -- rss-admin-ui
+npm run production:diagnose:redacted
+npm run verify:operator-ergonomics
+```
 
 MS-024A local rehearsal commands:
 
