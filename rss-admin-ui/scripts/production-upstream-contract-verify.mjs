@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const packageStatus = "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED";
+const currentStatus = "MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED";
 const upstreamNames = ["ADMIN_UI_HEALTH_UPSTREAM_ORIGIN", "ADMIN_UI_AUTH_UPSTREAM_ORIGIN"];
 const publicEdgeOrigins = [
   "https://rss.habersoft.com",
@@ -42,7 +43,8 @@ console.log(
   JSON.stringify(
     {
       status: "production-upstream-contract-verify-ok",
-      admin_ui_state: packageStatus,
+      admin_ui_state: currentStatus,
+      prior_status_dashboard_state: packageStatus,
       public_edge_upstreams_rejected: publicEdgeOrigins.length,
       loopback_upstreams_rejected: loopbackOrigins.length,
       internal_examples_accepted: safeInternalExamples.length,
@@ -246,7 +248,9 @@ function assertDocsContract() {
 
   for (const fragment of [
     packageStatus,
+    "MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED",
     "AUTH_NOT_CONFIGURED_RESIDUAL",
+    "AUTH_CONFIGURED_UNAUTHENTICATED",
     "codex_public_readonly_verified",
     "operator-reported",
     "public `https://rss-panel.habersoft.com/status-api/health/ready` still returns `502`",
@@ -269,7 +273,9 @@ function assertDocsContract() {
     "public_edge_upstream_rejected",
     "npm run test:status-api-production-networking",
     "npm run test:status-api-upstream-remediation",
-    "Authenticated admin-shell production acceptance remains pending"
+    "authenticated admin shell production acceptance",
+    "Codex did not independently perform a credentialed login",
+    "future business/admin write features are not accepted"
   ]) {
     if (!docs.includes(fragment)) failures.push(`docs missing upstream contract fragment: ${fragment}`);
   }

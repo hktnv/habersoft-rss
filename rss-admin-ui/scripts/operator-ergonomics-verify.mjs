@@ -164,6 +164,7 @@ function assertDocs() {
     "npm run production:diagnose:redacted",
     "npm run verify:operator-ergonomics",
     "npm run verify:production-overlay-canonicalization",
+    "npm run verify:production-auth-acceptance",
     "habersoft-rss-frontend:latest",
     "operator-managed mutable local image default",
     "invalid_upstream_origin",
@@ -171,8 +172,9 @@ function assertDocs() {
     "upstream_unavailable",
     "upstream_forbidden",
     "frontend container may be down/restarting",
-    "authenticated admin shell remains pending",
-    "no live acceptance claimed"
+    "MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED",
+    "auth-smoke:redacted remains a redacted regression/sanity tool",
+    "Codex did not independently perform a credentialed login"
   ]) {
     if (!docs.includes(fragment)) failures.push(`docs missing MS-024B fragment: ${fragment}`);
   }

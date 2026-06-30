@@ -1,6 +1,6 @@
 # Live Status Dashboard Acceptance
 
-Status: `MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING`.
+Status: `MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED`.
 
 MS-023D closes the read-only status-dashboard production acceptance boundary for the already operator-managed admin UI surface. The accepted scope is limited to the production shell health endpoint and same-origin status-api transport:
 
@@ -10,11 +10,11 @@ GET /status-api/health/live
 GET /status-api/health/ready
 ```
 
-This is not authenticated admin product acceptance. Login, session-authenticated dashboard visibility, logout, business admin pages, feed/user/tenant management, backend writes, monitoring/SLA claims, and privileged production evidence projection remain out of scope.
+MS-024F records authenticated admin shell acceptance for the current implemented status/auth shell scope by operator report. Business admin pages, feed/user/tenant management, backend writes, monitoring/SLA claims, privileged production evidence projection, and future admin product slices remain out of scope.
 
 Codex did not mutate production for MS-023D. Codex did not SSH/SCP/SFTP/rsync, restart services, run production Docker commands, edit production env files, capture rollback baseline, publish an image, create a registry tag, create a Git tag, create a GitHub Release, create a PR, or read production secrets.
 
-MS-023D status-dashboard production transport remains accepted. MS-024E adds operator-reported evidence that backend admin auth is configured and the frontend edge returns `AUTH_CONFIGURED_UNAUTHENTICATED` after `npm run ops:compose:recreate`. It does not accept authenticated admin-shell production, and it does not perform production deployment or rollback-baseline capture.
+MS-023D status-dashboard production transport remains accepted. MS-024E adds operator-reported evidence that backend admin auth is configured and the frontend edge returns `AUTH_CONFIGURED_UNAUTHENTICATED` after `npm run ops:compose:recreate`. MS-024F adds the operator-reported statement that authenticated admin shell production acceptance is closed for the current implemented scope. Codex did not independently perform a credentialed login, mutate production, or capture rollback baseline.
 
 ## Evidence Boundary
 
@@ -29,7 +29,7 @@ The operator reported and Codex independently verified with public read-only GET
 | `https://rss-panel.habersoft.com/status-api/health/ready` | `200` | `status=ready`, `postgres=up`, `redis=up`, `tenantAuth=up` |
 | `https://rss-panel.habersoft.com/admin-auth/session` | `501` | `configured=false`, `authenticated=false`, `status=not_configured`, `reason=not_configured` |
 
-The `501 not_configured` admin-auth result is classified as `AUTH_NOT_CONFIGURED_RESIDUAL`. It is not a blocker for the read-only status-dashboard closure because the status dashboard transport uses only `/status-api/health/live` and `/status-api/health/ready` without credentials. It is a blocker for authenticated admin-shell production acceptance.
+The `501 not_configured` admin-auth result was classified as `AUTH_NOT_CONFIGURED_RESIDUAL`. It is not a blocker for the read-only status-dashboard closure because the status dashboard transport uses only `/status-api/health/live` and `/status-api/health/ready` without credentials. It was the authenticated admin-shell production acceptance residual later resolved through MS-024E configured-auth evidence and MS-024F operator-reported acceptance.
 
 MS-024E operator-reported update:
 
@@ -42,7 +42,16 @@ MS-024E operator-reported update:
 
 The frontend proxy recovered after canonical overlay helper recreate (`npm run ops:compose:recreate`) following the backend recreate.
 
-The updated auth result is `AUTH_CONFIGURED_UNAUTHENTICATED`. It means the backend admin-auth env is wired and the frontend proxy is reaching it before login. It is not authenticated admin product acceptance; login_smoke_pending remains.
+The updated auth result was `AUTH_CONFIGURED_UNAUTHENTICATED`. It means the backend admin-auth env is wired and the frontend proxy is reaching it before login.
+
+MS-024F operator-reported update:
+
+- bounded status: `MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED`;
+- source type: `operator_reported`;
+- operator statement: after MS-024E delivery, production retest was performed and the authenticated admin shell was accepted in production;
+- accepted scope: `/healthz`, same-origin `/status-api/health/*`, same-origin `/admin-auth/*`, and protected shell entry/exit behavior as currently implemented;
+- source boundary: Codex did not independently perform a credentialed login, did not read real credentials, did not run real credentialed smoke, and did not mutate production;
+- future business/admin write features are not accepted.
 
 ## Runtime Ownership Split
 
@@ -99,6 +108,6 @@ GET /admin-auth/session with the valid cookie -> HTTP 200, authenticated=true
 POST /admin-auth/logout -> HTTP 200, server-side session invalidated
 ```
 
-That progression is not accepted by MS-023D and requires a separate operator-authorized evidence milestone.
+That progression was not accepted by MS-023D. MS-024F now records the operator-reported acceptance of the current implemented authenticated admin shell scope.
 
-The redacted smoke helper for that later evidence is `npm run auth-smoke:redacted`; credentials must be supplied only through `ADMIN_AUTH_SMOKE_USERNAME` and `ADMIN_AUTH_SMOKE_PASSWORD`. Local synthetic coverage is `npm run test:admin-auth-smoke-redacted` and package coverage is `npm run verify:ms024a-auth-enablement-package`.
+The redacted smoke helper is now a regression/sanity tool, not a pending acceptance blocker for the current implemented scope: `npm run auth-smoke:redacted`; credentials must be supplied only through `ADMIN_AUTH_SMOKE_USERNAME` and `ADMIN_AUTH_SMOKE_PASSWORD`. Local synthetic coverage is `npm run test:admin-auth-smoke-redacted`, package coverage is `npm run verify:ms024a-auth-enablement-package`, and claim-boundary coverage is `npm run verify:production-auth-acceptance`. No further AUTH_NOT_CONFIGURED_RESIDUAL or AUTH_CONFIGURED_UNAUTHENTICATED operator action remains for the current implemented admin-auth shell scope unless new contradictory evidence appears.

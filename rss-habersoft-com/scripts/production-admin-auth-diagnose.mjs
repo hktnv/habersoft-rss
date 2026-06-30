@@ -75,7 +75,7 @@ writeJson({
     "npm run production:diagnose:redacted",
     "recreate main-service-api after operator-owned admin-auth env changes",
     "after backend API/image/network/admin-auth env recreate, run: cd /opt/habersoft-rss/rss-admin-ui && npm run ops:compose:recreate",
-    "then run frontend auth smoke without credentials to confirm AUTH_CONFIGURED_UNAUTHENTICATED, followed by credential env login smoke for AUTHENTICATED_ADMIN_ACCEPTED"
+    "use frontend auth smoke as a redacted regression/sanity tool; operator-reported MS-024F acceptance is recorded separately without requiring Codex credentialed login"
   ],
   output: "redacted"
 });

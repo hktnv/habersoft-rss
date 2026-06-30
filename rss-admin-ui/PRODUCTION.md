@@ -1,8 +1,8 @@
 # rss-admin-ui Production Guide
 
-Status: `MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING`.
+Status: `MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED`.
 
-This guide owns the frontend delivery contract for `rss-admin-ui`. MS-022A adds a local/tested same-origin admin auth/session foundation on top of the protected shell foundation. MS-022B adds the secretless production activation package, local production-mode RC acceptance, and operator handoff docs for a later authorized milestone. MS-023A-R2 prepares the operator-managed production configuration/proxy package and runbook guidance. MS-023B remediates the operator-reported public-edge status-api upstream blocker. MS-023C remediates the operator-reported production Docker bridge container-loopback upstream misconfiguration. MS-023D records read-only live production status-dashboard transport acceptance and classifies admin auth as not configured. MS-024A prepares the operator auth enablement package and same-origin proxy hardening while production admin auth remains pending operator backend runtime changes. MS-024B adds operator ergonomics, auth-smoke diagnostics, and graduated guardrails after the operator-reported latest recreate blocker. MS-024C canonicalizes backend-network overlay usage for production service-DNS upstreams, adds no-crash request-time proxy resolution for missing service DNS, and points `AUTH_NOT_CONFIGURED_RESIDUAL` to backend runtime auth activation diagnostics. MS-024D lands the backend production Compose env mapping needed for that activation path. MS-024E records operator-reported configured unauthenticated auth-session evidence after frontend helper recreate, while authenticated admin-shell acceptance remains login-smoke pending. No production deployment is performed by Codex.
+This guide owns the frontend delivery contract for `rss-admin-ui`. MS-022A adds a local/tested same-origin admin auth/session foundation on top of the protected shell foundation. MS-022B adds the secretless production activation package, local production-mode RC acceptance, and operator handoff docs for a later authorized milestone. MS-023A-R2 prepares the operator-managed production configuration/proxy package and runbook guidance. MS-023B remediates the operator-reported public-edge status-api upstream blocker. MS-023C remediates the operator-reported production Docker bridge container-loopback upstream misconfiguration. MS-023D records read-only live production status-dashboard transport acceptance and classifies admin auth as not configured. MS-024A prepares the operator auth enablement package and same-origin proxy hardening while production admin auth remained pending operator backend runtime changes. MS-024B adds operator ergonomics, auth-smoke diagnostics, and graduated guardrails after the operator-reported latest recreate blocker. MS-024C canonicalizes backend-network overlay usage for production service-DNS upstreams, adds no-crash request-time proxy resolution for missing service DNS, and points `AUTH_NOT_CONFIGURED_RESIDUAL` to backend runtime auth activation diagnostics. MS-024D lands the backend production Compose env mapping needed for that activation path. MS-024E records operator-reported configured unauthenticated auth-session evidence after frontend helper recreate. MS-024F records the operator-reported production retest statement that authenticated admin shell production acceptance is closed for the current implemented status/auth shell scope. No production deployment or credentialed login is performed by Codex.
 
 Historical note: MS-020B supersedes the MS-020A `FOUNDATION_ONLY` state. `FOUNDATION_ONLY` is not the current frontend status token.
 
@@ -26,7 +26,7 @@ MS-024C keeps that fail-closed traffic policy but removes the service-DNS restar
 
 The read-only dashboard observes only same-origin `GET /status-api/health/live` and `GET /status-api/health/ready`, mapped by the frontend runtime to backend `/health/live` and `/health/ready`. It uses no `Authorization` header, no cookie credential, no bearer or Tenant token, no Agent key, no browser persistence, and no write method. The full transport contract is [.docs/same-origin-health-transport.md](.docs/same-origin-health-transport.md).
 
-The future production activation data classification, authority record template, edge/server requirements, and post-deploy evidence checklist are [.docs/production-activation-readiness.md](.docs/production-activation-readiness.md). The operator-managed production package, live status-dashboard acceptance, status-api production networking runbook, and operator handoff are [.docs/production-activation-package.md](.docs/production-activation-package.md), [.docs/live-status-dashboard-acceptance.md](.docs/live-status-dashboard-acceptance.md), [.docs/status-api-upstream-remediation.md](.docs/status-api-upstream-remediation.md), and [.docs/admin-auth-production-operator-handoff.md](.docs/admin-auth-production-operator-handoff.md). MS-023D status transport is accepted; MS-024E auth-session status is `AUTH_CONFIGURED_UNAUTHENTICATED`; authenticated admin-shell production acceptance remains pending.
+The future production activation data classification, authority record template, edge/server requirements, and post-deploy evidence checklist are [.docs/production-activation-readiness.md](.docs/production-activation-readiness.md). The operator-managed production package, live status-dashboard acceptance, status-api production networking runbook, and operator handoff are [.docs/production-activation-package.md](.docs/production-activation-package.md), [.docs/live-status-dashboard-acceptance.md](.docs/live-status-dashboard-acceptance.md), [.docs/status-api-upstream-remediation.md](.docs/status-api-upstream-remediation.md), and [.docs/admin-auth-production-operator-handoff.md](.docs/admin-auth-production-operator-handoff.md). MS-023D status transport is accepted; MS-024E auth-session status was `AUTH_CONFIGURED_UNAUTHENTICATED`; MS-024F authenticated admin shell acceptance is accepted by operator report for the current implemented shell scope.
 
 The protected admin shell unlocks only when the same-origin session endpoint returns `authenticated: true`. The current implementation still exposes no privileged business data and no admin write controls. Business admin features remain blocked until a separate authority-backed milestone defines Tenant/admin identity, role policy, authenticated field classification, and production evidence. The full boundary is [.docs/admin-auth-session-boundary.md](.docs/admin-auth-session-boundary.md).
 
@@ -34,7 +34,7 @@ MS-022A defines `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /
 
 Backend admin-auth variables must be applied to the backend API runtime. Passing backend-only auth variables only to the frontend/admin UI Compose command does not enable backend auth. If `/admin-auth/session` returns HTTP `501 not_configured` while `/healthz` and `/status-api/health/*` pass, the next operator action is backend runtime admin-auth env placement plus `main-service-api` restart/recreate under the rollback plan, not continued changes to `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`.
 
-For MS-024D/MS-024E, placing values only in `rss-admin-ui/.env.production` is insufficient because that file is frontend runtime input, not backend API service runtime input. `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. `/admin-auth/session -> configured=true, authenticated=false, reason=unauthenticated` means backend auth is configured and awaiting login smoke. Use `deploy/production/backend-admin-auth.env.template`, the backend `production.env.template` admin-auth block, and backend verifiers before operator-side backend API restart/recreate.
+For MS-024D/MS-024E, placing values only in `rss-admin-ui/.env.production` is insufficient because that file is frontend runtime input, not backend API service runtime input. `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. `/admin-auth/session -> configured=true, authenticated=false, reason=unauthenticated` means backend auth is configured before login. MS-024F records that the later production retest accepted the authenticated admin shell by operator report. Use `deploy/production/backend-admin-auth.env.template`, the backend `production.env.template` admin-auth block, and backend verifiers before operator-side backend API restart/recreate.
 
 ## Image Contract
 
@@ -107,7 +107,7 @@ MS-023D accepts the read-only production status-dashboard transport from operato
 - `https://rss-panel.habersoft.com/status-api/health/live -> 200, status=live`;
 - `https://rss-panel.habersoft.com/status-api/health/ready -> 200, status=ready, postgres=up, redis=up, tenantAuth=up`.
 
-`https://rss-panel.habersoft.com/admin-auth/session -> 501 not_configured` is classified as `AUTH_NOT_CONFIGURED_RESIDUAL`. It is not a blocker for read-only status-dashboard closure. It is a blocker for authenticated admin-shell production acceptance.
+`https://rss-panel.habersoft.com/admin-auth/session -> 501 not_configured` was classified as `AUTH_NOT_CONFIGURED_RESIDUAL`. It was not a blocker for read-only status-dashboard closure, but it was the authenticated admin-shell production acceptance residual later resolved through MS-024E configured-auth evidence and MS-024F operator-reported authenticated-shell acceptance.
 
 The residual means backend admin auth is still disabled/not configured at the backend API runtime boundary, or the frontend auth route remains in its static fail-closed sentinel mode. Because status-api health is already accepted, do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` for this residual. Verify `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` points to the internal backend origin and verify backend runtime env placement from `backend-admin-auth.env.template`.
 
@@ -124,7 +124,7 @@ MS-024E records operator-reported evidence only; Codex did not contact or mutate
 - after that helper recreate, `/healthz`, `/status-api/health/live`, `/status-api/health/ready`, and `/admin-auth/session` passed through the frontend edge;
 - `auth-smoke:redacted` returned `AUTH_CONFIGURED_UNAUTHENTICATED` with `diagnostic_classes: []`.
 
-`AUTH_CONFIGURED_UNAUTHENTICATED` is the expected no-cookie, pre-login state. It is not authenticated admin-shell acceptance. The next evidence required for full authenticated admin acceptance is redacted credential login smoke using only environment variables:
+`AUTH_CONFIGURED_UNAUTHENTICATED` is the expected no-cookie, pre-login state recorded by MS-024E. MS-024F closes the current authenticated admin shell acceptance residual by operator report. For regression/sanity checks, operators may still run redacted credential login smoke using only environment variables:
 
 ```bash
 ADMIN_AUTH_SMOKE_USERNAME="<operator-owned>" \
@@ -132,7 +132,7 @@ ADMIN_AUTH_SMOKE_PASSWORD="<operator-owned>" \
 npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
 ```
 
-Report only the redacted classification, such as `AUTHENTICATED_ADMIN_ACCEPTED` or `AUTH_LOGIN_ATTEMPT_FAILED`; do not paste credentials, cookies, session IDs, password hashes, session secrets, raw logs, or raw response bodies.
+Report only the redacted classification, such as `AUTHENTICATED_ADMIN_ACCEPTED` or `AUTH_LOGIN_ATTEMPT_FAILED`; do not paste credentials, cookies, session IDs, password hashes, session secrets, raw logs, or raw response bodies. This smoke is no longer a pending acceptance blocker for the current implemented auth shell scope unless new contradictory evidence appears.
 
 Historical MS-023C remediation remains the correct networking reference if status-api regresses. Preferred frontend upstream topology remains:
 
@@ -157,6 +157,34 @@ Host-gateway mode with `http://host.docker.internal:3200` is allowed only after 
 
 Detailed runbooks: [.docs/live-status-dashboard-acceptance.md](.docs/live-status-dashboard-acceptance.md) and [.docs/status-api-upstream-remediation.md](.docs/status-api-upstream-remediation.md).
 
+## MS-024F Authenticated Admin Shell Acceptance
+
+Bounded status: `MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED`.
+
+Browser status label: `AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED`.
+
+MS-024F records the latest operator-reported production retest statement: after MS-024E delivery, production retest was performed and the authenticated admin shell was accepted in production.
+
+Accepted current scope:
+
+- public/loopback `/healthz` availability;
+- same-origin `/status-api/health/live` and `/status-api/health/ready` status dashboard transport;
+- same-origin `/admin-auth/session`, `/admin-auth/login`, and `/admin-auth/logout` flow as implemented;
+- protected shell entry/exit behavior for the current read-only status dashboard surface.
+
+Evidence source boundary:
+
+- source type: `operator_reported`;
+- Codex did not independently perform a credentialed login;
+- Codex did not read, hash, print, copy, or persist real admin credentials, cookies, session IDs, password hashes, session secrets, Redis keys, raw production logs, or raw response bodies;
+- Codex did not mutate production, restart/recreate containers, edit env files, publish images, create a Git tag, create a GitHub Release, create a PR, or capture rollback baseline.
+
+Future boundary:
+
+- future business/admin write features are not accepted;
+- feed editing, tenant management, role/permission expansion, broader authenticated field classification, and admin product slices require separate bounded milestones;
+- No further AUTH_NOT_CONFIGURED_RESIDUAL or AUTH_CONFIGURED_UNAUTHENTICATED operator action remains for the current implemented admin-auth shell scope unless new contradictory evidence appears.
+
 ## MS-024A Auth Enablement Package
 
 Bounded status: `MS-024A_ADMIN_AUTH_ENABLEMENT_PACKAGE_READY_STATUS_DASHBOARD_ACTIVE_AUTH_ACTIVATION_PENDING_OPERATOR`.
@@ -169,7 +197,7 @@ MS-023D status-dashboard production transport remains accepted. MS-024A adds the
 - `npm run auth-smoke:redacted` performs a session-only classification by default and an optional `--login-smoke` only when `ADMIN_AUTH_SMOKE_USERNAME` and `ADMIN_AUTH_SMOKE_PASSWORD` are supplied through environment variables;
 - `npm run test:admin-auth-smoke-redacted` and `npm run verify:ms024a-auth-enablement-package` validate the package locally with synthetic values.
 
-No CORS broadening is part of this package. Redacted login/session/logout evidence remains an operator-managed future acceptance input after backend runtime admin-auth env placement and `main-service-api` restart/recreate.
+No CORS broadening is part of this package. Redacted login/session/logout evidence remains operator-managed regression/sanity input after future backend runtime admin-auth env placement or `main-service-api` restart/recreate.
 
 Local readiness package command:
 
@@ -178,6 +206,7 @@ npm run verify:production-readiness
 npm run verify:production-activation-package
 npm run verify:operator-managed-production-package
 npm run verify:production-upstream-contract
+npm run verify:production-auth-acceptance
 npm run verify:operator-ergonomics
 npm run verify:live-evidence-intake
 npm run verify:admin-auth-not-configured-remediation
@@ -195,7 +224,7 @@ npm run test:auth-proxy
 
 Bounded status: `MS-024B_OPERATOR_ERGONOMICS_AUTH_SMOKE_REMEDIATION_READY_OPERATOR_RETEST_REQUIRED`.
 
-This is repository remediation only. The status-dashboard scope was accepted in MS-023D, but the operator-reported latest recreate introduced a new auth/runtime blocker; no live acceptance claimed here. The authenticated admin shell remains pending until redacted auth smoke passes live.
+This is repository remediation only. The status-dashboard scope was accepted in MS-023D, but the operator-reported latest recreate introduced a new auth/runtime blocker; no live acceptance was claimed in MS-024B. MS-024F later closes the current authenticated admin shell acceptance residual by operator report.
 
 Policy: graduated guardrails. Inspection should be easy, diagnostics should be clear, static frontend should not crash-loop for upstream mistakes, unsafe upstream traffic must still fail closed, and secrets remain protected.
 
@@ -273,7 +302,7 @@ npm run production:admin-auth:compose:verify
 npm run admin-auth:verify-config -- --env-file <operator-backend-auth-env> --require-enabled
 ```
 
-Backend production Compose now maps admin-auth values into `main-service-api` and intentionally omits them from `main-service-worker`. After backend auth env activation or any backend API/image/network/admin-auth env recreate, recreate `main-service-api` under the backend runbook, then always recreate the frontend with `npm run ops:compose:recreate` before rerunning `auth-smoke:redacted`. Authenticated admin shell remains pending until redacted login/session/logout smoke passes.
+Backend production Compose now maps admin-auth values into `main-service-api` and intentionally omits them from `main-service-worker`. After backend auth env activation or any backend API/image/network/admin-auth env recreate, recreate `main-service-api` under the backend runbook, then always recreate the frontend with `npm run ops:compose:recreate` before rerunning `auth-smoke:redacted`. MS-024F records the later operator-reported authenticated shell acceptance; rerun smoke only as redacted regression/sanity evidence unless new contradictory evidence appears.
 
 Advanced direct Compose fallback for operators who intentionally bypass the helper:
 
@@ -306,4 +335,4 @@ A future operator or separately authorized deploy milestone must prove, with red
 
 ## Claim Boundary
 
-MS-023D accepts only the read-only status-dashboard production transport. MS-024E records that `AUTH_NOT_CONFIGURED_RESIDUAL` is resolved to `AUTH_CONFIGURED_UNAUTHENTICATED` by operator report, but authenticated admin-shell production acceptance remains pending until redacted login/session/logout evidence is accepted.
+MS-023D accepts the read-only status-dashboard production transport. MS-024E records that `AUTH_NOT_CONFIGURED_RESIDUAL` is resolved to `AUTH_CONFIGURED_UNAUTHENTICATED` by operator report. MS-024F records that authenticated admin shell production acceptance is closed for the current implemented scope by operator report. The claim does not include Codex credentialed login, future business/admin write features, feed editing, tenant management, role/permission expansion, long-term stability, or production mutation.

@@ -7,6 +7,7 @@ const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const repoRoot = path.resolve(frontendRoot, "..");
 const backendRoot = path.join(repoRoot, "rss-habersoft-com");
 const packageStatus = "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED";
+const currentStatus = "MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED";
 const failures = [];
 
 assertRequiredFiles();
@@ -27,7 +28,8 @@ console.log(
   JSON.stringify(
     {
       status: "operator-managed-production-package-verify-ok",
-      admin_ui_state: packageStatus,
+      admin_ui_state: currentStatus,
+      prior_status_dashboard_state: packageStatus,
       rollback_baseline: "operator-managed",
       server_deployment: "operator-managed",
       production_contact: false,
@@ -75,6 +77,9 @@ function assertPackageScript() {
   if (pkg.scripts?.["verify:production-upstream-contract"] !== "node scripts/production-upstream-contract-verify.mjs") {
     failures.push("package.json missing verify:production-upstream-contract");
   }
+  if (pkg.scripts?.["verify:production-auth-acceptance"] !== "node scripts/production-auth-acceptance-verify.mjs") {
+    failures.push("package.json missing verify:production-auth-acceptance");
+  }
   if (pkg.scripts?.["verify:live-evidence-intake"] !== "node scripts/live-evidence-intake-verify.mjs") {
     failures.push("package.json missing verify:live-evidence-intake");
   }
@@ -110,9 +115,13 @@ function assertDocs() {
 
   for (const fragment of [
     packageStatus,
+    "MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED",
     "AUTH_NOT_CONFIGURED_RESIDUAL",
+    "AUTH_CONFIGURED_UNAUTHENTICATED",
+    "AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED",
     "codex_public_readonly_verified",
     "operator_reported",
+    "operator-reported authenticated admin shell",
     "rollback baseline is operator-managed",
     "server deployment/configuration is operator-managed",
     "no production deployment",
@@ -149,6 +158,7 @@ function assertDocs() {
     "test:status-api-production-networking",
     "verify:operator-ergonomics",
     "verify:production-overlay-canonicalization",
+    "verify:production-auth-acceptance",
     "ops:compose:config",
     "ops:compose:up",
     "graduated guardrails",

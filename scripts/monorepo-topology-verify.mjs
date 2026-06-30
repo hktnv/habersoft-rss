@@ -187,13 +187,17 @@ function assertRootDocs() {
       !frontendProduction.includes("MS-023B_STATUS_API_UPSTREAM_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED") &&
       !frontendProduction.includes("MS-023C_STATUS_API_PRODUCTION_NETWORK_REMEDIATION_PACKAGE_READY_OPERATOR_FIX_REQUIRED") &&
       !frontendProduction.includes("MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED") &&
-      !frontendProduction.includes("MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING")) ||
+      !frontendProduction.includes("MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING") &&
+      !frontendProduction.includes("MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED")) ||
     !frontendProduction.includes("/admin-auth/session") ||
     !frontendProduction.includes("/admin-auth/login") ||
     !frontendProduction.includes("AUTH_NOT_CONFIGURED_RESIDUAL") ||
-    !frontendProduction.includes("AUTH_CONFIGURED_UNAUTHENTICATED")
+    !frontendProduction.includes("AUTH_CONFIGURED_UNAUTHENTICATED") ||
+    !frontendProduction.includes("MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED") ||
+    !frontendProduction.includes("operator-reported") ||
+    !frontendProduction.includes("future business/admin write features are not accepted")
   ) {
-    failures.push("frontend production guide must state MS-022A auth foundation, historical MS-023D auth residual, and MS-024E configured unauthenticated state");
+    failures.push("frontend production guide must state MS-022A auth foundation, historical MS-023D/MS-024E auth states, and MS-024F operator-reported auth-shell acceptance");
   }
   if (/byte-identical mirror/iu.test(rootProduction) || /operator mirror PRODUCTION\.md SHA-256/iu.test(rootProduction)) {
     failures.push("root production guide still claims old mirror contract");

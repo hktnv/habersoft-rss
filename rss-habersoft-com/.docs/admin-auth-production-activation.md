@@ -1,10 +1,10 @@
 # Admin Auth Production Activation Package
 
-Status: `MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING`.
+Status: `MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED`.
 
-MS-024E records operator-reported production retest evidence after MS-024D: backend admin-auth runtime env is live and valid in `main-service-api`, `main-service-worker` intentionally remains without admin-auth env, backend loopback `/admin-auth/session` returns `configured=true`, `authenticated=false`, `reason=unauthenticated`, and the frontend proxy recovered after the canonical overlay helper recreate. It does not claim authenticated admin login/session acceptance, deploy the admin UI, mutate production, capture rollback baseline, publish an image, create a Git tag, or request real production secrets.
+MS-024E records operator-reported production retest evidence after MS-024D: backend admin-auth runtime env is live and valid in `main-service-api`, `main-service-worker` intentionally remains without admin-auth env, backend loopback `/admin-auth/session` returns `configured=true`, `authenticated=false`, `reason=unauthenticated`, and the frontend proxy recovered after the canonical overlay helper recreate. MS-024F records the later operator-reported production retest statement that authenticated admin shell production acceptance is closed for the current implemented status/auth shell scope. Codex did not independently perform a credentialed login, deploy the admin UI, mutate production, capture rollback baseline, publish an image, create a Git tag, create a GitHub Release, create a PR, or request real production secrets.
 
-MS-023D status-dashboard production transport remains accepted. Historically, `/admin-auth/session -> 501 not_configured` meant backend auth was not active at the proxied upstream. MS-024E intakes the operator report that this residual is resolved to the expected pre-login state: `/admin-auth/session -> configured=true, authenticated=false, reason=unauthenticated` and `auth-smoke:redacted -> AUTH_CONFIGURED_UNAUTHENTICATED` with empty `diagnostic_classes`. `AUTH_CONFIGURED_UNAUTHENTICATED` is not authenticated admin-shell acceptance; it is the state that requires the next operator credentialed redacted login smoke.
+MS-023D status-dashboard production transport remains accepted. Historically, `/admin-auth/session -> 501 not_configured` meant backend auth was not active at the proxied upstream. MS-024E intakes the operator report that this residual is resolved to the expected pre-login state: `/admin-auth/session -> configured=true`, `authenticated=false`, `reason=unauthenticated` and `auth-smoke:redacted -> AUTH_CONFIGURED_UNAUTHENTICATED` with empty `diagnostic_classes`. MS-024F closes that current-scope acceptance residual by operator report. `auth-smoke:redacted` remains a redacted regression/sanity tool, not a pending acceptance blocker unless new contradictory evidence appears.
 
 ## Runtime Contract
 
@@ -89,13 +89,13 @@ ADMIN_UI_SESSION_REDIS_PREFIX=admin_auth:production
 
 ## Future Production Authority
 
-A future production activation milestone must be operator-authorized and must provide evidence without raw secrets:
+Future production auth/runtime changes must be operator-authorized and must provide evidence without raw secrets:
 
 - immutable backend and frontend image identity;
 - remote Git SHA;
 - production environment variable presence with secret values redacted;
 - `GET /admin-auth/session` fail-closed before login;
-- login, session, logout smoke with redacted request/response evidence;
+- login, session, logout smoke with redacted request/response evidence when rerun as regression/sanity proof;
 - cookie evidence showing `HttpOnly`, `SameSite=Lax`, path `/admin-auth`, and `Secure` under TLS production;
 - no Agent key, Tenant bearer token, password, password hash, session secret, Redis session key, raw log, or raw body disclosure;
 - rollback path and exact image/env identity used for rollback.
@@ -110,4 +110,4 @@ MS-024E keeps that claim boundary and improves diagnostics/runbook guidance. If 
 npm run admin-auth:verify-config -- --env-file <operator-backend-auth-env> --require-enabled
 ```
 
-Backend API recreate after env placement is an operator rollback/config decision and is not performed by Codex. Worker recreate is not required solely for backend admin-auth env placement. Authenticated admin-shell production acceptance remains pending until the operator supplies `ADMIN_AUTH_SMOKE_USERNAME` and `ADMIN_AUTH_SMOKE_PASSWORD` as environment variables to `npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com` and reports a redacted `AUTHENTICATED_ADMIN_ACCEPTED` result.
+Backend API recreate after env placement is an operator rollback/config decision and is not performed by Codex. Worker recreate is not required solely for backend admin-auth env placement. MS-024F records the operator-reported authenticated admin shell production acceptance for the current implemented scope. No further AUTH_NOT_CONFIGURED_RESIDUAL or AUTH_CONFIGURED_UNAUTHENTICATED operator action remains for the current implemented admin-auth shell scope unless new contradictory evidence appears. Future business/admin write features are not accepted by this backend admin-auth activation package.

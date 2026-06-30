@@ -113,8 +113,8 @@ export function StatusDashboard({
             <dd>READ_ONLY_STATUS_DASHBOARD_PRODUCTION_TRANSPORT_ACTIVE</dd>
           </div>
           <div>
-            <dt>Deployment</dt>
-            <dd>AUTH_NOT_CONFIGURED_RESIDUAL</dd>
+            <dt>Auth shell</dt>
+            <dd>AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED</dd>
           </div>
           <div>
             <dt>API writes</dt>

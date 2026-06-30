@@ -1,12 +1,12 @@
 # Status API Production Networking Remediation
 
-Status: `MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING`.
+Status: `MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED`.
 
-MS-023C is a repository-level remediation package for an operator-reported live install blocker. MS-023D records that the live status-api blocker is now resolved for the read-only status-dashboard transport. MS-024B adds graduated guardrails after the operator-reported latest recreate showed a restart-loop and generic auth-smoke failure. MS-024C canonicalizes the backend-network overlay/helper path after the operator proved that plain `deploy/production/compose.yaml` can fail for service-DNS upstreams such as `main-service-api`. MS-024E records the post-backend-recreate edge symptom: backend loopback auth was configured, but the frontend retained stale upstream/network references until `npm run ops:compose:recreate`. Codex did not mutate the live server, capture rollback baseline, read secrets, publish an image, create a Git tag, create a GitHub Release, or create a PR.
+MS-023C is a repository-level remediation package for an operator-reported live install blocker. MS-023D records that the live status-api blocker is now resolved for the read-only status-dashboard transport. MS-024B adds graduated guardrails after the operator-reported latest recreate showed a restart-loop and generic auth-smoke failure. MS-024C canonicalizes the backend-network overlay/helper path after the operator proved that plain `deploy/production/compose.yaml` can fail for service-DNS upstreams such as `main-service-api`. MS-024E records the post-backend-recreate edge symptom: backend loopback auth was configured, but the frontend retained stale upstream/network references until `npm run ops:compose:recreate`. MS-024F records operator-reported authenticated admin shell acceptance after the MS-024E retest. Codex did not mutate the live server, perform credentialed login, capture rollback baseline, read secrets, publish an image, create a Git tag, create a GitHub Release, or create a PR.
 
-The bounded live status is now `MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING`. Evidence source is `operator_reported` plus `codex_public_readonly_verified` for MS-023D status transport, plus MS-024E operator-reported configured unauthenticated auth evidence. Authenticated admin-shell production acceptance remains pending because only `AUTH_CONFIGURED_UNAUTHENTICATED` has been reported, not `AUTHENTICATED_ADMIN_ACCEPTED`.
+The bounded live status is now `MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED`. Evidence source is `operator_reported` plus `codex_public_readonly_verified` for MS-023D status transport, plus MS-024E operator-reported configured unauthenticated auth evidence, plus MS-024F operator-reported authenticated shell acceptance. The accepted scope is the current status/auth shell only; future business/admin write features are not accepted.
 
-MS-024B did not claim the then-latest live recreate was healthy. MS-024E records the later operator retest as configured unauthenticated after frontend helper recreate. The authenticated admin shell remains pending.
+MS-024B did not claim the then-latest live recreate was healthy. MS-024E records the later operator retest as configured unauthenticated after frontend helper recreate. MS-024F records the operator-reported production retest that authenticated admin shell acceptance is closed for the current implemented scope.
 
 ## MS-023D Accepted Result
 
@@ -17,7 +17,7 @@ The operator reported and Codex verified using public read-only GET requests wit
 - `https://rss-panel.habersoft.com/status-api/health/ready -> 200, status=ready, postgres=up, redis=up, tenantAuth=up`;
 - `https://rss-panel.habersoft.com/admin-auth/session -> 501, configured=false, authenticated=false, status=not_configured`.
 
-The status-api production networking blocker is closed for the read-only dashboard transport. The historical admin-auth result was a separate backend auth activation residual. Because `/healthz` and `/status-api/health/*` pass, do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` for auth states. MS-024E records backend auth as configured unauthenticated after backend env activation and frontend helper recreate.
+The status-api production networking blocker is closed for the read-only dashboard transport. The historical admin-auth result was a separate backend auth activation residual. Because `/healthz` and `/status-api/health/*` pass, do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` for auth states. MS-024E records backend auth as configured unauthenticated after backend env activation and frontend helper recreate. MS-024F records operator-reported authenticated-shell acceptance; Codex did not independently perform a credentialed login.
 
 ## MS-024E Post-Backend-Recreate Guardrail
 
@@ -198,6 +198,6 @@ npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com
 
 ## Claim Boundary
 
-MS-023C lands a remediation package and runbook only. Production mutation remains operator-managed. Admin UI public shell is operator-reported up, but full production acceptance remains pending unless a future authorized step verifies the public `/status-api/health/ready` path after the production networking fix.
+MS-023C lands a remediation package and runbook only. Production mutation remains operator-managed. Admin UI public shell was operator-reported up, but full status-dashboard production acceptance was still pending until later evidence verified the public `/status-api/health/ready` path after the production networking fix.
 
-MS-023D supersedes that pending status for the read-only status-dashboard transport: `/healthz`, `/status-api/health/live`, and `/status-api/health/ready` are accepted. Authenticated admin-shell production acceptance remains pending until `AUTH_NOT_CONFIGURED_RESIDUAL` is resolved with backend runtime auth env placement and redacted auth smoke evidence.
+MS-023D supersedes that pending status for the read-only status-dashboard transport: `/healthz`, `/status-api/health/live`, and `/status-api/health/ready` are accepted. MS-024E resolves `AUTH_NOT_CONFIGURED_RESIDUAL` to `AUTH_CONFIGURED_UNAUTHENTICATED` by operator report. MS-024F records operator-reported authenticated admin shell production acceptance for the current implemented scope. Future business/admin write features remain out of scope.

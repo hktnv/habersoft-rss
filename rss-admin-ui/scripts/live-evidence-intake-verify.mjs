@@ -5,10 +5,12 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const backendRoot = path.join(repoRoot, "rss-habersoft-com");
-const packageStatus = "MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING";
+const packageStatus = "MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED";
+const ms024eStatus = "MS-024E_ADMIN_AUTH_CONFIGURED_UNAUTHENTICATED_PRODUCTION_VERIFIED_LOGIN_SMOKE_PENDING";
 const priorPackageStatus = "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED";
 const authResidual = "AUTH_NOT_CONFIGURED_RESIDUAL";
 const configuredUnauthenticated = "AUTH_CONFIGURED_UNAUTHENTICATED";
+const acceptedAuthShell = "AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED";
 const failures = [];
 
 const backendOnlyAuthVars = [
@@ -50,9 +52,10 @@ console.log(
       admin_ui_state: packageStatus,
       prior_status_dashboard_state: priorPackageStatus,
       historical_admin_auth_residual: authResidual,
-      current_admin_auth_state: configuredUnauthenticated,
+      ms024e_admin_auth_state: configuredUnauthenticated,
+      current_admin_auth_state: acceptedAuthShell,
       read_only_status_dashboard_transport: "accepted",
-      authenticated_admin_acceptance: false,
+      authenticated_admin_acceptance: "operator_reported",
       production_mutation: false,
       real_secret_use: false,
       registry_publication: false,
@@ -96,7 +99,8 @@ function assertPackageScripts() {
     "verify:admin-auth-not-configured-remediation": "node scripts/live-evidence-intake-verify.mjs",
     "verify:production-activation-package": "node scripts/production-activation-package-verify.mjs",
     "verify:operator-managed-production-package": "node scripts/operator-managed-production-package-verify.mjs",
-    "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs"
+    "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs",
+    "verify:production-auth-acceptance": "node scripts/production-auth-acceptance-verify.mjs"
   };
   for (const [name, command] of Object.entries(required)) {
     if (scripts[name] !== command) failures.push(`package.json missing ${name}`);
@@ -118,14 +122,18 @@ function assertDocs() {
 
   for (const fragment of [
     packageStatus,
+    ms024eStatus,
     priorPackageStatus,
     authResidual,
     configuredUnauthenticated,
+    acceptedAuthShell,
     "codex_public_readonly_verified",
     "operator_reported",
     "operator-reported",
     "read-only status-dashboard production",
-    "not authenticated admin product acceptance",
+    "authenticated admin shell production acceptance",
+    "Codex did not independently perform a credentialed login",
+    "future business/admin write features are not accepted",
     "/healthz",
     "/status-api/health/live",
     "/status-api/health/ready",
@@ -146,7 +154,8 @@ function assertDocs() {
     "backend API restart/recreate",
     "frontend proxy recovered after canonical overlay helper recreate",
     "npm run ops:compose:recreate",
-    "login smoke pending",
+    "auth-smoke:redacted remains a redacted regression/sanity tool",
+    "No further AUTH_NOT_CONFIGURED_RESIDUAL or AUTH_CONFIGURED_UNAUTHENTICATED operator action remains",
     "not continued changes to `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN`",
     "Do not paste real admin credentials",
     "No production deployment",
@@ -158,7 +167,7 @@ function assertDocs() {
   }
 
   for (const forbidden of [
-    /\bauthenticated admin(?:-shell)? production acceptance (?:is )?(?:accepted|complete|passed)\b/iu,
+    /\bCodex (?:logged in|performed a credentialed login|used real admin credentials)\b/iu,
     /\bproduction admin auth\s+(?:is|has been)\s+enabled\b/iu,
     /\bvalid login\s+(?:is|has been)\s+accepted\b/iu,
     /\bfeed\/user\/tenant management\s+(?:is|has been)\s+accepted\b/iu
@@ -251,7 +260,7 @@ function assertDashboardStatusSurface() {
   const appTest = readFrontend("tests/app-shell.test.tsx");
   for (const fragment of [
     "READ_ONLY_STATUS_DASHBOARD_PRODUCTION_TRANSPORT_ACTIVE",
-    authResidual,
+    acceptedAuthShell,
     "OUT_OF_SCOPE"
   ]) {
     if (!dashboard.includes(fragment)) failures.push(`dashboard status surface missing ${fragment}`);
