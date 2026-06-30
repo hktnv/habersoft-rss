@@ -169,7 +169,7 @@ function describeSessionStatus(status: AdminSessionStatus): { readonly heading: 
     case "authenticated":
       return {
         heading: "Admin session active",
-        message: "The protected admin surface is available for credential-free health observation."
+        message: "The protected admin surface is available for read-only operations overview and health observation."
       };
     case "auth_unavailable":
     case "invalid_response":

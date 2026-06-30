@@ -1,8 +1,10 @@
 # Admin Auth Session Boundary
 
-Status: `MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY - NOT_DEPLOYED`.
+Status: `MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
 
-MS-022A adds a local/tested same-origin admin auth/session foundation. It does not deploy `rss-admin-ui`, does not activate `rss-panel.habersoft.com`, does not mutate production edge/DNS/TLS/OpenLiteSpeed, and does not publish an image, tag, release, or registry artifact.
+Historical foundation status: `MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY - NOT_DEPLOYED`.
+
+MS-022A adds a local/tested same-origin admin auth/session foundation. MS-025A keeps that session model and uses it for the protected read-only admin operations route. This document does not claim MS-025A live production acceptance; deployment and retest remain operator-managed.
 
 ## Current Boundary
 
@@ -11,11 +13,13 @@ MS-022A adds a local/tested same-origin admin auth/session foundation. It does n
 - The browser uses only same-origin `/admin-auth/session`, `/admin-auth/login`, and `/admin-auth/logout`.
 - The frontend runtime proxies those auth paths only when server-only `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is configured.
 - If `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is absent, the runtime keeps the MS-021B static fail-closed not_configured sentinel.
-- Auth sessions use an opaque server-side session stored behind Redis and an HttpOnly `SameSite=Lax` cookie scoped to `/admin-auth`.
+- Auth sessions use an opaque server-side session stored behind Redis and an HttpOnly `SameSite=Lax` cookie scoped to `/`.
+- Login clears the historical `Path=/admin-auth` cookie, and logout clears both `Path=/` and `Path=/admin-auth`.
+- The authenticated operations dashboard uses `GET /admin-api/operations/summary` with the same cookie-based session.
 - No Agent key, `X-Agent-Key`, Tenant bearer token, JWT, refresh token, database URL, cookie secret, or production secret belongs in the browser.
-- The health dashboard is inside the protected shell and unlocks only when `/admin-auth/session` returns `authenticated: true`.
+- The health dashboard and read-only operations overview are inside the protected shell and unlock only when `/admin-auth/session` returns `authenticated: true`.
 - Health transport remains credential-free and still uses only `/status-api/health/live` and `/status-api/health/ready`.
-- Business admin writes, Tenant data, feed administration, roles, and privileged business metrics remain out of scope.
+- Business admin writes, Tenant data, feed administration, roles, raw rows, raw logs, and privileged non-aggregate data remain out of scope.
 
 ## Browser Contract
 
@@ -23,9 +27,12 @@ MS-022A adds a local/tested same-origin admin auth/session foundation. It does n
 GET  /admin-auth/session
 POST /admin-auth/login
 POST /admin-auth/logout
+GET  /admin-api/operations/summary
 ```
 
-Requests are relative same-origin requests with `cache: "no-store"` and no custom credential headers. The client uses browser cookie semantics only for the HttpOnly session cookie; it does not read or write cookies directly and does not use localStorage, sessionStorage, IndexedDB, or cookieStore.
+Requests are relative same-origin requests with `cache: "no-store"` and no custom credential headers. The client uses browser cookie semantics only for the HttpOnly session cookie; it does not read or write cookies directly and does not use localStorage, sessionStorage, IndexedDB, cookieStore, or `document.cookie`.
+
+The operations summary is GET-only, aggregate-only, and manually refreshable. It must not expose tenant identifiers, feed URLs, entry content, raw feed content, raw logs, raw request/response bodies, upstream origins, password hashes, session secrets, cookies, Agent keys, Tenant tokens, or database/Redis URLs.
 
 ## Future Production Gates
 

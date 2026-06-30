@@ -39,6 +39,7 @@ assertNoProductionContactEnv(rootComposeEnv);
 assertNoProductionContactEnv(productionComposeEnv);
 
 run("npm", ["run", "build"]);
+run("npm", ["run", "verify:admin-operations-dashboard"]);
 run("docker", ["build", "-t", image, "."], { printOutput: false, timeoutMs: 600000 });
 console.log(JSON.stringify({ status: "docker-build-ok", image }));
 
@@ -89,6 +90,10 @@ run("npm", ["run", "test:auth-proxy"], {
   env: { RSS_ADMIN_UI_TEST_IMAGE: image },
   timeoutMs: 600000
 });
+run("npm", ["run", "test:admin-operations-proxy"], {
+  env: { RSS_ADMIN_UI_TEST_IMAGE: image },
+  timeoutMs: 600000
+});
 
 console.log(
   JSON.stringify(
@@ -97,6 +102,7 @@ console.log(
       image,
       checks: [
         "production build exists",
+        "admin operations dashboard source/docs/proxy verifier passes",
         "docker image builds",
         "frontend production compose config passes without env file for inspection defaults",
         "missing upstream origin starts static runtime and fails closed at route level",
@@ -109,6 +115,7 @@ console.log(
         "production overlay canonicalization harness passes",
         "same-origin admin session sentinel fails closed",
         "same-origin admin auth proxy exact-route security passes",
+        "same-origin admin operations summary proxy exact-route security passes",
         "root compose config passes with synthetic values",
         "frontend production compose config passes with synthetic values",
         "frontend backend-network production compose overlay passes with synthetic values",

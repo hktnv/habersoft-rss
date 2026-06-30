@@ -111,6 +111,23 @@ dd {
   margin-top: 24px;
 }
 
+.operations-overview {
+  padding: 32px 32px 0;
+}
+
+.operations-band {
+  align-items: center;
+}
+
+.operations-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 32px;
+}
+
+.notes-panel {
+  grid-column: span 2;
+}
+
 .panel {
   min-height: 190px;
   padding: 18px;
@@ -343,15 +360,21 @@ button:disabled {
 }
 
 .protected-admin-slot .app-shell {
+  min-height: auto;
   padding-top: 24px;
 }
 
 @media (max-width: 900px) {
   .workspace-band,
   .panel-grid,
+  .operations-grid,
   .summary-row,
   .protected-admin-status {
     grid-template-columns: 1fr;
+  }
+
+  .notes-panel {
+    grid-column: auto;
   }
 
   .admin-login-form {
@@ -392,6 +415,7 @@ button:disabled {
 
 @media (max-width: 560px) {
   .app-shell,
+  .operations-overview,
   .protected-admin-gate {
     padding: 20px;
   }

@@ -72,6 +72,7 @@ function assertBoundarySource() {
     'sameOriginAdminSessionPath: "/admin-auth/session"',
     'sameOriginAdminLoginPath: "/admin-auth/login"',
     'sameOriginAdminLogoutPath: "/admin-auth/logout"',
+    'sameOriginAdminOperationsSummaryPath: "/admin-api/operations/summary"',
     "sameOriginAdminSessionSentinelOnly: false",
     "realAuthImplemented: true",
     "defaultAllowsProtectedContent: false",
@@ -236,6 +237,7 @@ function assertDocsContract() {
     "server-side",
     "Agent key",
     "Tenant bearer",
+    "/admin-api/operations/summary",
     "no production deployment",
     "MS-021B",
     "static fail-closed"

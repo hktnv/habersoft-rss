@@ -33,11 +33,11 @@ export type AdminSessionResponse =
 export type AdminCookieMutation =
   | {
       readonly kind: "set";
-      readonly cookie: string;
+      readonly cookies: readonly string[];
     }
   | {
       readonly kind: "clear";
-      readonly cookie: string;
+      readonly cookies: readonly string[];
     }
   | {
       readonly kind: "none";
@@ -122,7 +122,10 @@ export class AdminAuthService {
       response: authenticatedResponse(expiresAt),
       cookie: {
         kind: "set",
-        cookie: buildSessionCookie(this.config, sessionId, this.config.sessionTtlSeconds)
+        cookies: [
+          buildSessionCookie(this.config, sessionId, this.config.sessionTtlSeconds),
+          buildClearSessionCookie(this.config, "/admin-auth")
+        ]
       }
     };
   }
@@ -148,7 +151,7 @@ export class AdminAuthService {
       },
       cookie: {
         kind: "clear",
-        cookie: buildClearSessionCookie(this.config)
+        cookies: buildClearSessionCookies(this.config)
       }
     };
   }
@@ -271,7 +274,7 @@ function isSessionToken(value: string): boolean {
 function buildSessionCookie(config: Extract<AdminAuthConfig, { readonly mode: "single_admin" }>, value: string, maxAge: number): string {
   const parts = [
     `${config.sessionCookieName}=${value}`,
-    "Path=/admin-auth",
+    "Path=/",
     `Max-Age=${maxAge}`,
     "HttpOnly",
     "SameSite=Lax"
@@ -283,10 +286,14 @@ function buildSessionCookie(config: Extract<AdminAuthConfig, { readonly mode: "s
   return parts.join("; ");
 }
 
-function buildClearSessionCookie(config: Extract<AdminAuthConfig, { readonly mode: "single_admin" }>): string {
+function buildClearSessionCookies(config: Extract<AdminAuthConfig, { readonly mode: "single_admin" }>): readonly string[] {
+  return [buildClearSessionCookie(config, "/"), buildClearSessionCookie(config, "/admin-auth")];
+}
+
+function buildClearSessionCookie(config: Extract<AdminAuthConfig, { readonly mode: "single_admin" }>, path: "/" | "/admin-auth"): string {
   const parts = [
     `${config.sessionCookieName}=`,
-    "Path=/admin-auth",
+    `Path=${path}`,
     "Max-Age=0",
     "HttpOnly",
     "SameSite=Lax"

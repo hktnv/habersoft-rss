@@ -461,6 +461,90 @@ auth_proxy_routes() {
 EOF
 }
 
+admin_api_static_routes() {
+  cat <<'EOF'
+  location = /admin-api/operations/summary {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+
+    if ($request_method != GET) {
+      return 405 '{"status":"method_not_allowed","reason":"read_only_endpoint"}';
+    }
+
+    set $args "";
+    return 501 '{"configured":false,"authenticated":false,"reason":"not_configured","message":"Admin authentication is not configured."}';
+  }
+EOF
+}
+
+admin_api_degraded_routes() {
+  reason="$1"
+  cat <<EOF
+  location = /admin-api/operations/summary {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+
+    if (\$request_method != GET) {
+      return 405 '{"status":"method_not_allowed","reason":"read_only_endpoint"}';
+    }
+
+    set \$args "";
+    return 502 '{"status":"unavailable","reason":"${reason}"}';
+  }
+EOF
+}
+
+admin_api_proxy_routes() {
+  origin="$1"
+  cat <<EOF
+  location = /admin-api/operations/summary {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+
+    if (\$request_method != GET) {
+      return 405 '{"status":"method_not_allowed","reason":"read_only_endpoint"}';
+    }
+
+    set \$admin_api_upstream_origin "${origin}";
+    set \$args "";
+    proxy_method GET;
+    proxy_pass_request_headers off;
+    proxy_pass_request_body off;
+    proxy_set_header Host \$proxy_host;
+    proxy_set_header Accept "application/json";
+    proxy_set_header Cookie \$http_cookie;
+    proxy_set_header Content-Length "";
+    proxy_hide_header Set-Cookie;
+    proxy_hide_header WWW-Authenticate;
+    proxy_hide_header Access-Control-Allow-Origin;
+    proxy_hide_header Access-Control-Allow-Credentials;
+    proxy_hide_header Access-Control-Allow-Headers;
+    proxy_hide_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Expose-Headers;
+    proxy_hide_header Access-Control-Max-Age;
+    proxy_intercept_errors on;
+    error_page 401 403 = @admin_api_unauthenticated;
+    error_page 500 502 504 = @admin_api_unavailable;
+    proxy_connect_timeout 2s;
+    proxy_send_timeout 2s;
+    proxy_read_timeout 4s;
+    proxy_buffering off;
+    proxy_pass \$admin_api_upstream_origin/admin-api/operations/summary?;
+  }
+
+  location @admin_api_unauthenticated {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+    return 401 '{"authenticated":false,"reason":"unauthenticated"}';
+  }
+
+  location @admin_api_unavailable {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+    return 502 '{"status":"unavailable","reason":"admin_api_unavailable"}';
+  }
+EOF
+}
+
 health_upstream_origin="${ADMIN_UI_HEALTH_UPSTREAM_ORIGIN:-}"
 auth_upstream_origin="${ADMIN_UI_AUTH_UPSTREAM_ORIGIN:-}"
 environment_name="${ADMIN_UI_ENVIRONMENT_NAME:-container}"
@@ -493,15 +577,22 @@ fi
 
 if [ "$auth_upstream_rejection" != "" ]; then
   auth_routes="$(auth_degraded_routes "$auth_upstream_rejection")"
+  admin_api_routes="$(admin_api_degraded_routes "$auth_upstream_rejection")"
 elif [ "$normalized_auth_upstream_origin" = "" ]; then
   auth_routes="$(auth_static_routes)"
+  admin_api_routes="$(admin_api_static_routes)"
 else
   auth_routes="$(auth_proxy_routes "$normalized_auth_upstream_origin")"
+  admin_api_routes="$(admin_api_proxy_routes "$normalized_auth_upstream_origin")"
 fi
 
-awk -v auth_block="$auth_routes" -v status_block="$status_routes" '
+awk -v auth_block="$auth_routes" -v admin_api_block="$admin_api_routes" -v status_block="$status_routes" '
   /__ADMIN_UI_AUTH_ROUTES__/ {
     print auth_block
+    next
+  }
+  /__ADMIN_UI_ADMIN_API_ROUTES__/ {
+    print admin_api_block
     next
   }
   /__ADMIN_UI_STATUS_ROUTES__/ {

@@ -327,6 +327,7 @@ function summarizeSetCookie(setCookie) {
     http_only: /(?:^|;\s*)HttpOnly(?:;|$)/iu.test(setCookie),
     secure: /(?:^|;\s*)Secure(?:;|$)/iu.test(setCookie),
     same_site_lax: /(?:^|;\s*)SameSite=Lax(?:;|$)/iu.test(setCookie),
+    path_root: /(?:^|;\s*)Path=\/(?:;|$)/iu.test(setCookie),
     path_admin_auth: /(?:^|;\s*)Path=\/admin-auth(?:;|$)/iu.test(setCookie)
   };
 }

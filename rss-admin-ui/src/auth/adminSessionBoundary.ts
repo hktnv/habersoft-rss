@@ -50,6 +50,7 @@ export const adminAuthBoundaryContract = {
   sameOriginAdminSessionPath: "/admin-auth/session",
   sameOriginAdminLoginPath: "/admin-auth/login",
   sameOriginAdminLogoutPath: "/admin-auth/logout",
+  sameOriginAdminOperationsSummaryPath: "/admin-api/operations/summary",
   sameOriginAdminSessionSentinelOnly: false,
   realAuthImplemented: true,
   defaultAllowsProtectedContent: false,

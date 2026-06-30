@@ -1,6 +1,6 @@
 # Live Status Dashboard Acceptance
 
-Status: `MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED`.
+Status: `MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
 
 MS-023D closes the read-only status-dashboard production acceptance boundary for the already operator-managed admin UI surface. The accepted scope is limited to the production shell health endpoint and same-origin status-api transport:
 
@@ -10,7 +10,7 @@ GET /status-api/health/live
 GET /status-api/health/ready
 ```
 
-MS-024F records authenticated admin shell acceptance for the current implemented status/auth shell scope by operator report. Business admin pages, feed/user/tenant management, backend writes, monitoring/SLA claims, privileged production evidence projection, and future admin product slices remain out of scope.
+MS-024F records authenticated admin shell acceptance for the current implemented status/auth shell scope by operator report. MS-025A adds the first protected read-only admin operations dashboard locally, but live production acceptance for `/admin-api/operations/summary` remains pending operator deploy/retest. Business admin write pages, feed/user/tenant management, backend writes, monitoring/SLA claims, privileged production evidence projection, and future write-capable admin product slices remain out of scope.
 
 Codex did not mutate production for MS-023D. Codex did not SSH/SCP/SFTP/rsync, restart services, run production Docker commands, edit production env files, capture rollback baseline, publish an image, create a registry tag, create a Git tag, create a GitHub Release, create a PR, or read production secrets.
 
@@ -53,6 +53,14 @@ MS-024F operator-reported update:
 - source boundary: Codex did not independently perform a credentialed login, did not read real credentials, did not run real credentialed smoke, and did not mutate production;
 - future business/admin write features are not accepted.
 
+MS-025A repository-local update:
+
+- bounded status: `MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED`;
+- new protected route: `GET /admin-api/operations/summary`;
+- local contract: aggregate dependency, feed, entry, and ingestion counts only;
+- no production deployment, no Codex credentialed login, no production mutation, and no live route acceptance claim;
+- next operator action for this new slice: deploy/recreate under the backend/frontend runbooks, run `cd /opt/habersoft-rss/rss-admin-ui && npm run ops:compose:recreate`, then retest login, `/admin-api/operations/summary`, Operations Overview rendering, logout, and locked-after-logout behavior.
+
 ## Runtime Ownership Split
 
 Frontend/admin UI runtime env controls:
@@ -83,6 +91,8 @@ ADMIN_UI_SESSION_REDIS_PREFIX
 
 Those variables must be visible to the backend API runtime that serves `/admin-auth/session`, `/admin-auth/login`, and `/admin-auth/logout`. Passing backend-only auth variables only to the frontend/admin UI Compose command does not enable backend auth.
 
+MS-025A also requires that same backend API runtime to serve `GET /admin-api/operations/summary`. The frontend proxy reuses `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` for the admin-api route, so after backend API/image/network/admin-auth env recreate the frontend helper recreate remains required before edge retest.
+
 ## Auth Evidence Progression
 
 Because the MS-023D public status-api checks pass, do not keep changing `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` to remediate auth states.
@@ -105,9 +115,11 @@ Expected authenticated-admin progression after configured unauthenticated eviden
 GET /admin-auth/session without a valid cookie -> HTTP 200, configured=true, authenticated=false
 POST /admin-auth/login with valid operator-owned credential -> HTTP 200, HttpOnly SameSite=Lax Secure cookie
 GET /admin-auth/session with the valid cookie -> HTTP 200, authenticated=true
+GET /admin-api/operations/summary with the valid cookie -> HTTP 200, aggregate-only status ok
 POST /admin-auth/logout -> HTTP 200, server-side session invalidated
+GET /admin-api/operations/summary after logout -> HTTP 401, no operations metrics
 ```
 
-That progression was not accepted by MS-023D. MS-024F now records the operator-reported acceptance of the current implemented authenticated admin shell scope.
+The admin-api steps are new in MS-025A and are not production accepted by MS-023D, MS-024E, or MS-024F. MS-024F records only the operator-reported acceptance of the status/auth shell scope implemented at that time.
 
 The redacted smoke helper is now a regression/sanity tool, not a pending acceptance blocker for the current implemented scope: `npm run auth-smoke:redacted`; credentials must be supplied only through `ADMIN_AUTH_SMOKE_USERNAME` and `ADMIN_AUTH_SMOKE_PASSWORD`. Local synthetic coverage is `npm run test:admin-auth-smoke-redacted`, package coverage is `npm run verify:ms024a-auth-enablement-package`, and claim-boundary coverage is `npm run verify:production-auth-acceptance`. No further AUTH_NOT_CONFIGURED_RESIDUAL or AUTH_CONFIGURED_UNAUTHENTICATED operator action remains for the current implemented admin-auth shell scope unless new contradictory evidence appears.

@@ -70,10 +70,15 @@ async function runDisabledScenario() {
     const live = await requestJson(`${base}/status-api/health/live`);
     assert(live.status === 200 && live.body?.status === "live", "disabled scenario health proxy failed");
 
+    const summary = await requestJson(`${base}/admin-api/operations/summary`);
+    assert(summary.status === 501, "disabled admin operations summary did not fail closed");
+    assert(!JSON.stringify(summary.body).includes("feeds"), "disabled summary leaked operations data");
+
     scenarioResults.push({
       name: "disabled-default",
       session_status: session.status,
       login_status: login.status,
+      operations_summary_status: summary.status,
       health_live: live.body?.status
     });
   });
@@ -112,6 +117,10 @@ async function runEnabledScenario() {
     assert(unauthenticated.body?.authenticated === false, "fresh enabled session should be unauthenticated");
     assert(unauthenticated.headers.setCookie === null, "fresh enabled session emitted a cookie");
 
+    const unauthenticatedSummary = await requestJson(`${base}/admin-api/operations/summary`);
+    assert(unauthenticatedSummary.status === 401, "admin operations summary did not require an admin session");
+    assert(!JSON.stringify(unauthenticatedSummary.body).includes("feeds"), "unauthenticated summary leaked operations data");
+
     const invalidLogin = await requestJson(`${base}/admin-auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -132,7 +141,7 @@ async function runEnabledScenario() {
     assert(!JSON.stringify(validLogin.body).includes(adminPasswordHash), "login body leaked password hash");
     assert(/HttpOnly/iu.test(validLogin.headers.setCookie ?? ""), "login cookie is not HTTP-only");
     assert(/SameSite=Lax/iu.test(validLogin.headers.setCookie ?? ""), "login cookie is not SameSite=Lax");
-    assert(/Path=\/admin-auth/iu.test(validLogin.headers.setCookie ?? ""), "login cookie path mismatch");
+    assert(/Path=\//iu.test(validLogin.headers.setCookie ?? ""), "login cookie path mismatch");
 
     const sessionCookie = cookiePair(validLogin.headers.setCookie);
     assert(sessionCookie !== undefined, "login did not produce a session cookie");
@@ -144,6 +153,21 @@ async function runEnabledScenario() {
     assert(authenticated.body?.authenticated === true, "session did not authenticate with cookie");
     assert(authenticated.body?.principal?.kind === "single_admin", "authenticated principal mismatch");
     assert(!JSON.stringify(authenticated.body).includes(sessionCookie), "session body leaked cookie value");
+
+    const adminSummary = await requestJson(`${base}/admin-api/operations/summary`, {
+      headers: {
+        Authorization: "Bearer redacted",
+        Cookie: sessionCookie,
+        "X-Agent-Key": "redacted"
+      }
+    });
+    assert(adminSummary.status === 200, "admin operations summary failed after login");
+    assert(adminSummary.body?.status === "ok", "admin operations summary status mismatch");
+    assert(adminSummary.body?.dependencies?.postgres === "up", "admin operations summary did not include dependency state");
+    assert(typeof adminSummary.body?.feeds?.total === "number", "admin operations summary did not include feed aggregates");
+    assert(adminSummary.headers.setCookie === null, "admin operations summary relayed Set-Cookie");
+    assert(!JSON.stringify(adminSummary.body).includes(adminPassword), "admin operations summary leaked password");
+    assert(!JSON.stringify(adminSummary.body).includes(adminPasswordHash), "admin operations summary leaked password hash");
 
     const live = await requestJson(`${base}/status-api/health/live`, {
       headers: {
@@ -186,6 +210,12 @@ async function runEnabledScenario() {
     });
     assert(afterLogout.status === 200, "post-logout session check failed");
     assert(afterLogout.body?.authenticated === false, "logout did not invalidate the server-side session");
+
+    const summaryAfterLogout = await requestJson(`${base}/admin-api/operations/summary`, {
+      headers: { Cookie: sessionCookie }
+    });
+    assert(summaryAfterLogout.status === 401, "admin operations summary remained available after logout");
+    assert(!JSON.stringify(summaryAfterLogout.body).includes("feeds"), "post-logout summary leaked operations data");
 
     const staticSurface = [index.body, envConfig.body, ...(await staticAssets(base, index.body))].join("\n");
     assert(!staticSurface.includes(adminPassword), "admin password leaked to static surface");

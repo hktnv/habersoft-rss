@@ -22,7 +22,9 @@ const requiredRepoFiles = [
   "PRODUCTION.md",
   "rss-admin-ui/README.md",
   "rss-admin-ui/PRODUCTION.md",
-  "rss-admin-ui/.docs/api-auth-contract.md"
+  "rss-admin-ui/.docs/api-auth-contract.md",
+  "rss-admin-ui/.docs/admin-operations-dashboard.md",
+  "rss-habersoft-com/.docs/admin-operations-summary-api.md"
 ];
 
 for (const file of requiredBackendFiles) requireFile(path.join(backendRoot, file), file);
@@ -212,6 +214,8 @@ function assertFrontendProductionGuide() {
     "FOUNDATION_ONLY",
     "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED",
     "AUTH_NOT_CONFIGURED_RESIDUAL",
+    "MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED",
+    "/admin-api/operations/summary",
     "rss-admin-ui",
     "AGENT_KEY",
     "no production deployment"

@@ -67,7 +67,7 @@ try {
     assert(login.json?.cookie?.login_set_cookie === "present", "login smoke did not report Set-Cookie presence");
     assert(login.json?.cookie?.http_only === true, "login smoke did not prove HttpOnly");
     assert(login.json?.cookie?.same_site_lax === true, "login smoke did not prove SameSite=Lax");
-    assert(login.json?.cookie?.path_admin_auth === true, "login smoke did not prove /admin-auth path");
+    assert(login.json?.cookie?.path_root === true, "login smoke did not prove root cookie path");
     assert(login.json?.logout?.result === "accepted", "login smoke did not confirm logout accepted");
     assert(login.json?.temp_cookie_jar_deleted === true, "login temp cookie jar was not deleted");
     assertSanitized(login.combinedOutput);
@@ -258,7 +258,10 @@ function startServer({ mode }) {
 
         authenticated = mode !== "session-after-login-false";
         if (mode !== "missing-cookie") {
-          response.setHeader("Set-Cookie", `${syntheticCookie}=present; HttpOnly; Secure; Path=/admin-auth; SameSite=Lax`);
+          response.setHeader("Set-Cookie", [
+            `${syntheticCookie}=present; HttpOnly; Secure; Path=/; SameSite=Lax`,
+            `${syntheticCookie}=; HttpOnly; Secure; Path=/admin-auth; SameSite=Lax; Max-Age=0`
+          ]);
         }
         response.end(JSON.stringify({ configured: true, authenticated: true }));
         return;
@@ -271,7 +274,10 @@ function startServer({ mode }) {
           return;
         }
         authenticated = false;
-        response.setHeader("Set-Cookie", `${syntheticCookie}=; HttpOnly; Secure; Path=/admin-auth; SameSite=Lax; Max-Age=0`);
+        response.setHeader("Set-Cookie", [
+          `${syntheticCookie}=; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=0`,
+          `${syntheticCookie}=; HttpOnly; Secure; Path=/admin-auth; SameSite=Lax; Max-Age=0`
+        ]);
         response.end(JSON.stringify({ configured: true, authenticated: false, reason: "logged_out" }));
         return;
       }

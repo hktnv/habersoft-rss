@@ -1,4 +1,5 @@
 import { DynamicModule, Module } from "@nestjs/common";
+import { AdminApiModule } from "./admin-api/admin-api.module";
 import { AdminAuthModule } from "./admin-auth/admin-auth.module";
 import { AgentAuthModule } from "./agent-auth/agent-auth.module";
 import { AgentDueFeedsModule } from "./agent-due-feeds/agent-due-feeds.module";
@@ -27,6 +28,7 @@ export class ApiModule {
         AgentEntriesModule,
         AgentFeedCheckResultsModule,
         AgentNewGuidsModule,
+        AdminApiModule,
         AdminAuthModule,
         TenantAuthModule,
         HealthModule,

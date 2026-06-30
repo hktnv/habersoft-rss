@@ -65,12 +65,19 @@ try {
   assert(results.logout.status === 200, "logout proxy failed");
   assert(/Max-Age=0/iu.test(results.logout.headers.setCookie ?? ""), "logout clear cookie was not relayed");
   assertNoCorsHeaders(results.logout.headers, "logout route");
+  assert(results.adminSummary.status === 200, "admin operations summary proxy failed");
+  assert(results.adminSummary.json?.status === "ok", "admin operations summary body mismatch");
+  assert(results.adminSummary.headers.setCookie === null, "admin operations summary relayed Set-Cookie");
+  assertNoCorsHeaders(results.adminSummary.headers, "admin operations summary route");
 
   assert(results.postSession.status === 405, "POST session was not rejected at frontend");
   assert(results.getLogin.status === 405, "GET login was not rejected at frontend");
   assert(results.getLogout.status === 405, "GET logout was not rejected at frontend");
+  assert(results.postAdminSummary.status === 405, "POST admin operations summary was not rejected at frontend");
   assert(results.unknown.status === 404, "unknown auth path was not rejected");
+  assert(results.unknownAdminApi.status === 404, "unknown admin-api path was not rejected");
   assert(results.sessionQuery.status === 200, "session query did not map to exact upstream path");
+  assert(results.adminSummaryQuery.status === 200, "admin operations query did not map to exact upstream path");
 
   const records = authRecords();
   assert(records.length === 4, `expected 4 upstream auth records, received ${records.length}`);
@@ -85,6 +92,20 @@ try {
     assert(record.sensitiveHeaders.agentKey === false, "agent key header reached auth upstream");
     assert(record.customCredentialLikeHeader === false, "credential-like custom header reached auth upstream");
     assert(record.sensitiveHeaders.cookie === true, "session cookie was not forwarded to auth upstream");
+  }
+
+  const adminRecords = adminApiRecords();
+  assert(adminRecords.length === 2, `expected 2 upstream admin-api records, received ${adminRecords.length}`);
+  for (const record of adminRecords) {
+    assert(record.method === "GET", "admin-api upstream method mismatch");
+    assert(record.path === "/admin-api/operations/summary", "admin-api upstream path mismatch");
+    assert(record.search === "", "query string reached admin-api upstream");
+    assert(record.bodyPresent === false, "admin-api request body reached upstream");
+    assert(record.sensitiveHeaders.authorization === false, "authorization header reached admin-api upstream");
+    assert(record.sensitiveHeaders.proxyAuthorization === false, "proxy authorization header reached admin-api upstream");
+    assert(record.sensitiveHeaders.agentKey === false, "agent key header reached admin-api upstream");
+    assert(record.customCredentialLikeHeader === false, "credential-like custom header reached admin-api upstream");
+    assert(record.sensitiveHeaders.cookie === true, "session cookie was not forwarded to admin-api upstream");
   }
 
   const loginRecord = records.find((record) => record.path === "/admin-auth/login");
@@ -102,8 +123,8 @@ try {
         status: "auth-proxy-harness-ok",
         image,
         network,
-        exact_routes: ["/admin-auth/session", "/admin-auth/login", "/admin-auth/logout"],
-        upstream_records: records.length,
+        exact_routes: ["/admin-auth/session", "/admin-auth/login", "/admin-auth/logout", "/admin-api/operations/summary"],
+        upstream_records: records.length + adminRecords.length,
         unavailable_status: unavailable.status
       },
       null,
@@ -171,10 +192,14 @@ function runFrontendRequests() {
         headers: { ...sensitiveHeaders, "content-type": "application/json" }
       }),
       logout: await request("/admin-auth/logout", { method: "POST", headers: sensitiveHeaders }),
+      adminSummary: await request("/admin-api/operations/summary", { headers: sensitiveHeaders }),
+      adminSummaryQuery: await request("/admin-api/operations/summary?token=example", { headers: sensitiveHeaders }),
       postSession: await request("/admin-auth/session", { method: "POST", body: "mutate=true", headers: sensitiveHeaders }),
       getLogin: await request("/admin-auth/login", { headers: sensitiveHeaders }),
       getLogout: await request("/admin-auth/logout", { headers: sensitiveHeaders }),
-      unknown: await request("/admin-auth/unknown", { headers: sensitiveHeaders })
+      postAdminSummary: await request("/admin-api/operations/summary", { method: "POST", body: "mutate=true", headers: sensitiveHeaders }),
+      unknown: await request("/admin-auth/unknown", { headers: sensitiveHeaders }),
+      unknownAdminApi: await request("/admin-api/operations/unknown", { headers: sensitiveHeaders })
     };
     console.log(JSON.stringify(results));
   `);
@@ -194,6 +219,17 @@ function authRecords() {
     "node",
     "-e",
     "fetch('http://127.0.0.1:3100/__records?surface=auth').then(async (r) => { console.log(await r.text()); }).catch(() => process.exit(1));"
+  ]);
+  return JSON.parse(result.stdout);
+}
+
+function adminApiRecords() {
+  const result = docker([
+    "exec",
+    sentinelName,
+    "node",
+    "-e",
+    "fetch('http://127.0.0.1:3100/__records?surface=admin-api').then(async (r) => { console.log(await r.text()); }).catch(() => process.exit(1));"
   ]);
   return JSON.parse(result.stdout);
 }
@@ -259,7 +295,13 @@ function sentinelProgram() {
       if (parsed.pathname === "/__records") {
         response.setHeader("Content-Type", "application/json");
         const surface = parsed.searchParams.get("surface");
-        response.end(JSON.stringify(surface === "auth" ? records.filter((record) => record.path.startsWith("/admin-auth/")) : records));
+        response.end(JSON.stringify(
+          surface === "auth"
+            ? records.filter((record) => record.path.startsWith("/admin-auth/"))
+            : surface === "admin-api"
+              ? records.filter((record) => record.path.startsWith("/admin-api/"))
+              : records
+        ));
         return;
       }
 
@@ -301,7 +343,10 @@ function sentinelProgram() {
         }
 
         if (parsed.pathname === "/admin-auth/login") {
-          response.setHeader("Set-Cookie", "habersoft_admin_session=opaque; HttpOnly; Path=/admin-auth; SameSite=Lax");
+          response.setHeader("Set-Cookie", [
+            "habersoft_admin_session=opaque; HttpOnly; Path=/; SameSite=Lax",
+            "habersoft_admin_session=; HttpOnly; Path=/admin-auth; SameSite=Lax; Max-Age=0"
+          ]);
           response.end(JSON.stringify({
             configured: true,
             authenticated: true,
@@ -312,8 +357,26 @@ function sentinelProgram() {
         }
 
         if (parsed.pathname === "/admin-auth/logout") {
-          response.setHeader("Set-Cookie", "habersoft_admin_session=; HttpOnly; Path=/admin-auth; SameSite=Lax; Max-Age=0");
+          response.setHeader("Set-Cookie", [
+            "habersoft_admin_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0",
+            "habersoft_admin_session=; HttpOnly; Path=/admin-auth; SameSite=Lax; Max-Age=0"
+          ]);
           response.end(JSON.stringify({ configured: true, authenticated: false, reason: "logged_out" }));
+          return;
+        }
+
+        if (parsed.pathname === "/admin-api/operations/summary") {
+          response.setHeader("Set-Cookie", "should_not_relay=1; HttpOnly; Path=/; SameSite=Lax");
+          response.end(JSON.stringify({
+            status: "ok",
+            generatedAt: "2026-06-30T06:00:00.000Z",
+            window: { recentHours: 24 },
+            dependencies: { postgres: "up", redis: "up", tenantAuth: "up" },
+            feeds: { total: 1, active: 1, disabled: 0, dueNow: 0 },
+            entries: { total: 2, createdLast24h: 1 },
+            ingestion: { checksLast24h: 3, successLast24h: 2, failedLast24h: 1, latestCheckAt: "2026-06-30T05:00:00.000Z" },
+            notes: [{ code: "summary_is_aggregate_only", message: "Aggregate counts only." }]
+          }));
           return;
         }
 

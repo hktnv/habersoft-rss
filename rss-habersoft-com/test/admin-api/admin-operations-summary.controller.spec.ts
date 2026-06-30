@@ -29,141 +29,140 @@ class FakeRedisCommand {
   }
 }
 
-describe("Admin auth API boundary", () => {
+describe("Admin operations summary API", () => {
   let app: NestFastifyApplication | undefined;
   let fastify: FastifyInstance;
   let redis: FakeRedisCommand;
+  let database: ReturnType<typeof fakeDatabase>;
 
   afterEach(async () => {
     await app?.close();
     app = undefined;
   });
 
-  it("defaults admin auth to disabled without requiring a credential", async () => {
+  it("fails closed without admin auth configured", async () => {
     await boot({ ...runtimeConfig, adminAuth: { mode: "disabled" } });
 
     const response = await fastify.inject({
       method: "GET",
-      url: "/admin-auth/session"
+      url: "/admin-api/operations/summary"
     });
 
     expect(response.statusCode).toBe(501);
-    expect(response.headers["set-cookie"]).toBeUndefined();
     expect(JSON.parse(response.payload)).toEqual({
       configured: false,
       authenticated: false,
-      status: "not_configured",
       reason: "not_configured",
       message: "Admin authentication is not configured."
     });
+    expect(database.feed.count).not.toHaveBeenCalled();
   });
 
-  it("keeps unauthenticated, invalid login, authenticated session, and logout flows server-side", async () => {
-    const password = "test-only-admin-password";
-    await boot(singleAdminConfig(password));
+  it("requires an authenticated admin session before returning aggregate operations data", async () => {
+    await boot(singleAdminConfig("test-only-admin-password"));
 
-    const firstSession = await fastify.inject({
+    const unauthenticated = await fastify.inject({
       method: "GET",
-      url: "/admin-auth/session"
+      url: "/admin-api/operations/summary"
     });
-    expect(firstSession.statusCode).toBe(200);
-    expect(JSON.parse(firstSession.payload)).toEqual({
-      configured: true,
-      authenticated: false,
-      reason: "unauthenticated"
-    });
+    expect(unauthenticated.statusCode).toBe(401);
+    expect(unauthenticated.payload).not.toContain("feeds");
+    expect(database.feed.count).not.toHaveBeenCalled();
 
-    const invalid = await fastify.inject({
+    const login = await fastify.inject({
       method: "POST",
       url: "/admin-auth/login",
-      payload: { username: "admin", password: "wrong" }
+      payload: { username: "admin", password: "test-only-admin-password" }
     });
-    expect(invalid.statusCode).toBe(401);
-    expect(invalid.headers["set-cookie"]).toBeUndefined();
-
-    const valid = await fastify.inject({
-      method: "POST",
-      url: "/admin-auth/login",
-      payload: { username: "admin", password }
-    });
-    expect(valid.statusCode).toBe(200);
-    const loginBody = parseJson(valid.payload);
-    expect(loginBody).toMatchObject({
-      configured: true,
-      authenticated: true,
-      principal: { kind: "single_admin", displayName: "Admin" }
-    });
-    expect(JSON.stringify(loginBody)).not.toContain(password);
-
-    const setCookie = valid.headers["set-cookie"];
-    const loginCookies = headerValues(setCookie);
-    expect(loginCookies).toEqual(expect.arrayContaining([
+    expect(login.statusCode).toBe(200);
+    const setCookie = login.headers["set-cookie"];
+    expect(headerValues(setCookie)).toEqual(expect.arrayContaining([
       expect.stringContaining("Path=/"),
       expect.stringContaining("Path=/admin-auth")
     ]));
-    expect(loginCookies.join("\n")).toEqual(expect.stringContaining("HttpOnly"));
-    expect(loginCookies.join("\n")).toEqual(expect.stringContaining("SameSite=Lax"));
-    expect(loginCookies.find((cookie) => /Path=\//u.test(cookie) && !/Path=\/admin-auth/u.test(cookie))).toEqual(
-      expect.not.stringContaining("Max-Age=0")
-    );
-    expect(redis.store.size).toBe(1);
+    const cookie = cookiePair(setCookie);
 
-    const authenticated = await fastify.inject({
+    const summary = await fastify.inject({
       method: "GET",
-      url: "/admin-auth/session",
+      url: "/admin-api/operations/summary?ignored=true",
       headers: {
-        cookie: cookiePair(setCookie)
+        cookie
       }
     });
-    expect(authenticated.statusCode).toBe(200);
-    expect(JSON.parse(authenticated.payload)).toMatchObject({
-      configured: true,
-      authenticated: true,
-      principal: { kind: "single_admin", displayName: "Admin" }
+    expect(summary.statusCode).toBe(200);
+    expect(summary.headers["cache-control"]).toContain("no-store");
+    const body = asRecord(JSON.parse(summary.payload) as unknown);
+    expect(body.status).toBe("ok");
+    expect(typeof body.generatedAt).toBe("string");
+    expect(body.window).toEqual({ recentHours: 24 });
+    expect(body.dependencies).toEqual({ postgres: "up", redis: "up", tenantAuth: "up" });
+    expect(body.feeds).toEqual({ total: 12, active: 9, disabled: 3, dueNow: 4 });
+    expect(body.entries).toEqual({ total: 40, createdLast24h: 7 });
+    expect(body.ingestion).toEqual({
+      checksLast24h: 11,
+      successLast24h: 8,
+      failedLast24h: 2,
+      latestCheckAt: "2026-06-30T06:00:00.000Z"
     });
+    expect(Array.isArray(body.notes)).toBe(true);
+    const firstNote = asRecord((body.notes as readonly unknown[])[0]);
+    expect(firstNote.code).toBe("summary_is_aggregate_only");
+    expect(String(firstNote.message)).toContain("counts and dependency states only");
+    expect(summary.payload).not.toContain("https://feed.example.test");
+    expect(summary.payload).not.toContain("entry body");
+    expect(summary.payload).not.toContain("AGENT_KEY");
+    expect(summary.payload).not.toContain("DATABASE_URL");
+  });
+
+  it("keeps admin-api read-only and exact-route scoped", async () => {
+    await boot(singleAdminConfig("test-only-admin-password"));
+
+    const post = await fastify.inject({
+      method: "POST",
+      url: "/admin-api/operations/summary"
+    });
+    expect(post.statusCode).toBe(405);
+    expect(post.payload).not.toContain("feeds");
+
+    const unknown = await fastify.inject({
+      method: "GET",
+      url: "/admin-api/operations/unknown"
+    });
+    expect(unknown.statusCode).toBe(404);
+  });
+
+  it("logout clears root and historical admin-auth cookie paths and blocks the summary", async () => {
+    await boot(singleAdminConfig("test-only-admin-password"));
+    const login = await fastify.inject({
+      method: "POST",
+      url: "/admin-auth/login",
+      payload: { username: "admin", password: "test-only-admin-password" }
+    });
+    const cookie = cookiePair(login.headers["set-cookie"]);
 
     const logout = await fastify.inject({
       method: "POST",
       url: "/admin-auth/logout",
-      headers: {
-        cookie: cookiePair(setCookie)
-      }
+      headers: { cookie }
     });
     expect(logout.statusCode).toBe(200);
     expect(headerValues(logout.headers["set-cookie"])).toEqual(expect.arrayContaining([
       expect.stringContaining("Path=/"),
       expect.stringContaining("Path=/admin-auth")
     ]));
-    expect(headerValues(logout.headers["set-cookie"]).join("\n")).toEqual(expect.stringContaining("Max-Age=0"));
-    expect(redis.store.size).toBe(0);
-  });
 
-  it("rate limits repeated invalid login attempts", async () => {
-    await boot(singleAdminConfig("test-only-admin-password"));
-
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const response = await fastify.inject({
-        method: "POST",
-        url: "/admin-auth/login",
-        payload: { username: "admin", password: "wrong" }
-      });
-      expect(response.statusCode).toBe(401);
-    }
-
-    const blocked = await fastify.inject({
-      method: "POST",
-      url: "/admin-auth/login",
-      payload: { username: "admin", password: "wrong" }
+    const afterLogout = await fastify.inject({
+      method: "GET",
+      url: "/admin-api/operations/summary",
+      headers: { cookie }
     });
-    expect(blocked.statusCode).toBe(429);
-    expect(JSON.parse(blocked.payload)).toMatchObject({
-      error_code: "ADMIN_AUTH_RATE_LIMITED",
-      authenticated: false
-    });
+    expect(afterLogout.statusCode).toBe(401);
+    expect(afterLogout.payload).not.toContain("feeds");
   });
 
   async function boot(config: RuntimeConfig): Promise<void> {
     redis = new FakeRedisCommand();
+    database = fakeDatabase();
     const moduleRef = await Test.createTestingModule({
       imports: [ApiModule.register(config)]
     })
@@ -185,7 +184,7 @@ describe("Admin auth API boundary", () => {
       .overrideProvider(PostgresService)
       .useValue({
         check: jest.fn().mockResolvedValue("up"),
-        database: jest.fn().mockReturnValue({})
+        database: jest.fn().mockReturnValue(database)
       })
       .compile();
 
@@ -195,6 +194,29 @@ describe("Admin auth API boundary", () => {
     await fastify.ready();
   }
 });
+
+function fakeDatabase() {
+  const count = jest
+    .fn()
+    .mockResolvedValueOnce(12)
+    .mockResolvedValueOnce(9)
+    .mockResolvedValueOnce(3)
+    .mockResolvedValueOnce(4)
+    .mockResolvedValueOnce(40)
+    .mockResolvedValueOnce(7)
+    .mockResolvedValueOnce(11)
+    .mockResolvedValueOnce(8)
+    .mockResolvedValueOnce(2);
+
+  return {
+    feed: { count },
+    entry: { count },
+    agentFeedCheckEvent: {
+      count,
+      findFirst: jest.fn().mockResolvedValue({ checkedAt: new Date("2026-06-30T06:00:00.000Z") })
+    }
+  };
+}
 
 function singleAdminConfig(password: string): RuntimeConfig {
   return {
@@ -212,10 +234,6 @@ function singleAdminConfig(password: string): RuntimeConfig {
   };
 }
 
-function parseJson(payload: string): unknown {
-  return JSON.parse(payload) as unknown;
-}
-
 function headerValues(value: string | string[] | number | undefined): string[] {
   if (value === undefined) return [];
   if (Array.isArray(value)) return value.map(String);
@@ -225,4 +243,11 @@ function headerValues(value: string | string[] | number | undefined): string[] {
 function cookiePair(setCookie: string | string[] | number | undefined): string {
   const rootCookie = headerValues(setCookie).find((cookie) => /Path=\//u.test(cookie) && !/Path=\/admin-auth/u.test(cookie));
   return rootCookie?.split(";", 1)[0] ?? "";
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  expect(typeof value).toBe("object");
+  expect(value).not.toBeNull();
+  expect(Array.isArray(value)).toBe(false);
+  return value as Record<string, unknown>;
 }

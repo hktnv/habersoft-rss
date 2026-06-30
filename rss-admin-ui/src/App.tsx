@@ -1,3 +1,4 @@
+import { OperationsOverview } from "./adminOperations/OperationsOverview";
 import { ProtectedAdminShell } from "./auth/ProtectedAdminShell";
 import { useAdminSessionController } from "./auth/useAdminSessionStatus";
 import { StatusDashboard } from "./status/StatusDashboard";
@@ -12,6 +13,7 @@ export function App() {
       onLogin={adminSession.login}
       onLogout={adminSession.logout}
     >
+      <OperationsOverview />
       <StatusDashboard />
     </ProtectedAdminShell>
   );

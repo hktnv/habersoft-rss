@@ -14,6 +14,8 @@ describe("admin UI authenticated status shell", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Admin session active" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Operations Overview" })).toBeInTheDocument();
+    expect(await screen.findByText("12")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Read-only Status Dashboard" })).toBeInTheDocument();
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
     expect(screen.getByText("READ_ONLY_STATUS_DASHBOARD_PRODUCTION_TRANSPORT_ACTIVE")).toBeInTheDocument();
@@ -35,37 +37,46 @@ describe("admin UI authenticated status shell", () => {
       "/admin-auth/session",
       expect.objectContaining({ method: "GET", credentials: "same-origin" })
     );
+    expect(fetch).toHaveBeenCalledWith(
+      "/admin-api/operations/summary",
+      expect.objectContaining({ method: "GET", credentials: "same-origin" })
+    );
     expect(fetch).toHaveBeenCalledWith("/status-api/health/live", expect.any(Object));
     expect(screen.queryByText("http://localhost:3200")).not.toBeInTheDocument();
   });
 
   it("keeps the dashboard hidden when admin auth is not configured", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValueOnce(
-        jsonResponse(
-          {
-            status: "not_configured",
-            authenticated: false,
-            message: "Admin authentication is not configured."
-          },
-          501
-        )
+    const fetch = vi.fn().mockResolvedValueOnce(
+      jsonResponse(
+        {
+          status: "not_configured",
+          authenticated: false,
+          message: "Admin authentication is not configured."
+        },
+        501
       )
     );
+    vi.stubGlobal("fetch", fetch);
 
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Admin authentication is not configured" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Read-only Status Dashboard" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Operations Overview" })).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).not.toHaveBeenCalledWith(
+      "/admin-api/operations/summary",
+      expect.objectContaining({ method: "GET" })
+    );
   });
 });
 
 function authenticatedFetch() {
-  return vi
-    .fn()
-    .mockResolvedValueOnce(
-      jsonResponse({
+  return vi.fn((input: RequestInfo | URL) => {
+    const path = String(input);
+    if (path === "/admin-auth/session") {
+      return Promise.resolve(
+        jsonResponse({
         configured: true,
         authenticated: true,
         principal: {
@@ -73,15 +84,41 @@ function authenticatedFetch() {
           displayName: "Admin"
         },
         expiresAt: "2026-06-20T00:00:00.000Z"
-      })
-    )
-    .mockResolvedValueOnce(jsonResponse({ status: "live" }))
-    .mockResolvedValueOnce(
-      jsonResponse({
+        })
+      );
+    }
+    if (path === "/admin-api/operations/summary") {
+      return Promise.resolve(
+        jsonResponse({
+          status: "ok",
+          generatedAt: "2026-06-30T06:00:00.000Z",
+          window: { recentHours: 24 },
+          dependencies: { postgres: "up", redis: "up", tenantAuth: "up" },
+          feeds: { total: 12, active: 10, disabled: 2, dueNow: 3 },
+          entries: { total: 40, createdLast24h: 6 },
+          ingestion: {
+            checksLast24h: 7,
+            successLast24h: 6,
+            failedLast24h: 1,
+            latestCheckAt: "2026-06-30T05:00:00.000Z"
+          },
+          notes: [{ code: "summary_is_aggregate_only", message: "Aggregate counts only." }]
+        })
+      );
+    }
+    if (path === "/status-api/health/live") {
+      return Promise.resolve(jsonResponse({ status: "live" }));
+    }
+    if (path === "/status-api/health/ready") {
+      return Promise.resolve(
+        jsonResponse({
         status: "ready",
         dependencies: { postgres: "up", redis: "up", tenantAuth: "up" }
-      })
-    );
+        })
+      );
+    }
+    return Promise.resolve(jsonResponse({ status: "not_found" }, 404));
+  });
 }
 
 function jsonResponse(body: unknown, status = 200): Response {

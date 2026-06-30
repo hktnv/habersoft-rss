@@ -56,7 +56,7 @@ function noStore(reply: FastifyReply): void {
 
 function applyCookie(reply: FastifyReply, mutation: AdminCookieMutation): void {
   if (mutation.kind === "set" || mutation.kind === "clear") {
-    reply.header("Set-Cookie", mutation.cookie);
+    reply.header("Set-Cookie", mutation.cookies);
   }
 }
 

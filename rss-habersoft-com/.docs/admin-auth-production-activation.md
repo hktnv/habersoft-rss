@@ -1,8 +1,8 @@
 # Admin Auth Production Activation Package
 
-Status: `MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED`.
+Status: `MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
 
-MS-024E records operator-reported production retest evidence after MS-024D: backend admin-auth runtime env is live and valid in `main-service-api`, `main-service-worker` intentionally remains without admin-auth env, backend loopback `/admin-auth/session` returns `configured=true`, `authenticated=false`, `reason=unauthenticated`, and the frontend proxy recovered after the canonical overlay helper recreate. MS-024F records the later operator-reported production retest statement that authenticated admin shell production acceptance is closed for the current implemented status/auth shell scope. Codex did not independently perform a credentialed login, deploy the admin UI, mutate production, capture rollback baseline, publish an image, create a Git tag, create a GitHub Release, create a PR, or request real production secrets.
+MS-024E records operator-reported production retest evidence after MS-024D: backend admin-auth runtime env is live and valid in `main-service-api`, `main-service-worker` intentionally remains without admin-auth env, backend loopback `/admin-auth/session` returns `configured=true`, `authenticated=false`, `reason=unauthenticated`, and the frontend proxy recovered after the canonical overlay helper recreate. MS-024F records the later operator-reported production retest statement that authenticated admin shell production acceptance is closed for the current implemented status/auth shell scope. MS-025A adds the protected read-only admin operations summary route locally and leaves production deploy/retest operator-managed. Codex did not independently perform a credentialed login, deploy the admin UI, mutate production, capture rollback baseline, publish an image, create a Git tag, create a GitHub Release, create a PR, or request real production secrets.
 
 MS-023D status-dashboard production transport remains accepted. Historically, `/admin-auth/session -> 501 not_configured` meant backend auth was not active at the proxied upstream. MS-024E intakes the operator report that this residual is resolved to the expected pre-login state: `/admin-auth/session -> configured=true`, `authenticated=false`, `reason=unauthenticated` and `auth-smoke:redacted -> AUTH_CONFIGURED_UNAUTHENTICATED` with empty `diagnostic_classes`. MS-024F closes that current-scope acceptance residual by operator report. `auth-smoke:redacted` remains a redacted regression/sanity tool, not a pending acceptance blocker unless new contradictory evidence appears.
 
@@ -74,6 +74,14 @@ npm run ops:compose:recreate
 
 The helper includes the backend-network overlay when `ADMIN_UI_BACKEND_DOCKER_NETWORK` is configured. Without this frontend recreate, Nginx may retain stale backend upstream/network references and edge status/auth routes can show `502` or `auth_unavailable` even while backend loopback auth is configured.
 
+MS-025A adds another frontend edge route that depends on the same backend API runtime and upstream reference:
+
+```text
+GET /admin-api/operations/summary
+```
+
+The route requires the existing admin-auth session and returns only aggregate dependency, feed, entry, and ingestion counts plus safe notes. It must not expose tenant identifiers, feed URLs, entry content, raw logs, raw upstream bodies, password hashes, session secrets, database/Redis URLs, Agent keys, Tenant tokens, or write controls. If this route is deployed or if backend API/image/network/admin-auth env changes, run the same frontend helper recreate before testing the edge route.
+
 Tracked examples must use placeholders:
 
 ```text
@@ -96,7 +104,8 @@ Future production auth/runtime changes must be operator-authorized and must prov
 - production environment variable presence with secret values redacted;
 - `GET /admin-auth/session` fail-closed before login;
 - login, session, logout smoke with redacted request/response evidence when rerun as regression/sanity proof;
-- cookie evidence showing `HttpOnly`, `SameSite=Lax`, path `/admin-auth`, and `Secure` under TLS production;
+- cookie evidence showing `HttpOnly`, `SameSite=Lax`, path `/`, historical `/admin-auth` clearing, and `Secure` under TLS production;
+- aggregate-only `/admin-api/operations/summary` evidence after login, with no metrics before login or after logout;
 - no Agent key, Tenant bearer token, password, password hash, session secret, Redis session key, raw log, or raw body disclosure;
 - rollback path and exact image/env identity used for rollback.
 
@@ -110,4 +119,4 @@ MS-024E keeps that claim boundary and improves diagnostics/runbook guidance. If 
 npm run admin-auth:verify-config -- --env-file <operator-backend-auth-env> --require-enabled
 ```
 
-Backend API recreate after env placement is an operator rollback/config decision and is not performed by Codex. Worker recreate is not required solely for backend admin-auth env placement. MS-024F records the operator-reported authenticated admin shell production acceptance for the current implemented scope. No further AUTH_NOT_CONFIGURED_RESIDUAL or AUTH_CONFIGURED_UNAUTHENTICATED operator action remains for the current implemented admin-auth shell scope unless new contradictory evidence appears. Future business/admin write features are not accepted by this backend admin-auth activation package.
+Backend API recreate after env placement is an operator rollback/config decision and is not performed by Codex. Worker recreate is not required solely for backend admin-auth env placement. MS-024F records the operator-reported authenticated admin shell production acceptance for the status/auth shell scope. MS-025A production activation remains pending operator deploy/retest for the operations summary route. No further AUTH_NOT_CONFIGURED_RESIDUAL or AUTH_CONFIGURED_UNAUTHENTICATED operator action remains for the current implemented admin-auth shell scope unless new contradictory evidence appears. Future business/admin write features are not accepted by this backend admin-auth activation package.

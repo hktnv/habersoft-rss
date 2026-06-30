@@ -7,7 +7,8 @@ import { AdminLoginRateLimiter } from "./admin-login-rate-limiter.service";
 @Module({
   imports: [RedisRuntimeModule],
   controllers: [AdminAuthController],
-  providers: [AdminAuthService, AdminLoginRateLimiter]
+  providers: [AdminAuthService, AdminLoginRateLimiter],
+  exports: [AdminAuthService]
 })
 export class AdminAuthModule {}
 

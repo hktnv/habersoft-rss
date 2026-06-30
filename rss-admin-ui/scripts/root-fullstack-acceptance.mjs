@@ -60,6 +60,10 @@ try {
   assert(unauthenticated.body?.authenticated === false, "fresh session should be unauthenticated");
   assert(unauthenticated.headers.setCookie === null, "fresh session emitted a cookie");
 
+  const unauthenticatedSummary = await requestJson(`${base}/admin-api/operations/summary`);
+  assert(unauthenticatedSummary.status === 401, "admin operations summary did not require an admin session");
+  assert(!JSON.stringify(unauthenticatedSummary.body).includes("feeds"), "unauthenticated summary leaked operations data");
+
   const invalidLogin = await requestJson(`${base}/admin-auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -79,7 +83,7 @@ try {
   assert(!JSON.stringify(validLogin.body).includes(adminPasswordHash), "login body leaked password hash");
   assert(/HttpOnly/iu.test(validLogin.headers.setCookie ?? ""), "login cookie is not HTTP-only");
   assert(/SameSite=Lax/iu.test(validLogin.headers.setCookie ?? ""), "login cookie is not SameSite=Lax");
-  assert(/Path=\/admin-auth/iu.test(validLogin.headers.setCookie ?? ""), "login cookie path mismatch");
+  assert(/Path=\//iu.test(validLogin.headers.setCookie ?? ""), "login cookie path mismatch");
 
   const sessionCookie = cookiePair(validLogin.headers.setCookie);
   assert(sessionCookie !== undefined, "login did not produce a session cookie");
@@ -90,6 +94,21 @@ try {
   assert(authenticated.status === 200, "authenticated session check failed");
   assert(authenticated.body?.authenticated === true, "session did not authenticate with cookie");
   assert(authenticated.body?.principal?.kind === "single_admin", "authenticated principal mismatch");
+
+  const adminSummary = await requestJson(`${base}/admin-api/operations/summary`, {
+    headers: {
+      Authorization: "Bearer redacted",
+      Cookie: sessionCookie,
+      "X-Agent-Key": "redacted"
+    }
+  });
+  assert(adminSummary.status === 200, "admin operations summary failed after login");
+  assert(adminSummary.body?.status === "ok", "admin operations summary status mismatch");
+  assert(adminSummary.body?.dependencies?.postgres === "up", "admin operations summary did not include dependency state");
+  assert(typeof adminSummary.body?.feeds?.total === "number", "admin operations summary did not include feed aggregates");
+  assert(adminSummary.headers.setCookie === null, "admin operations summary relayed Set-Cookie");
+  assert(!JSON.stringify(adminSummary.body).includes(adminPassword), "admin operations summary leaked password");
+  assert(!JSON.stringify(adminSummary.body).includes(adminPasswordHash), "admin operations summary leaked password hash");
 
   const live = await requestJson(`${base}/status-api/health/live`, {
     headers: {
@@ -130,6 +149,12 @@ try {
   assert(afterLogout.status === 200, "post-logout session check failed");
   assert(afterLogout.body?.authenticated === false, "logout did not invalidate the server-side session");
 
+  const summaryAfterLogout = await requestJson(`${base}/admin-api/operations/summary`, {
+    headers: { Cookie: sessionCookie }
+  });
+  assert(summaryAfterLogout.status === 401, "admin operations summary remained available after logout");
+  assert(!JSON.stringify(summaryAfterLogout.body).includes("feeds"), "post-logout summary leaked operations data");
+
   const staticSurface = [index.body, envConfig.body, ...(await staticAssets(base, index.body))].join("\n");
   assert(!staticSurface.includes(adminPassword), "admin password leaked to static surface");
   assert(!staticSurface.includes(adminPasswordHash), "admin password hash leaked to static surface");
@@ -149,8 +174,10 @@ try {
           invalid_login_status: invalidLogin.status,
           valid_login_status: validLogin.status,
           authenticated_session: authenticated.body.authenticated,
+          operations_summary_status: adminSummary.status,
           logout_status: logout.status,
-          after_logout_authenticated: afterLogout.body.authenticated
+          after_logout_authenticated: afterLogout.body.authenticated,
+          operations_summary_after_logout_status: summaryAfterLogout.status
         },
         readiness: ready.body.dependencies
       },
