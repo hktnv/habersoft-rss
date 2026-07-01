@@ -324,3 +324,9 @@ npm run test:admin-api-proxy-template
 npm run test:fullstack
 npm run test:production-mode-rc
 ```
+
+## MS-027A-R1 Promotion Image Freshness
+
+Bounded status: `SUCCESS_MS_027A_R1_PRODUCTION_PROMOTION_IMAGE_FRESHNESS_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED`.
+
+The one-command operator `--apply` flow now blocks `source_not_promoted`, builds backend/frontend images from current HEAD, verifies `org.opencontainers.image.revision` and `org.opencontainers.image.source`, updates operator image pointers, and then recreates. `--recreate-only` is restart-only; it blocks stale images as `backend_image_stale` or `frontend_image_stale` unless the existing image labels already match HEAD. Validate locally with `npm run verify:production-image-freshness`. Feed onboarding production acceptance remains pending operator retest.

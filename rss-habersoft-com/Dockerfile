@@ -15,6 +15,10 @@ COPY scripts ./scripts
 RUN npm run prisma:generate && npm run build
 
 FROM node:24.17.0-bookworm-slim AS runtime
+ARG HABERSOFT_IMAGE_REVISION=unknown
+ARG HABERSOFT_IMAGE_SOURCE=https://github.com/hktnv/habersoft-rss
+LABEL org.opencontainers.image.revision=$HABERSOFT_IMAGE_REVISION
+LABEL org.opencontainers.image.source=$HABERSOFT_IMAGE_SOURCE
 ENV NODE_ENV=production
 WORKDIR /app
 RUN apt-get update \

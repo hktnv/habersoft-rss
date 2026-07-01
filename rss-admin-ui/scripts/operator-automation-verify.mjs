@@ -53,7 +53,8 @@ function assertStaticContracts() {
     "ops:browser-evidence:verify": "node scripts/browser-evidence-verify.mjs",
     "verify:browser-evidence": "node scripts/browser-evidence-verify.mjs --self-test",
     "verify:admin-feed-onboarding": "node scripts/admin-feed-onboarding-verify.mjs",
-    "verify:operator-automation": "node scripts/operator-automation-verify.mjs"
+    "verify:operator-automation": "node scripts/operator-automation-verify.mjs",
+    "verify:production-image-freshness": "node scripts/production-image-freshness-verify.mjs"
   };
   for (const [name, command] of Object.entries(requiredFrontend)) {
     if (frontendScripts[name] !== command) failures.push(`frontend package.json missing ${name}`);
@@ -69,6 +70,7 @@ function assertStaticContracts() {
     "scripts/admin-feed-onboarding-verify.mjs",
     "scripts/browser-evidence-verify.mjs",
     "scripts/operator-risk-model.mjs",
+    "scripts/production-image-freshness-verify.mjs",
     "src/adminOperations/browserEvidence.ts",
     "../rss-habersoft-com/scripts/production-api-worker-recreate.mjs"
   ]) {
@@ -81,12 +83,12 @@ function assertStaticContracts() {
   }
 
   const composeOps = readFrontend("scripts/production-compose-ops.mjs");
-  for (const fragment of ["--apply", "apply_required_for_mutation", "mutatingCommand && !apply", "npm run ops:compose:recreate -- --apply"]) {
+  for (const fragment of ["--apply", "apply_required_for_mutation", "mutatingCommand && !apply", "npm run ops:compose:recreate -- --apply", "frontend_image_stale", "build_current_head_then_recreate", "--recreate-only"]) {
     if (!composeOps.includes(fragment)) failures.push(`frontend compose helper missing apply guardrail: ${fragment}`);
   }
 
   const backendRecreate = readBackend("scripts/production-api-worker-recreate.mjs");
-  for (const fragment of ["--apply", "backend-api-worker-recreate-dry-run", "backend-api-worker-recreate-apply", "apply_required_for_mutation", "credentials and secrets must not be supplied"]) {
+  for (const fragment of ["--apply", "backend-api-worker-recreate-dry-run", "backend-api-worker-recreate-apply", "apply_required_for_mutation", "credentials and secrets must not be supplied", "backend_image_stale", "source_not_promoted", "build_current_head_then_recreate", "--recreate-only"]) {
     if (!backendRecreate.includes(fragment)) failures.push(`backend recreate helper missing guardrail: ${fragment}`);
   }
 
@@ -124,7 +126,17 @@ function assertStaticContracts() {
     "--browser-evidence",
     "ROUTE_PROOF_NOT_AVAILABLE",
     "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
-    "/admin-api/operations/feed-onboarding-requests"
+    "/admin-api/operations/feed-onboarding-requests",
+    "source_not_promoted",
+    "backend_image_stale",
+    "frontend_image_stale",
+    "backend_route_missing",
+    "frontend_route_missing",
+    "nginx_template_marker_unresolved",
+    "auth_not_configured",
+    "unauthenticated_expected",
+    "no_eligible_feed_target",
+    "accepted_route_smoke_pending_effect"
   ]) {
     if (!promotion.includes(fragment)) failures.push(`promotion retest script missing fragment: ${fragment}`);
   }
@@ -169,8 +181,12 @@ function assertStaticContracts() {
     "ops:browser-evidence:verify",
     "verify:browser-evidence",
     "verify:admin-feed-onboarding",
+    "verify:production-image-freshness",
     "ops:production:recreate:api-worker -- --dry-run",
     "ops:production:recreate:api-worker -- --apply",
+    "--recreate-only",
+    "backend_image_stale",
+    "frontend_image_stale",
     "ops:compose:recreate -- --apply",
     "CRITICAL",
     "HIGH",
@@ -238,13 +254,16 @@ async function assertRuntimeClassifications() {
     const browserEvidence = await runNode(["scripts/browser-evidence-verify.mjs", "--self-test"]);
     assertJson(browserEvidence, "browser-evidence-verify-self-test-ok", "browser evidence self-test");
 
+    const imageFreshness = await runNode(["scripts/production-image-freshness-verify.mjs"]);
+    assertJson(imageFreshness, "production-image-freshness-verify-ok", "production image freshness verifier");
+
     const promotionDryRun = await runPromotion(["--dry-run", "--endpoint", endpoint, "--nginx-config-file", nginxConfig]);
     assertJson(promotionDryRun, "OPERATOR_PROMOTION_RETEST_DRY_RUN_READY", "promotion dry-run");
 
     const promotionRetest = await runPromotion(["--retest-only", "--endpoint", endpoint, "--nginx-config-file", nginxConfig]);
     assertJson(promotionRetest, "OPERATOR_PROMOTION_RETEST_REDACTED_OK", "promotion retest-only");
 
-    for (const result of [dryRun, noCredentials, noEligible, eligibleAccepted, browserEvidence, promotionDryRun, promotionRetest]) {
+    for (const result of [dryRun, noCredentials, noEligible, eligibleAccepted, browserEvidence, imageFreshness, promotionDryRun, promotionRetest]) {
       assertSanitized(result.stdout);
     }
   } finally {

@@ -5,10 +5,11 @@ import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
+const gitRevision = git(["rev-parse", "HEAD"], repoRoot);
 const image =
   process.env.RSS_ADMIN_UI_READINESS_IMAGE ??
   process.env.RSS_ADMIN_UI_TEST_IMAGE ??
-  "rss-admin-ui:ms026c-r1-local";
+  "rss-admin-ui:ms027a-r1-local";
 const productionHostPattern = /(?:^|[/:.])rss(?:-panel)?\.habersoft\.com(?:$|[/:])/iu;
 const rootComposeEnv = {
   RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms026c-r1-local",
@@ -50,10 +51,20 @@ run("npm", ["run", "verify:admin-feed-recheck-action"]);
 run("npm", ["run", "verify:admin-feed-onboarding"]);
 run("npm", ["run", "verify:operator-automation"]);
 run("npm", ["run", "verify:operator-automation-acceptance"]);
+run("npm", ["run", "verify:production-image-freshness"]);
 run("npm", ["run", "verify:browser-evidence"]);
 run("npm", ["run", "verify:production-operations-acceptance"]);
 run("npm", ["run", "verify:production-operations-drilldown-acceptance"]);
-run("docker", ["build", "-t", image, "."], { printOutput: false, timeoutMs: 600000 });
+run("docker", [
+  "build",
+  "-t",
+  image,
+  "--build-arg",
+  `HABERSOFT_IMAGE_REVISION=${gitRevision}`,
+  "--build-arg",
+  "HABERSOFT_IMAGE_SOURCE=https://github.com/hktnv/habersoft-rss",
+  "."
+], { printOutput: false, timeoutMs: 600000 });
 console.log(JSON.stringify({ status: "docker-build-ok", image }));
 
 run("docker", ["compose", "config", "--quiet"], {
@@ -132,6 +143,7 @@ console.log(
         "authenticated admin feed onboarding verifier passes",
         "MS-026C operator automation verifier passes",
         "MS-026C-R1 operator automation acceptance verifier passes",
+        "MS-027A-R1 production image freshness verifier passes",
         "MS-026C browser evidence verifier passes",
         "MS-025A-R2 operator-reported operations acceptance verifier passes",
         "MS-025B-R1 operator-reported operations drilldown acceptance verifier passes",
@@ -194,6 +206,17 @@ function run(command, args, options = {}) {
     );
   }
   return result;
+}
+
+function git(args, cwd) {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    shell: false,
+    timeout: 30000
+  });
+  if (result.status !== 0) return "unavailable";
+  return result.stdout.trim();
 }
 
 function resolveCommand(command, args) {

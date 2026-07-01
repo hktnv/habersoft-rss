@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+Status: `SUCCESS_MS_027A_R1_PRODUCTION_PROMOTION_IMAGE_FRESHNESS_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED`.
 
 ## Scope
 
-Included through MS-027A:
+Included through MS-027A-R1:
 
 - application shell,
 - root route,
@@ -74,7 +74,8 @@ Included through MS-027A:
 - MS-026B redacted operator automation, no-eligible feed recheck classification, and risk-tiered apply guardrails,
 - MS-026C one-command operator promotion/retest automation, browser evidence bridge, and future feed-recheck closure flow,
 - MS-026C-R1 operator-reported production acceptance closure for the automation/retest package while feed recheck effect remains pending,
-- MS-027A authenticated admin feed onboarding route, panel, proxy, browser evidence fields, and verifier.
+- MS-027A authenticated admin feed onboarding route, panel, proxy, browser evidence fields, and verifier,
+- MS-027A-R1 production image freshness remediation for backend/frontend promotion, stale-image classifications, and verifier.
 
 Not included:
 
@@ -124,6 +125,7 @@ npm run verify:admin-operations-drilldown
 npm run verify:admin-feed-onboarding
 npm run verify:operator-automation
 npm run verify:operator-automation-acceptance
+npm run verify:production-image-freshness
 npm run verify:browser-evidence
 npm run ops:production:retest -- --dry-run
 npm run ops:production:retest -- --retest-only --endpoint https://rss-panel.habersoft.com
@@ -172,6 +174,8 @@ MS-026C adds `npm run ops:production:retest` as the one-command operator wrapper
 MS-026C-R1 records `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET` from operator-reported evidence only. The reported acceptance classes are `OPERATOR_PROMOTION_RETEST_REDACTED_OK`, `NGINX_ROUTE_PROOF_ACCEPTED`, `browser-evidence-verify-ok`, `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, and `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`; critical risk `none`; no production contact by Codex. Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`. No production feed was created, seeded, or faked. No fake actionRef was generated. The tracked guard is `npm run verify:operator-automation-acceptance`, and the durable sanitized receipt is stored outside Git under `operator-state/admin-ui-production-activation/ms-026c-r1-operator-automation-accepted-feed-recheck-pending-no-target-receipt.json`.
 
 MS-027A adds authenticated admin feed onboarding at `POST /admin-api/operations/feed-onboarding-requests`. The panel requires explicit confirmation, keeps the raw input and CSRF/idempotency material in memory only, sends `X-Admin-CSRF` and `X-Admin-Idempotency-Key`, and renders only safe response fields. The backend validates a public HTTPS feed URL, rejects unsafe localhost/private/internal-style targets, stores a reserved admin onboarding relation, and performs no synchronous external feed fetch. Safe responses and browser evidence include only `displayId`, public `sourceHost`, state, eligibility, safe messages, and `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE` with `feed_onboarding_available`, `feed_onboarding_status`, `no_eligible_target`, and `critical_risk`; there is no raw feed URL in response or evidence. Operator automation classifies `FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED` and Nginx proof now requires summary/drilldown/feed-recheck/feed-onboarding. Status: `SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`; operator deploy/retest required remains. Codex did not perform production contact. No production feed was created, seeded, or faked. Validate with `npm run verify:admin-feed-onboarding`, `npm run test:admin-api-proxy-template`, `npm run test:fullstack`, and `npm run test:production-mode-rc`.
+
+MS-027A-R1 adds production promotion image freshness remediation. The canonical operator path is still `npm run ops:production:retest`, but `--apply` now requires the checkout to match `origin/main`, builds backend/frontend images from current HEAD, verifies `org.opencontainers.image.revision` and `org.opencontainers.image.source`, updates the operator image pointer, and then recreates containers. `--recreate-only` is restart-only and blocks unless the existing image already matches HEAD. Operator output distinguishes `source_not_promoted`, `backend_image_stale`, `frontend_image_stale`, `backend_route_missing`, `frontend_route_missing`, `nginx_template_marker_unresolved`, `auth_not_configured`, `unauthenticated_expected`, `no_eligible_feed_target`, and `accepted_route_smoke_pending_effect`. Validate with `npm run verify:production-image-freshness`; operator production retest remains required.
 
 MS-024B changes the operator runtime posture to graduated guardrails. Missing, malformed, public-edge, or Docker bridge loopback upstreams no longer crash-loop the static frontend container. `/healthz` and the static app start, while exact proxy routes return bounded JSON with reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` remains available for strict synthetic checks.
 

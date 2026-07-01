@@ -86,10 +86,12 @@ const protectedBackendPaths = [
 const allowedBackendAdminAuthDelta = new Set([
   "deploy/production/compose.yaml",
   "deploy/production/production.env.template",
+  "Dockerfile",
   "package.json",
   "src/api.module.ts",
   "src/bootstrap/api-entrypoint.ts",
-  "src/configuration/runtime-config.ts"
+  "src/configuration/runtime-config.ts",
+  "src/tenant-auth/tenant-jwt.verifier.ts"
 ]);
 
 assertDirectory(backendRoot);
@@ -118,7 +120,7 @@ console.log(JSON.stringify({
   topology: "POLYREPO_STYLE_SINGLE_GIT_MONOREPO",
   migration_base: migrationBase,
   project_roots: [backendRoot, frontendRoot],
-  backend_protected_content: "byte-identical-except-admin-auth-runtime-and-ms024d-production-env-wiring-delta",
+  backend_protected_content: "byte-identical-except-admin-auth-runtime-ms024d-production-env-ms027a-tenant-verifier-and-ms027a-r1-image-freshness-deltas",
   nested_git: false
 }, null, 2));
 

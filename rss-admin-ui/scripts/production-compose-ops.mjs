@@ -3,19 +3,36 @@ import { existsSync, readFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  CANONICAL_IMAGE_SOURCE,
+  buildImage,
+  classifyImageFreshness,
+  currentGitRevision,
+  dockerBuildArgs,
+  inspectImage,
+  isImmutableImageReference,
+  localPromotionTag,
+  writeEnvAssignment
+} from "../../scripts/production-image-freshness-lib.mjs";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = path.resolve(frontendRoot, "..");
 const composeFile = path.join("deploy", "production", "compose.yaml");
 const backendNetworkFile = path.join("deploy", "production", "compose.backend-network.yaml");
 const envFile = ".env.production";
+const defaultFrontendImage = "habersoft-rss-frontend:latest";
 const command = process.argv[2] ?? "diagnose";
 const rawPassthrough = process.argv.slice(3);
 const apply = rawPassthrough.includes("--apply") || process.env.ADMIN_UI_COMPOSE_OPS_APPLY === "true";
 const requestedDryRun = rawPassthrough.includes("--dry-run") || process.env.ADMIN_UI_COMPOSE_OPS_DRY_RUN === "true";
+const recreateOnly = rawPassthrough.includes("--recreate-only") || process.env.ADMIN_UI_COMPOSE_RECREATE_ONLY === "true";
 const mutatingCommand = command === "up" || command === "recreate";
 const dryRun = requestedDryRun || (mutatingCommand && !apply);
-const passthrough = rawPassthrough.filter((arg) => arg !== "--dry-run" && arg !== "--apply");
+const passthrough = filterPassthrough(rawPassthrough);
 const credentialCliPattern = /^--(?:username|password)(?:=|$)/u;
+const revision = currentGitRevision(repoRoot);
+const imageSource = process.env.HABERSOFT_IMAGE_SOURCE ?? CANONICAL_IMAGE_SOURCE;
+let composeEnvOverride = {};
 
 if (rawPassthrough.some((arg) => credentialCliPattern.test(arg))) {
   fail("credentials must not be supplied on compose helper command lines");
@@ -28,6 +45,13 @@ const envFilePath = path.join(frontendRoot, envFile);
 const envFilePresent = existsSync(envFilePath);
 const envFileValues = envFilePresent ? parseEnvFile(envFilePath) : {};
 const effectiveEnv = relevantEnv(envFileValues);
+const effectiveFrontendImage = (effectiveEnv.RSS_ADMIN_UI_IMAGE || defaultFrontendImage).trim();
+const requestedImageTag = optionValue("--image-tag");
+const promotionImageTag =
+  requestedImageTag ??
+  process.env.RSS_ADMIN_UI_PROMOTION_IMAGE_TAG ??
+  (!isImmutableImageReference(effectiveFrontendImage) && effectiveFrontendImage !== "" ? effectiveFrontendImage : localPromotionTag("frontend", revision));
+const currentFreshness = classifyImageFreshness({ component: "frontend", image: effectiveFrontendImage, expectedRevision: revision, expectedSource: imageSource });
 const serviceDnsUpstreams = serviceDnsUpstreamNames(effectiveEnv);
 const backendNetworkConfigured = isUsableBackendNetwork(effectiveEnv.ADMIN_UI_BACKEND_DOCKER_NETWORK);
 const runtimeOverlayRequired = backendNetworkConfigured || serviceDnsUpstreams.length > 0;
@@ -49,12 +73,21 @@ switch (command) {
     break;
   case "up":
     requireRuntimePreflight(command);
+    if (!dryRun) requireFreshImageForNoBuild(command);
     printCommandSummary(command, composeBaseArgs(true));
     if (!dryRun) runCompose([...composeBaseArgs(true), "up", "-d", "--no-build", "--pull", "never", ...passthrough]);
     break;
   case "recreate":
     requireRuntimePreflight(command);
-    printCommandSummary(command, composeBaseArgs(true));
+    {
+      let promotionFreshness = currentFreshness;
+      if (!dryRun && recreateOnly) {
+        promotionFreshness = requireFreshImageForNoBuild(command);
+      } else if (!dryRun) {
+        promotionFreshness = promoteFrontendImage();
+      }
+      printCommandSummary(command, composeBaseArgs(true), { image_freshness: promotionFreshness });
+    }
     if (!dryRun) {
       runCompose([
         ...composeBaseArgs(true),
@@ -102,10 +135,12 @@ function diagnose() {
       effective_config: "/tmp/nginx/conf.d/default.conf",
       verify_after_image_rebuild: "docker compose exec rss-admin-ui sh -lc 'nginx -T 2>&1 | grep -F \"/admin-api/operations/summary\" && grep -F \"/admin-api/operations/drilldown\" /tmp/nginx/conf.d/default.conf && grep -F \"/admin-api/operations/feed-recheck-requests\" /tmp/nginx/conf.d/default.conf && grep -F \"/admin-api/operations/feed-onboarding-requests\" /tmp/nginx/conf.d/default.conf && ! grep -F \"__ADMIN_UI_\" /tmp/nginx/conf.d/default.conf'"
     },
+    image_freshness: currentFreshness,
     config_status: config.status,
     ps_status: ps.status,
     next_steps: [
-      "if nginx.conf or docker-entrypoint.sh changed, rebuild/update the frontend image before recreate",
+      "for source promotion, run npm run ops:compose:recreate -- --apply so the helper rebuilds and verifies a current-HEAD frontend image",
+      "use npm run ops:compose:recreate -- --apply --recreate-only only after the existing image labels already match current HEAD",
       "npm run ops:compose:config",
       "npm run ops:compose:recreate -- --apply",
       "verify the running generated Nginx config contains /admin-api/operations/summary, /admin-api/operations/drilldown, /admin-api/operations/feed-recheck-requests, /admin-api/operations/feed-onboarding-requests, and no unresolved __ADMIN_UI_*__ markers",
@@ -153,13 +188,39 @@ function printBlocked(label) {
   );
 }
 
-function printCommandSummary(label, args) {
+function printCommandSummary(label, args, extra = {}) {
+  const imageFreshness = extra.image_freshness ?? currentFreshness;
   const output = {
     status: "frontend-production-compose-command-ready",
     command: label,
     dry_run: dryRun,
     apply,
     apply_required_for_mutation: mutatingCommand,
+    promotion_mode: label === "recreate" && !recreateOnly ? "build_current_head_then_recreate" : "recreate_only_existing_image",
+    git_revision: revision,
+    image_source: imageSource,
+    image_freshness: imageFreshness,
+    classifications: [imageFreshness.classification],
+    build: {
+      will_build: label === "recreate" && !recreateOnly,
+      dockerfile: "Dockerfile",
+      context: ".",
+      tag: promotionImageTag,
+      command_preview: ["docker", ...dockerBuildArgs({
+        dockerfile: "Dockerfile",
+        context: ".",
+        tag: promotionImageTag,
+        revision,
+        source: imageSource
+      })].join(" ")
+    },
+    env_update: {
+      env_file: envFilePresent ? envFile : "not-present",
+      key: "RSS_ADMIN_UI_IMAGE",
+      will_write: apply && !dryRun && label === "recreate" && !recreateOnly && envFilePresent,
+      runtime_override_for_current_run: Object.hasOwn(composeEnvOverride, "RSS_ADMIN_UI_IMAGE")
+    },
+    restart_safety: "--no-build --pull never --force-recreate is allowed only after frontend image freshness is proven current",
     compose_files: composeFiles(args.includes(backendNetworkFile)),
     env_file: envFilePresent ? envFile : "not-present",
     backend_network_overlay: args.includes(backendNetworkFile),
@@ -167,6 +228,87 @@ function printCommandSummary(label, args) {
     output: "redacted"
   };
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+}
+
+function promoteFrontendImage() {
+  const build = buildImage({
+    component: "frontend",
+    cwd: frontendRoot,
+    dockerfile: "Dockerfile",
+    context: ".",
+    tag: promotionImageTag,
+    revision,
+    source: imageSource
+  });
+  if (!build.ok) {
+    printImageBlocked("recreate", {
+      status: "frontend_image_stale",
+      classification: "frontend_image_stale",
+      fresh: false,
+      image: promotionImageTag,
+      reason: "frontend image build failed",
+      output: "redacted"
+    });
+    process.exit(build.exit_code);
+  }
+
+  const inspected = inspectImage(promotionImageTag, { cwd: frontendRoot });
+  const freshness = classifyImageFreshness({
+    component: "frontend",
+    image: promotionImageTag,
+    expectedRevision: revision,
+    expectedSource: imageSource,
+    inspectResult: inspected
+  });
+  if (!freshness.fresh) {
+    printImageBlocked("recreate", freshness, "built frontend image did not carry current HEAD labels");
+    process.exit(1);
+  }
+
+  composeEnvOverride = {
+    ...composeEnvOverride,
+    RSS_ADMIN_UI_IMAGE: inspected.id
+  };
+  if (envFilePresent) {
+    writeEnvAssignment(envFilePath, "RSS_ADMIN_UI_IMAGE", inspected.id);
+  }
+  return freshness;
+}
+
+function requireFreshImageForNoBuild(label) {
+  if (!currentFreshness.fresh) {
+    printImageBlocked(label, currentFreshness, "no-build recreate/up requested but frontend image revision is not current HEAD");
+    process.exit(1);
+  }
+  return currentFreshness;
+}
+
+function printImageBlocked(label, freshness, reason = freshness.reason) {
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        status: "frontend-production-compose-command-blocked",
+        command: label,
+        reason,
+        blocking_classification: "frontend_image_stale",
+        dry_run: dryRun,
+        apply,
+        promotion_mode: recreateOnly ? "recreate_only_existing_image" : "build_current_head_then_recreate",
+        git_revision: revision,
+        image_source: imageSource,
+        image_freshness: freshness,
+        classifications: ["frontend_image_stale"],
+        next_steps: [
+          "confirm the production checkout is at origin/main with git pull --ff-only origin main",
+          "rerun npm run ops:compose:recreate -- --apply to build a current-HEAD frontend image",
+          "use --recreate-only only for restart-only recovery after image labels already match current HEAD"
+        ],
+        output: "redacted"
+      },
+      null,
+      2
+    )}\n`
+  );
 }
 
 function composeBaseArgs(forRuntime) {
@@ -274,6 +416,31 @@ function relevantEnv(fileValues) {
   return Object.fromEntries(names.map((name) => [name, process.env[name] ?? fileValues[name] ?? ""]));
 }
 
+function filterPassthrough(values) {
+  const filtered = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (["--dry-run", "--apply", "--recreate-only"].includes(value)) continue;
+    if (value === "--image-tag") {
+      index += 1;
+      continue;
+    }
+    if (value.startsWith("--image-tag=")) continue;
+    filtered.push(value);
+  }
+  return filtered;
+}
+
+function optionValue(name) {
+  const exact = rawPassthrough.find((arg) => arg.startsWith(`${name}=`));
+  if (exact !== undefined) return exact.slice(name.length + 1);
+  const index = rawPassthrough.indexOf(name);
+  if (index === -1) return undefined;
+  const value = rawPassthrough[index + 1];
+  if (value === undefined || value.startsWith("--")) fail(`${name} requires a value`);
+  return value;
+}
+
 function parseEnvFile(file) {
   if (/^ms-023a-secrets\.json$/iu.test(path.basename(file))) {
     fail("refusing to read ms-023a-secrets.json");
@@ -301,7 +468,7 @@ function parseEnvFile(file) {
 function runCompose(args, options = {}) {
   const result = spawnSync("docker", ["compose", ...args], {
     cwd: frontendRoot,
-    env: process.env,
+    env: { ...process.env, ...composeEnvOverride },
     encoding: "utf8",
     shell: false,
     timeout: 120000

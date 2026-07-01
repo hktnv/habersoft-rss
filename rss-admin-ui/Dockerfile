@@ -8,6 +8,10 @@ COPY . .
 RUN npm run build
 
 FROM nginx:1.29-alpine AS runtime
+ARG HABERSOFT_IMAGE_REVISION=unknown
+ARG HABERSOFT_IMAGE_SOURCE=https://github.com/hktnv/habersoft-rss
+LABEL org.opencontainers.image.revision=$HABERSOFT_IMAGE_REVISION
+LABEL org.opencontainers.image.source=$HABERSOFT_IMAGE_SOURCE
 
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /tmp/nginx/templates/default.conf.template

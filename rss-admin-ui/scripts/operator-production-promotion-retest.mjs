@@ -22,6 +22,18 @@ const skipBackendRecreate = args.includes("--skip-backend-recreate");
 const skipFrontendRecreate = args.includes("--skip-frontend-recreate");
 const migrationCheck = args.includes("--migration-check");
 const attemptFeedRecheck = args.includes("--attempt-feed-recheck");
+const operatorClassificationCatalog = [
+  "source_not_promoted",
+  "backend_image_stale",
+  "frontend_image_stale",
+  "backend_route_missing",
+  "frontend_route_missing",
+  "nginx_template_marker_unresolved",
+  "auth_not_configured",
+  "unauthenticated_expected",
+  "no_eligible_feed_target",
+  "accepted_route_smoke_pending_effect"
+];
 
 if (args.includes("--help") || args.includes("-h")) {
   writeJson({
@@ -49,6 +61,7 @@ const operatorFiles = operatorFileSummary();
 const warnings = [];
 const critical = [];
 const steps = [];
+const operatorClassifications = new Set(sourcePromotionClassifications(git));
 
 if (nginxConfigFile === undefined) {
   warnings.push(riskClass("ROUTE_PROOF_NOT_AVAILABLE", "provide --nginx-config-file with running/generated Nginx config for route proof"));
@@ -71,6 +84,8 @@ if (dryRun) {
     roots,
     operator_files: operatorFiles,
     planned_steps: plannedSteps(),
+    operator_classifications: [...operatorClassifications],
+    classification_catalog: operatorClassificationCatalog,
     receipt: {
       will_write: receiptOut !== undefined,
       path: receiptOut === undefined ? "not-requested" : path.resolve(receiptOut)
@@ -83,6 +98,26 @@ if (dryRun) {
     output: "redacted"
   }, false);
   process.exit(0);
+}
+
+if (apply && operatorClassifications.has("source_not_promoted")) {
+  critical.push(riskClass("SOURCE_NOT_PROMOTED", "current checkout does not match origin/main; run git pull --ff-only origin main before --apply"));
+  await finish({
+    status: "OPERATOR_PROMOTION_RETEST_ATTENTION_REQUIRED",
+    mode: "apply",
+    git,
+    roots,
+    operator_files: operatorFiles,
+    operator_classifications: [...operatorClassifications],
+    classification_catalog: operatorClassificationCatalog,
+    risk: {
+      warnings,
+      critical,
+      model: riskSummary()
+    },
+    output: "redacted"
+  }, true);
+  process.exit(1);
 }
 
 if (migrationCheck) {
@@ -100,6 +135,7 @@ if (apply && !skipFrontendRecreate) {
 const routeProof = nginxConfigFile === undefined ? routeProofMissing() : routeProofFromFile(nginxConfigFile);
 if (routeProof.status !== "NGINX_ROUTE_PROOF_ACCEPTED") {
   const routeRisk = routeProof.critical === true ? riskClass("NGINX_EXACT_ADMIN_ROUTE_MISSING", routeProof.reason) : riskClass("ROUTE_PROOF_NOT_AVAILABLE", routeProof.reason);
+  if (routeProof.classification !== undefined) operatorClassifications.add(routeProof.classification);
   if (routeProof.critical === true) critical.push(routeRisk);
   else warnings.push(routeRisk);
 }
@@ -124,10 +160,18 @@ if (browserEvidenceFile !== undefined) {
 const failedSteps = steps.filter((step) => step.exit_code !== 0);
 const acceptanceStep = steps.find((step) => step.name === "frontend-redacted-acceptance");
 const acceptanceClasses = acceptanceStep?.classification === undefined ? [] : [acceptanceStep.classification];
+for (const step of steps) collectStepClassifications(step, operatorClassifications);
 const noEligible = acceptanceStep?.feed_recheck_effect_status === "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET" || browserEvidence.classifications.includes("BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET");
-if (noEligible) warnings.push(riskClass("PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET", "route/auth/proxy checks can pass while effect remains pending until a real eligible feed exists"));
+if (noEligible) {
+  operatorClassifications.add("no_eligible_feed_target");
+  warnings.push(riskClass("PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET", "route/auth/proxy checks can pass while effect remains pending until a real eligible feed exists"));
+}
 if (acceptanceStep?.feed_onboarding_classification === "FEED_ONBOARDING_ROUTE_SMOKE_ATTENTION_REQUIRED") {
+  operatorClassifications.add(routeProof.status === "NGINX_ROUTE_PROOF_ACCEPTED" ? "backend_route_missing" : "frontend_route_missing");
   critical.push(riskClass("ADMIN_FEED_ONBOARDING_ROUTE_UNSAFE", "feed onboarding route smoke did not pass exact JSON auth-gated checks"));
+}
+if (acceptanceStep?.feed_onboarding_classification === "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED") {
+  operatorClassifications.add("accepted_route_smoke_pending_effect");
 }
 const highApplyWarnings = apply && warnings.some((warning) => warning.tier === "HIGH");
 
@@ -140,6 +184,8 @@ await finish({
   route_proof: routeProof,
   browser_evidence: browserEvidence,
   steps,
+  operator_classifications: [...operatorClassifications],
+  classification_catalog: operatorClassificationCatalog,
   classifications: [...acceptanceClasses, ...browserEvidence.classifications],
   feed_recheck_effect_status: noEligible ? "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET" : acceptanceStep?.feed_recheck_effect_status ?? "PENDING_OPERATOR_ACTION_OR_BROWSER_EVIDENCE",
   feed_onboarding_status: acceptanceStep?.feed_onboarding_status ?? "PENDING_ROUTE_SMOKE_OR_BROWSER_EVIDENCE",
@@ -156,8 +202,8 @@ function plannedSteps() {
     "verify checkout and current Git SHA",
     "detect backend/frontend roots and operator env/template file presence without reading secret values",
     "optional backend migration status check with --migration-check",
-    "operator-owned backend API/worker recreate only when --apply is used",
-    "operator-owned frontend compose recreate only when --apply is used",
+    "operator-owned backend current-HEAD image build, OCI label verification, runtime image pointer update, then API/worker recreate only when --apply is used",
+    "operator-owned frontend current-HEAD image build, OCI label verification, env image pointer update, then compose recreate only when --apply is used",
     "running/generated Nginx route proof for summary, drilldown, feed-recheck, and feed-onboarding when --nginx-config-file is provided",
     "redacted health/status/auth/admin-api acceptance through ops:production:acceptance:redacted when --apply or --retest-only is used",
     "browser evidence verifier when --browser-evidence is provided",
@@ -174,6 +220,8 @@ function runStep(name, cwd, npmScript, npmArgs) {
     exit_code: result.status ?? 1,
     status: parsed?.status ?? (result.status === 0 ? "ok" : "failed"),
     classification: parsed?.auth?.classification ?? parsed?.classification ?? parsed?.status ?? "none",
+    classifications: Array.isArray(parsed?.classifications) ? parsed.classifications : [],
+    image_freshness: parsed?.image_freshness ?? undefined,
     feed_recheck_classification: parsed?.feed_recheck?.classification ?? "none",
     feed_recheck_effect_status: parsed?.feed_recheck?.effect_status ?? "none",
     feed_onboarding_classification: parsed?.feed_onboarding?.classification ?? "none",
@@ -205,6 +253,7 @@ function routeProofMissing() {
   return {
     status: "ROUTE_PROOF_NOT_AVAILABLE",
     reason: "no --nginx-config-file supplied",
+    classification: "frontend_route_missing",
     critical: false
   };
 }
@@ -218,6 +267,7 @@ function routeProofFromFile(file) {
     return {
       status: "ROUTE_PROOF_NOT_AVAILABLE",
       reason: "nginx config file could not be read",
+      classification: "frontend_route_missing",
       critical: false
     };
   }
@@ -225,6 +275,7 @@ function routeProofFromFile(file) {
     return {
       status: "NGINX_ROUTE_PROOF_REJECTED",
       reason: "unresolved __ADMIN_UI_ marker present",
+      classification: "nginx_template_marker_unresolved",
       critical: true
     };
   }
@@ -238,6 +289,7 @@ function routeProofFromFile(file) {
     return {
       status: "NGINX_ROUTE_PROOF_REJECTED",
       reason: "exact admin route missing",
+      classification: "frontend_route_missing",
       missing_routes: missing,
       critical: true
     };
@@ -283,6 +335,32 @@ function defaultReceiptPath() {
     return "E:\\Codex\\rss-habersoft-com\\operator-state\\admin-ui-production-activation\\ms-026c-one-command-production-retest-receipt.json";
   }
   return path.join(os.homedir(), ".habersoft-rss", "operator-state", "admin-ui-production-activation", "ms-026c-one-command-production-retest-receipt.json");
+}
+
+function sourcePromotionClassifications(gitInfo) {
+  if (gitInfo.current === "unavailable" || gitInfo.origin_main === "unavailable" || gitInfo.current !== gitInfo.origin_main) {
+    return ["source_not_promoted"];
+  }
+  return [];
+}
+
+function collectStepClassifications(step, target) {
+  for (const classification of step.classifications ?? []) {
+    if (operatorClassificationCatalog.includes(classification)) target.add(classification);
+  }
+  if (step.image_freshness?.classification === "backend_image_stale") target.add("backend_image_stale");
+  if (step.image_freshness?.classification === "frontend_image_stale") target.add("frontend_image_stale");
+  if (step.classification === "AUTH_NOT_CONFIGURED_RESIDUAL") target.add("auth_not_configured");
+  if (step.classification === "AUTH_CONFIGURED_UNAUTHENTICATED" || step.classification === "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED") {
+    target.add("unauthenticated_expected");
+  }
+  if (step.feed_recheck_classification === "NO_ELIGIBLE_FEED_RECHECK_TARGET") target.add("no_eligible_feed_target");
+  if (step.feed_onboarding_classification === "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED") {
+    target.add("accepted_route_smoke_pending_effect");
+  }
+  if (step.feed_onboarding_classification === "FEED_ONBOARDING_ROUTE_SMOKE_ATTENTION_REQUIRED") {
+    target.add("backend_route_missing");
+  }
 }
 
 function rootSummary() {

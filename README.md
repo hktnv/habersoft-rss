@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status and operations dashboard with same-origin admin auth/session routes plus one bounded feed recheck action | `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status and operations dashboard with same-origin admin auth/session routes plus bounded feed recheck/onboarding actions | `SUCCESS_MS_027A_R1_PRODUCTION_PROMOTION_IMAGE_FRESHNESS_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -79,6 +79,7 @@ npm run verify:admin-operations-dashboard
 npm run verify:admin-operations-drilldown
 npm run verify:operator-automation
 npm run verify:operator-automation-acceptance
+npm run verify:production-image-freshness
 npm run verify:browser-evidence
 npm run ops:production:retest -- --dry-run
 npm run ops:production:retest -- --retest-only --endpoint https://rss-panel.habersoft.com
@@ -109,6 +110,8 @@ MS-026C adds `SUCCESS_MS_026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_C
 MS-026C-R1 records `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET` from operator-reported production retest evidence only. `OPERATOR_PROMOTION_RETEST_REDACTED_OK`, `NGINX_ROUTE_PROOF_ACCEPTED`, `browser-evidence-verify-ok`, `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, and `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET` close the MS-026C automation/browser-evidence residual. Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`; No production feed was created, seeded, or faked; No fake actionRef was generated; no production contact by Codex occurred.
 
 MS-027A adds `SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`: authenticated admin feed onboarding through `POST /admin-api/operations/feed-onboarding-requests`. The action is JSON-only, same-origin, admin-session-only, CSRF-protected with `X-Admin-CSRF`, idempotency-protected with `X-Admin-Idempotency-Key`, bounded by host cooldown, and implemented with a reserved admin onboarding relation so a real eligible target can later appear in Operations Drilldown. It performs no synchronous external feed fetch and returns only `displayId`, public `sourceHost`, state, eligibility, safe message, and safe next steps; no raw feed URL in response or evidence is allowed. Browser evidence now includes `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`, `feed_onboarding_available`, `feed_onboarding_status`, `no_eligible_target`, and `critical_risk`. Operator automation adds `FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED` and route proof for summary/drilldown/feed-recheck/feed-onboarding. Codex did not perform production contact. No production feed was created, seeded, or faked. Operator deploy/retest required remains. Validate with `npm run verify:admin-feed-onboarding`, `npm run test:admin-api-proxy-template`, `npm run test:fullstack`, and `npm run test:production-mode-rc`.
+
+MS-027A-R1 adds `SUCCESS_MS_027A_R1_PRODUCTION_PROMOTION_IMAGE_FRESHNESS_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED`: production promotion `--apply` now builds backend/frontend images from current HEAD, verifies `org.opencontainers.image.revision` and `org.opencontainers.image.source=https://github.com/hktnv/habersoft-rss`, and blocks stale recreate-only paths as `backend_image_stale` or `frontend_image_stale`. `--recreate-only` is restart-only and must prove the existing image already matches HEAD. The one-command output also distinguishes `source_not_promoted`, route-missing classes, auth-not-configured/unauthenticated expected states, no eligible feed target, and accepted route smoke with pending effect. Validate locally with `npm run verify:production-image-freshness`; production feed-onboarding acceptance still requires operator retest.
 
 MS-020D adds the local-only production activation readiness package. It includes a public-data classification for the current status-only fields, an operator authority record template, a future post-deploy evidence checklist, and `npm run verify:production-readiness`. It does not authorize production mutation.
 
