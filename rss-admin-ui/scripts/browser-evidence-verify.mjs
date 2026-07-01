@@ -11,11 +11,12 @@ const forbiddenStringPattern = /feed_recheck_v1\.|https?:\/\/|Set-Cookie|Authori
 const selfTest = args.includes("--self-test");
 const receiptOut = optionValue("--receipt-out") ?? optionValue("--receipt-file");
 const evidenceFile = optionValue("--file") ?? positionalFile();
+const evidenceStdin = args.includes("--stdin") || args.includes("--browser-evidence-stdin");
 
 if (args.includes("--help") || args.includes("-h")) {
   writeJson({
     status: "browser-evidence-verify-help",
-    usage: "node scripts/browser-evidence-verify.mjs --file redacted-browser-evidence.json [--receipt-out receipt.json]",
+    usage: "node scripts/browser-evidence-verify.mjs (--file redacted-browser-evidence.json|--stdin) [--receipt-out receipt.json]",
     self_test: "node scripts/browser-evidence-verify.mjs --self-test",
     accepted_classifications: [
       "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
@@ -45,11 +46,15 @@ if (selfTest) {
   process.exit(0);
 }
 
-if (evidenceFile === undefined) {
-  fail("--file is required unless --self-test is used");
+if (evidenceFile !== undefined && evidenceStdin) {
+  fail("--file and --stdin cannot be combined");
 }
 
-const result = await verifyEvidenceFile(evidenceFile);
+if (evidenceFile === undefined && !evidenceStdin) {
+  fail("--file or --stdin is required unless --self-test is used");
+}
+
+const result = evidenceStdin ? await verifyEvidenceStdin() : await verifyEvidenceFile(evidenceFile);
 await maybeWriteReceipt(result);
 writeJson(result);
 if (result.status !== "browser-evidence-verify-ok") process.exit(1);
@@ -63,6 +68,42 @@ export async function verifyEvidenceFile(file) {
     return invalid("file_unreadable");
   }
 
+  const bytes = Buffer.byteLength(text, "utf8");
+  const digest = createHash("sha256").update(text).digest("hex");
+  const validation = validateEvidenceText(text);
+  if (!validation.valid) {
+    return {
+      status: "browser-evidence-verify-invalid",
+      classification: "BROWSER_EVIDENCE_INVALID",
+      reason: validation.reason,
+      evidence_sha256: digest,
+      bytes,
+      output: "redacted"
+    };
+  }
+
+  return {
+    status: "browser-evidence-verify-ok",
+    classifications: validation.classifications,
+    feed_recheck_effect_status: validation.evidence.feedRecheck.effectStatus,
+    no_eligible_feed_recheck_target: validation.evidence.operations.feeds.noEligibleFeedRecheckTarget,
+    feed_onboarding_available: validation.evidence.feedOnboarding.feed_onboarding_available,
+    feed_onboarding_status: validation.evidence.feedOnboarding.feed_onboarding_status,
+    feed_onboarding_effect_status: validation.evidence.feedOnboarding.effectStatus ?? "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+    no_eligible_target: validation.evidence.feedOnboarding.no_eligible_target,
+    critical_risk: validation.evidence.feedOnboarding.critical_risk,
+    evidence_sha256: digest,
+    bytes,
+    output: "redacted"
+  };
+}
+
+export async function verifyEvidenceStdin() {
+  const text = await readStdin(maxBytes + 1);
+  return verifyEvidenceText(text);
+}
+
+export function verifyEvidenceText(text) {
   const bytes = Buffer.byteLength(text, "utf8");
   const digest = createHash("sha256").update(text).digest("hex");
   const validation = validateEvidenceText(text);
@@ -148,6 +189,7 @@ async function runSelfTest() {
     const valid = await verifyEvidenceFile(validFile);
     const accepted = await verifyEvidenceFile(acceptedFile);
     const noEligible = await verifyEvidenceFile(noEligibleFile);
+    const stdinEquivalent = verifyEvidenceText(`${JSON.stringify(acceptedEffectEvidence(), null, 2)}\n`);
     const forbidden = await verifyEvidenceFile(forbiddenFile);
     const unknown = await verifyEvidenceFile(unknownFile);
     const overlarge = await verifyEvidenceFile(overlargeFile);
@@ -162,6 +204,9 @@ async function runSelfTest() {
       !accepted.classifications.includes("FEED_RECHECK_EFFECT_ACCEPTED")
     ) {
       failures.push("accepted onboarding/recheck effect evidence was not classified");
+    }
+    if (stdinEquivalent.status !== "browser-evidence-verify-ok" || stdinEquivalent.feed_recheck_effect_status !== "FEED_RECHECK_EFFECT_ACCEPTED") {
+      failures.push("stdin-equivalent onboarding/recheck evidence was not classified");
     }
     if (noEligible.status !== "browser-evidence-verify-ok" || !noEligible.classifications.includes("BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET")) {
       failures.push("no-eligible evidence was not classified");
@@ -183,7 +228,7 @@ async function runSelfTest() {
 
     writeJson({
       status: "browser-evidence-verify-self-test-ok",
-      cases: ["valid_minimal", "accepted_effect", "no_eligible", "forbidden_field", "unknown_field", "overlarge"],
+      cases: ["valid_minimal", "accepted_effect", "stdin_accepted_effect", "no_eligible", "forbidden_field", "unknown_field", "overlarge"],
       output: "redacted"
     });
   } finally {
@@ -458,11 +503,31 @@ function optionValue(name) {
 }
 
 function positionalFile() {
-  return args.find((arg) => !arg.startsWith("--"));
+  const value = args.find((arg) => !arg.startsWith("--"));
+  return value === undefined || value === "true" ? undefined : value;
 }
 
 function writeJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+function readStdin(limitBytes) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let bytes = 0;
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => {
+      bytes += Buffer.byteLength(chunk, "utf8");
+      if (bytes > limitBytes) {
+        process.stdin.destroy();
+        resolve(" ".repeat(limitBytes));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    process.stdin.on("end", () => resolve(chunks.join("")));
+    process.stdin.on("error", reject);
+  });
 }
 
 function fail(message) {

@@ -29,6 +29,7 @@ console.log(
       feed_recheck_eligibility_script: "ops:feed-recheck:eligibility:redacted",
       browser_evidence_script: "ops:browser-evidence:verify",
       feed_onboarding_recheck_effect_flow_script: "verify:feed-onboarding-recheck-effect-flow",
+      feed_onboarding_recheck_effect_acceptance_script: "verify:production-feed-effect-acceptance",
       no_eligible_target_classification: "NO_ELIGIBLE_FEED_RECHECK_TARGET",
       feed_recheck_effect_status: "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
       feed_onboarding_route_smoke: "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED",
@@ -57,7 +58,8 @@ function assertStaticContracts() {
     "verify:feed-onboarding-recheck-effect-flow": "node scripts/feed-onboarding-recheck-effect-flow-verify.mjs",
     "verify:operator-automation": "node scripts/operator-automation-verify.mjs",
     "verify:production-image-freshness": "node scripts/production-image-freshness-verify.mjs",
-    "verify:production-feed-onboarding-acceptance": "node scripts/production-feed-onboarding-acceptance-verify.mjs"
+    "verify:production-feed-onboarding-acceptance": "node scripts/production-feed-onboarding-acceptance-verify.mjs",
+    "verify:production-feed-effect-acceptance": "node scripts/production-feed-effect-acceptance-verify.mjs"
   };
   for (const [name, command] of Object.entries(requiredFrontend)) {
     if (frontendScripts[name] !== command) failures.push(`frontend package.json missing ${name}`);
@@ -76,8 +78,10 @@ function assertStaticContracts() {
     "scripts/operator-risk-model.mjs",
     "scripts/production-image-freshness-verify.mjs",
     "scripts/production-feed-onboarding-acceptance-verify.mjs",
+    "scripts/production-feed-effect-acceptance-verify.mjs",
     "src/adminOperations/browserEvidence.ts",
     ".docs/production-feed-onboarding-acceptance.md",
+    ".docs/production-feed-effect-acceptance.md",
     "../rss-habersoft-com/scripts/production-api-worker-recreate.mjs"
   ]) {
     requireFile(path.resolve(frontendRoot, file), file);
@@ -108,8 +112,13 @@ function assertStaticContracts() {
     "FEED_RECHECK_ACTION_ACCEPTED",
     "FEED_RECHECK_EFFECT_ACCEPTED",
     "FEED_ONBOARDING_EFFECT_ACCEPTED",
+    "FEED_ONBOARDING_EFFECT_PENDING",
     "PENDING_FEED_RECHECK_COOLDOWN",
+    "FEED_RECHECK_EFFECT_PENDING",
     "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION",
+    "NGINX_ROUTE_PROOF_ACCEPTED",
+    "NGINX_ROUTE_PROOF_CONTAINER_NOT_RUNNING",
+    "UNSAFE_EVIDENCE_REJECTED",
     "AUTHENTICATED_BROWSER_EVIDENCE_ACCEPTED",
     "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED",
     "FEED_ONBOARDING_ROUTE_SMOKE_ATTENTION_REQUIRED",
@@ -122,7 +131,10 @@ function assertStaticContracts() {
     "FEED_RECHECK_UNAUTH_POST_NOT_401_JSON",
     "feed_onboarding_status",
     "--attempt-feed-recheck",
-    "--browser-evidence"
+    "--browser-evidence",
+    "--browser-evidence-file",
+    "--browser-evidence-stdin",
+    "--write-receipt"
   ]) {
     if (!operatorRetest.includes(fragment)) failures.push(`operator retest script missing classification: ${fragment}`);
   }
@@ -136,6 +148,9 @@ function assertStaticContracts() {
     "--retest-only",
     "--nginx-config-file",
     "--browser-evidence",
+    "--browser-evidence-file",
+    "routeProofFromRunningContainer",
+    "NGINX_ROUTE_PROOF_CONTAINER_NOT_RUNNING",
     "ROUTE_PROOF_NOT_AVAILABLE",
     "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
     "/admin-api/operations/feed-onboarding-requests",
@@ -154,7 +169,10 @@ function assertStaticContracts() {
     "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
     "PENDING_FEED_RECHECK_COOLDOWN",
     "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION",
-    "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION"
+    "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION",
+    "NGINX_ROUTE_PROOF_ACCEPTED",
+    "NGINX_ROUTE_PROOF_MISSING_ADMIN_API_ROUTE",
+    "NGINX_ROUTE_PROOF_UNRESOLVED_TEMPLATE_MARKER"
   ]) {
     if (!promotion.includes(fragment)) failures.push(`promotion retest script missing fragment: ${fragment}`);
   }
@@ -174,6 +192,7 @@ function assertStaticContracts() {
     "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION",
     "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
     "BROWSER_EVIDENCE_INVALID",
+    "--stdin",
     "--self-test"
   ]) {
     if (!browserEvidence.includes(fragment)) failures.push(`browser evidence verifier missing fragment: ${fragment}`);
@@ -186,6 +205,7 @@ function assertStaticContracts() {
     readFrontend("PRODUCTION.md"),
     readFrontend(".docs/admin-operations-dashboard.md"),
     readFrontend(".docs/production-activation-package.md"),
+    readFrontend(".docs/production-feed-effect-acceptance.md"),
     readFrontend(".docs/admin-auth-production-operator-handoff.md"),
     readBackend("README.md"),
     readBackend("PRODUCTION.md")
@@ -209,6 +229,7 @@ function assertStaticContracts() {
     "verify:admin-feed-onboarding",
     "verify:production-image-freshness",
     "verify:production-feed-onboarding-acceptance",
+    "verify:production-feed-effect-acceptance",
     "ops:production:recreate:api-worker -- --dry-run",
     "ops:production:recreate:api-worker -- --apply",
     "--recreate-only",
@@ -221,8 +242,14 @@ function assertStaticContracts() {
     "LOW",
     "SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED",
     "SUCCESS_MS_027B_FEED_ONBOARDING_RECHECK_EFFECT_FLOW_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED",
+    "SUCCESS_MS_027B_R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTANCE_CLOSED_OPERATOR_REPORTED_EVIDENCE_AUTOMATION_LANDED",
+    "MS-027B-R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
     "FEED_ONBOARDING_EFFECT_ACCEPTED",
     "FEED_RECHECK_EFFECT_ACCEPTED",
+    "FEED_RECHECK_EFFECT_PENDING",
+    "NGINX_ROUTE_PROOF_ACCEPTED",
+    "ops:production:acceptance:redacted -- --browser-evidence-stdin",
+    "Download redacted evidence JSON",
     "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
     "PENDING_FEED_RECHECK_COOLDOWN",
     "verify:feed-onboarding-recheck-effect-flow"
@@ -312,6 +339,13 @@ async function assertRuntimeClassifications() {
       "production feed onboarding acceptance verifier"
     );
 
+    const feedEffectAcceptance = await runNode(["scripts/production-feed-effect-acceptance-verify.mjs"]);
+    assertJson(
+      feedEffectAcceptance,
+      "production-feed-effect-acceptance-verify-ok",
+      "production feed effect acceptance verifier"
+    );
+
     const promotionDryRun = await runPromotion(["--dry-run", "--endpoint", endpoint, "--nginx-config-file", nginxConfig]);
     assertJson(promotionDryRun, "OPERATOR_PROMOTION_RETEST_DRY_RUN_READY", "promotion dry-run");
 
@@ -327,6 +361,7 @@ async function assertRuntimeClassifications() {
       browserEvidence,
       imageFreshness,
       feedOnboardingAcceptance,
+      feedEffectAcceptance,
       promotionDryRun,
       promotionRetest
     ]) {

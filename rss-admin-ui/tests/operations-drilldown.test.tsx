@@ -120,6 +120,36 @@ describe("OperationsDrilldown", () => {
     expect(copied).not.toMatch(/feed_recheck_v1\.|csrf|cookie|https?:\/\//iu);
   });
 
+  it("downloads redacted browser evidence JSON without exposing raw action metadata", async () => {
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    const createObjectUrl = vi.fn((blob: Blob) => {
+      void blob;
+      return "blob:redacted-evidence";
+    });
+    const revokeObjectUrl = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrl });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectUrl });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    try {
+      render(<OperationsDrilldown loadDrilldown={vi.fn().mockResolvedValue(successResult())} csrfToken={csrfToken} />);
+
+      fireEvent.click(await screen.findByRole("button", { name: "Download redacted evidence JSON" }));
+
+      expect(await screen.findByText("Redacted evidence download prepared.")).toBeInTheDocument();
+      expect(createObjectUrl).toHaveBeenCalledTimes(1);
+      const blob = createObjectUrl.mock.calls[0]?.[0];
+      expect(blob).toBeInstanceOf(Blob);
+      expect(click).toHaveBeenCalledTimes(1);
+      expect(revokeObjectUrl).toHaveBeenCalledWith("blob:redacted-evidence");
+    } finally {
+      click.mockRestore();
+      Object.defineProperty(URL, "createObjectURL", { configurable: true, value: originalCreateObjectUrl });
+      Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: originalRevokeObjectUrl });
+    }
+  });
+
   it("shows session-expired state without rendering drilldown rows", async () => {
     const loadDrilldown = vi.fn().mockResolvedValue({
       kind: "unauthenticated",

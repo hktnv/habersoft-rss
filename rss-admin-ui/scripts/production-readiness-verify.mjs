@@ -41,6 +41,8 @@ const feedOnboardingAcceptanceStatus =
   "SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED";
 const feedOnboardingRecheckEffectStatus =
   "SUCCESS_MS_027B_FEED_ONBOARDING_RECHECK_EFFECT_FLOW_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED";
+const feedOnboardingRecheckEffectAcceptanceStatus =
+  "SUCCESS_MS_027B_R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTANCE_CLOSED_OPERATOR_REPORTED_EVIDENCE_AUTOMATION_LANDED";
 
 run("node", ["--version"]);
 run("npm", ["--version"]);
@@ -58,6 +60,7 @@ run("npm", ["run", "verify:operator-automation"]);
 run("npm", ["run", "verify:operator-automation-acceptance"]);
 run("npm", ["run", "verify:production-image-freshness"]);
 run("npm", ["run", "verify:production-feed-onboarding-acceptance"]);
+run("npm", ["run", "verify:production-feed-effect-acceptance"]);
 run("npm", ["run", "verify:browser-evidence"]);
 run("npm", ["run", "verify:production-operations-acceptance"]);
 run("npm", ["run", "verify:production-operations-drilldown-acceptance"]);
@@ -143,6 +146,7 @@ console.log(
       operator_automation: operatorAutomationStatus,
       feed_onboarding_acceptance: feedOnboardingAcceptanceStatus,
       feed_onboarding_recheck_effect_flow: feedOnboardingRecheckEffectStatus,
+      feed_onboarding_recheck_effect_acceptance: feedOnboardingRecheckEffectAcceptanceStatus,
       checks: [
         "production build exists",
         "admin operations dashboard source/docs/proxy verifier passes",
@@ -154,6 +158,7 @@ console.log(
         "MS-026C-R1 operator automation acceptance verifier passes",
         "MS-027A-R1 production image freshness verifier passes",
         "MS-027A-R2 production promotion/feed-onboarding route-smoke acceptance verifier passes",
+        "MS-027B-R1 feed onboarding plus recheck effect production acceptance verifier passes",
         "MS-026C browser evidence verifier passes",
         "MS-025A-R2 operator-reported operations acceptance verifier passes",
         "MS-025B-R1 operator-reported operations drilldown acceptance verifier passes",

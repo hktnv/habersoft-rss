@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -13,9 +13,11 @@ const acceptanceOnly = args.includes("--acceptance-only");
 const feedRecheckOnly = args.includes("--feed-recheck-only");
 const attemptFeedRecheck = args.includes("--attempt-feed-recheck");
 const dryRun = args.includes("--dry-run") || !acceptanceOnly;
-const receiptFile = optionValue("--receipt-file") ?? process.env.OPERATOR_RETEST_RECEIPT_FILE;
+const receiptFile = optionValue("--write-receipt") ?? optionValue("--receipt-file") ?? process.env.OPERATOR_RETEST_RECEIPT_FILE;
 const endpoint = optionValue("--endpoint") ?? optionValue("--base-url") ?? process.env.OPERATOR_RETEST_BASE_URL ?? "http://127.0.0.1:8081";
-const browserEvidenceFile = optionValue("--browser-evidence") ?? process.env.OPERATOR_BROWSER_EVIDENCE_FILE;
+const browserEvidenceFile = optionValue("--browser-evidence-file") ?? optionValue("--browser-evidence") ?? process.env.OPERATOR_BROWSER_EVIDENCE_FILE;
+const browserEvidenceStdin = args.includes("--browser-evidence-stdin");
+const nginxConfigFile = optionValue("--nginx-config-file") ?? process.env.OPERATOR_NGINX_CONFIG_FILE;
 const timeoutMs = Number(process.env.OPERATOR_RETEST_TIMEOUT_MS ?? "5000");
 const username = process.env.ADMIN_AUTH_SMOKE_USERNAME;
 const password = process.env.ADMIN_AUTH_SMOKE_PASSWORD;
@@ -24,10 +26,11 @@ const credentialsProvided = username !== undefined || password !== undefined;
 if (args.includes("--help") || args.includes("-h")) {
   writeJson({
     status: "operator-production-retest-help",
-    usage: "node scripts/operator-production-retest.mjs [--dry-run|--acceptance-only] [--feed-recheck-only] [--attempt-feed-recheck] [--endpoint URL] [--browser-evidence FILE] [--receipt-file PATH]",
+    usage: "node scripts/operator-production-retest.mjs [--dry-run|--acceptance-only] [--feed-recheck-only] [--attempt-feed-recheck] [--endpoint URL] [--browser-evidence-file FILE|--browser-evidence-stdin] [--nginx-config-file FILE] [--write-receipt PATH]",
     default: "dry-run diagnostics",
     credential_policy: "admin credentials must be supplied only through ADMIN_AUTH_SMOKE_USERNAME and ADMIN_AUTH_SMOKE_PASSWORD",
-    browser_evidence_policy: "redacted browser evidence can close authenticated read-only and effect classifications without credentials",
+    browser_evidence_policy: "redacted browser evidence can close authenticated read-only and effect classifications without credentials; file and stdin modes never echo the evidence body",
+    route_proof_policy: "route proof reads a supplied generated config or, when Docker is available, inspects the running admin UI container with docker ps/exec only",
     action_policy: "feed recheck action attempt requires --attempt-feed-recheck and an authenticated eligible actionRef; feed onboarding is route-smoked unless redacted evidence reports an effect",
     output: "redacted"
   });
@@ -42,6 +45,9 @@ if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 30000) {
 }
 if (credentialsProvided && (username === undefined || username === "" || password === undefined || password === "")) {
   fail("authenticated acceptance requires both ADMIN_AUTH_SMOKE_USERNAME and ADMIN_AUTH_SMOKE_PASSWORD");
+}
+if (browserEvidenceFile !== undefined && browserEvidenceStdin) {
+  fail("--browser-evidence-file/--browser-evidence and --browser-evidence-stdin cannot be combined");
 }
 
 const baseUrl = normalizeBaseUrl(endpoint);
@@ -59,7 +65,9 @@ if (dryRun) {
       command: "npm run ops:production:acceptance:redacted -- --endpoint <panel-origin>",
       feed_recheck_action_attempt_requires: "--attempt-feed-recheck",
       feed_onboarding_action_attempt: "manual authenticated operator action only; not automatic",
-      browser_evidence: browserEvidenceFile === undefined ? "optional" : "will_verify"
+      browser_evidence: browserEvidenceStdin ? "stdin_supported" : browserEvidenceFile === undefined ? "optional" : "will_verify",
+      route_proof: "auto_collects_from_running_container_or_accepts_--nginx-config-file",
+      receipt: receiptFile === undefined ? "optional_with_--write-receipt" : "will_write"
     },
     risk_tier: riskTierSummary(),
     output: "redacted"
@@ -103,13 +111,15 @@ async function runAcceptance() {
   checks.push(summarize("GET /admin-api/foo", unknownAdminApi));
 
   const browserEvidence = browserEvidenceFile === undefined
-    ? {
-        status: "BROWSER_EVIDENCE_NOT_PROVIDED",
-        classifications: [],
-        feed_recheck_effect_status: "PENDING_BROWSER_EVIDENCE_OR_ENV_CREDENTIALS",
-        feed_onboarding_effect_status: "PENDING_BROWSER_EVIDENCE_OR_ENV_CREDENTIALS",
-        output: "redacted"
-      }
+    ? browserEvidenceStdin
+      ? await runBrowserEvidenceVerifierFromStdin()
+      : {
+          status: "BROWSER_EVIDENCE_NOT_PROVIDED",
+          classifications: [],
+          feed_recheck_effect_status: "PENDING_BROWSER_EVIDENCE_OR_ENV_CREDENTIALS",
+          feed_onboarding_effect_status: "PENDING_BROWSER_EVIDENCE_OR_ENV_CREDENTIALS",
+          output: "redacted"
+        }
     : runBrowserEvidenceVerifier(browserEvidenceFile);
   const browserEvidenceAccepted = browserEvidence.status === "browser-evidence-verify-ok";
   let auth = {
@@ -219,23 +229,32 @@ async function runAcceptance() {
     getFeedOnboarding,
     unknownAdminApi
   });
-  const status = routeClassifications.critical.length === 0 && auth.classification !== "AUTH_LOGIN_ATTEMPT_FAILED" && (browserEvidenceFile === undefined || browserEvidenceAccepted)
+  const routeProof = collectRouteProof();
+  const routeProofCritical = routeProof.classification === "NGINX_ROUTE_PROOF_MISSING_ADMIN_API_ROUTE" || routeProof.classification === "NGINX_ROUTE_PROOF_UNRESOLVED_TEMPLATE_MARKER";
+  const criticalRisk = routeClassifications.critical.length > 0 || routeProofCritical || auth.classification === "AUTH_LOGIN_ATTEMPT_FAILED" || (browserEvidence.status === "browser-evidence-verify-invalid");
+  const classifications = acceptanceClassifications({ auth, browserEvidence, feedRecheck, feedOnboarding, routeProof, routeClassifications });
+  const status = !criticalRisk
     ? "OPERATOR_ACCEPTANCE_REDACTED_OK"
     : "OPERATOR_ACCEPTANCE_REDACTED_ATTENTION_REQUIRED";
 
   await finish({
     status,
+    milestone: "MS-027B-R1",
     mode: "acceptance",
     base_url: baseUrl.origin,
+    classifications,
+    criticalRisk: criticalRisk ? "attention_required" : "none",
     checks,
     auth,
     browser_evidence: browserEvidence,
     feed_recheck: feedRecheck,
     feed_onboarding: feedOnboarding,
+    route_proof: routeProof,
     route_classifications: routeClassifications,
     risk_tier: riskTierSummary(),
     output: "redacted"
   });
+  process.exitCode = status === "OPERATOR_ACCEPTANCE_REDACTED_OK" ? 0 : 1;
 }
 
 function repositoryUpdatePreflight() {
@@ -337,6 +356,28 @@ function runBrowserEvidenceVerifier(file) {
   const result = spawnSync(process.execPath, ["scripts/browser-evidence-verify.mjs", "--file", file], {
     cwd: frontendRoot,
     env: process.env,
+    encoding: "utf8",
+    shell: false,
+    timeout: 30000
+  });
+  const parsed = parseJson(result.stdout);
+  return {
+    status: parsed?.status ?? "browser-evidence-verify-failed",
+    exit_code: result.status ?? 1,
+    classifications: Array.isArray(parsed?.classifications) ? parsed.classifications : ["BROWSER_EVIDENCE_INVALID"],
+    feed_recheck_effect_status: parsed?.feed_recheck_effect_status ?? "unknown",
+    feed_onboarding_effect_status: parsed?.feed_onboarding_effect_status ?? "unknown",
+    evidence_sha256: parsed?.evidence_sha256 ?? "unavailable",
+    output: "redacted"
+  };
+}
+
+async function runBrowserEvidenceVerifierFromStdin() {
+  const evidenceText = await readStdin(32769);
+  const result = spawnSync(process.execPath, ["scripts/browser-evidence-verify.mjs", "--stdin"], {
+    cwd: frontendRoot,
+    env: process.env,
+    input: evidenceText,
     encoding: "utf8",
     shell: false,
     timeout: 30000
@@ -650,6 +691,168 @@ function allowlistedValue(value) {
 
 function safeNumber(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : "unknown";
+}
+
+function collectRouteProof() {
+  if (nginxConfigFile !== undefined) return routeProofFromText(readRouteProofFile(nginxConfigFile), "file");
+  const container = runningAdminUiContainer();
+  if (container.status !== "ok") return container;
+  const result = spawnSync("docker", ["exec", container.container, "nginx", "-T"], {
+    cwd: frontendRoot,
+    encoding: "utf8",
+    shell: false,
+    timeout: 30000
+  });
+  if (result.status !== 0) {
+    return {
+      status: "NGINX_ROUTE_PROOF_UNAVAILABLE",
+      classification: "NGINX_ROUTE_PROOF_UNAVAILABLE",
+      reason: "running container did not return generated Nginx config",
+      source: "docker_exec_nginx_T",
+      output: "redacted"
+    };
+  }
+  return routeProofFromText(`${result.stdout}\n${result.stderr}`, "running_container");
+}
+
+function runningAdminUiContainer() {
+  const label = spawnSync("docker", ["ps", "--filter", "label=com.docker.compose.service=rss-admin-ui", "--format", "{{.ID}}"], {
+    cwd: frontendRoot,
+    encoding: "utf8",
+    shell: false,
+    timeout: 15000
+  });
+  if (label.error !== undefined || label.status !== 0) {
+    return {
+      status: "NGINX_ROUTE_PROOF_UNAVAILABLE",
+      classification: "NGINX_ROUTE_PROOF_UNAVAILABLE",
+      reason: "docker ps unavailable",
+      source: "docker_ps",
+      output: "redacted"
+    };
+  }
+  const byLabel = label.stdout.split(/\r?\n/u).filter(Boolean);
+  if (byLabel.length > 0) return { status: "ok", container: byLabel[0] };
+
+  const byNameResult = spawnSync("docker", ["ps", "--filter", "name=rss-admin-ui", "--format", "{{.ID}}"], {
+    cwd: frontendRoot,
+    encoding: "utf8",
+    shell: false,
+    timeout: 15000
+  });
+  const byName = byNameResult.status === 0 ? byNameResult.stdout.split(/\r?\n/u).filter(Boolean) : [];
+  if (byName.length > 0) return { status: "ok", container: byName[0] };
+  return {
+    status: "NGINX_ROUTE_PROOF_CONTAINER_NOT_RUNNING",
+    classification: "NGINX_ROUTE_PROOF_CONTAINER_NOT_RUNNING",
+    reason: "no running admin UI container was found",
+    source: "docker_ps",
+    output: "redacted"
+  };
+}
+
+function readRouteProofFile(file) {
+  try {
+    return readFileSync(path.resolve(file), "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+function routeProofFromText(text, source) {
+  if (text === undefined) {
+    return {
+      status: "NGINX_ROUTE_PROOF_UNAVAILABLE",
+      classification: "NGINX_ROUTE_PROOF_UNAVAILABLE",
+      reason: "Nginx config could not be read",
+      source,
+      output: "redacted"
+    };
+  }
+  if (/__ADMIN_UI_[A-Z0-9_]+__/u.test(text)) {
+    return {
+      status: "NGINX_ROUTE_PROOF_ATTENTION_REQUIRED",
+      classification: "NGINX_ROUTE_PROOF_UNRESOLVED_TEMPLATE_MARKER",
+      reason: "unresolved template marker present",
+      source,
+      output: "redacted"
+    };
+  }
+  const requiredRoutes = [
+    "/admin-api/operations/summary",
+    "/admin-api/operations/drilldown",
+    "/admin-api/operations/feed-recheck-requests",
+    "/admin-api/operations/feed-onboarding-requests"
+  ];
+  const missingRoutes = requiredRoutes.filter((route) => !text.includes(`location = ${route}`));
+  if (missingRoutes.length > 0) {
+    return {
+      status: "NGINX_ROUTE_PROOF_ATTENTION_REQUIRED",
+      classification: "NGINX_ROUTE_PROOF_MISSING_ADMIN_API_ROUTE",
+      missing_routes: missingRoutes,
+      source,
+      output: "redacted"
+    };
+  }
+  const spaFallbackIndex = indexOfRegex(text, /location\s+\/\s*\{/u);
+  const routeIndexes = requiredRoutes.map((route) => text.indexOf(`location = ${route}`));
+  if (spaFallbackIndex !== -1 && routeIndexes.some((index) => index === -1 || index > spaFallbackIndex)) {
+    return {
+      status: "NGINX_ROUTE_PROOF_ATTENTION_REQUIRED",
+      classification: "NGINX_ROUTE_PROOF_MISSING_ADMIN_API_ROUTE",
+      reason: "admin API route order is unsafe",
+      source,
+      output: "redacted"
+    };
+  }
+  return {
+    status: "NGINX_ROUTE_PROOF_ACCEPTED",
+    classification: "NGINX_ROUTE_PROOF_ACCEPTED",
+    required_routes: requiredRoutes,
+    unresolved_markers: false,
+    source,
+    output: "redacted"
+  };
+}
+
+function acceptanceClassifications({ auth, browserEvidence, feedRecheck, feedOnboarding, routeProof, routeClassifications }) {
+  const values = new Set();
+  if (auth.classification === "AUTHENTICATED_BROWSER_EVIDENCE_ACCEPTED" || auth.classification === "AUTHENTICATED_ADMIN_ACCEPTED") {
+    values.add("BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY");
+  }
+  if (auth.classification === "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED") values.add("AUTH_REQUIRED_OR_UNAUTHENTICATED");
+  if (routeProof.classification === "NGINX_ROUTE_PROOF_ACCEPTED") values.add("NGINX_ROUTE_PROOF_ACCEPTED");
+  if (routeProof.classification !== "NGINX_ROUTE_PROOF_ACCEPTED") values.add("ROUTE_PROOF_ATTENTION_REQUIRED");
+  for (const classification of browserEvidence.classifications ?? []) values.add(classification);
+  if (feedOnboarding.effect_status === "FEED_ONBOARDING_EFFECT_ACCEPTED") values.add("FEED_ONBOARDING_EFFECT_ACCEPTED");
+  if (feedOnboarding.effect_status === "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING") values.add("FEED_ONBOARDING_EFFECT_PENDING");
+  if (feedRecheck.effect_status === "FEED_RECHECK_EFFECT_ACCEPTED") values.add("FEED_RECHECK_EFFECT_ACCEPTED");
+  if (feedRecheck.effect_status === "PENDING_FEED_RECHECK_COOLDOWN") values.add("FEED_RECHECK_COOLDOWN_ACTIVE");
+  if (feedRecheck.effect_status === "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET") values.add("PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET");
+  if (String(feedRecheck.effect_status ?? "").startsWith("PENDING_")) values.add("FEED_RECHECK_EFFECT_PENDING");
+  if (feedRecheck.effect_status === "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION") values.add("FEED_RECHECK_EFFECT_REJECTED");
+  if (feedRecheck.effect_status === "PENDING_BROWSER_EVIDENCE_OR_ENV_CREDENTIALS") values.add("OPERATOR_ACTION_REQUIRED");
+  if (browserEvidence.status === "browser-evidence-verify-invalid") values.add("UNSAFE_EVIDENCE_REJECTED");
+  if (routeClassifications.critical.length > 0) values.add("ROUTE_PROOF_ATTENTION_REQUIRED");
+  return [...values];
+}
+
+function indexOfRegex(value, pattern) {
+  return pattern.exec(value)?.index ?? -1;
+}
+
+function readStdin(limitBytes) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let bytes = 0;
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => {
+      bytes += Buffer.byteLength(chunk, "utf8");
+      if (bytes <= limitBytes) chunks.push(chunk);
+    });
+    process.stdin.on("end", () => resolve(bytes > limitBytes ? " ".repeat(limitBytes) : chunks.join("")));
+    process.stdin.on("error", reject);
+  });
 }
 
 function fail(message) {

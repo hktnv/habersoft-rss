@@ -145,6 +145,10 @@ function assertDocs() {
 }
 
 function assertNoFeedEffectOverclaim(docs) {
+  const r2ScopedDocs = docs
+    .split(/\r?\n/u)
+    .filter((line) => !isMs027bR1EffectAcceptanceLine(line))
+    .join("\n");
   const forbidden = [
     /feed recheck effect acceptance is closed/iu,
     /feed recheck effect accepted(?:\s|:)/iu,
@@ -152,12 +156,13 @@ function assertNoFeedEffectOverclaim(docs) {
     /SUCCESS_MS_027A_R2[^\n]{0,240}BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED/iu
   ];
   for (const pattern of forbidden) {
-    if (pattern.test(docs)) failures.push(`docs overclaim feed recheck effect acceptance: ${pattern}`);
+    if (pattern.test(r2ScopedDocs)) failures.push(`docs overclaim feed recheck effect acceptance: ${pattern}`);
   }
 
   for (const line of docs.split(/\r?\n/u)) {
     if (
       line.includes("BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED") &&
+      !isMs027bR1EffectAcceptanceLine(line) &&
       !/\b(future|reserved|only when|may close only when)\b/iu.test(line)
     ) {
       failures.push("docs mention feed effect accepted classification outside future-only context");
@@ -166,14 +171,24 @@ function assertNoFeedEffectOverclaim(docs) {
 }
 
 function assertNoFeedOnboardingEndToEndOverclaim(docs) {
+  const r2ScopedDocs = docs
+    .split(/\r?\n/u)
+    .filter((line) => !isMs027bR1EffectAcceptanceLine(line))
+    .join("\n");
   const forbidden = [
     /feed onboarding end-to-end (?:effect )?acceptance (?:is )?(?:closed|accepted)/iu,
     /feed onboarding effect acceptance (?:is )?(?:closed|accepted)/iu,
     /BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE[^\n]{0,160}\b(?:closes|accepts|accepted)[^\n]{0,160}\b(?:effect|end-to-end)\b/iu
   ];
   for (const pattern of forbidden) {
-    if (pattern.test(docs)) failures.push(`docs overclaim feed onboarding effect acceptance: ${pattern}`);
+    if (pattern.test(r2ScopedDocs)) failures.push(`docs overclaim feed onboarding effect acceptance: ${pattern}`);
   }
+}
+
+function isMs027bR1EffectAcceptanceLine(line) {
+  return /\b(?:MS-027B|MS-027B-R1|SUCCESS_MS_027B_R1|FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTED|production-feed-effect-acceptance|ms-027b-r1-feed-onboarding-recheck-effect)\b/u.test(
+    line
+  );
 }
 
 function assertNoSeedOrFakeAcceptancePath(docs) {

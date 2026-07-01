@@ -24,7 +24,7 @@ type FeedRecheckState = {
   readonly result?: FeedRecheckResult;
 };
 
-type EvidenceCopyState = "idle" | "copied" | "unavailable";
+type EvidenceExportState = "idle" | "copied" | "downloaded" | "unavailable";
 
 export function OperationsDrilldown({
   loadDrilldown = fetchOperationsDrilldown,
@@ -42,7 +42,7 @@ export function OperationsDrilldown({
   const [state, setState] = useState<DrilldownState>({ phase: "loading" });
   const [feedRechecks, setFeedRechecks] = useState<Record<string, FeedRecheckState>>({});
   const [feedOnboardingResult, setFeedOnboardingResult] = useState<FeedOnboardingResult | undefined>(undefined);
-  const [evidenceCopyState, setEvidenceCopyState] = useState<EvidenceCopyState>("idle");
+  const [evidenceExportState, setEvidenceExportState] = useState<EvidenceExportState>("idle");
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | undefined>(undefined);
   const actionAbortRef = useRef<AbortController | undefined>(undefined);
@@ -101,18 +101,40 @@ export function OperationsDrilldown({
 
   const copyRedactedEvidence = async (drilldown: OperationsDrilldownData) => {
     if (navigator.clipboard?.writeText === undefined) {
-      setEvidenceCopyState("unavailable");
+      setEvidenceExportState("unavailable");
       return;
     }
 
-    const evidence = createRedactedBrowserEvidence(drilldown, feedRechecks, feedOnboardingResult);
     try {
-      await navigator.clipboard.writeText(serializeRedactedBrowserEvidence(evidence));
-      setEvidenceCopyState("copied");
+      await navigator.clipboard.writeText(redactedEvidenceText(drilldown));
+      setEvidenceExportState("copied");
     } catch {
-      setEvidenceCopyState("unavailable");
+      setEvidenceExportState("unavailable");
     }
   };
+
+  const downloadRedactedEvidence = (drilldown: OperationsDrilldownData) => {
+    if (typeof Blob === "undefined" || URL.createObjectURL === undefined) {
+      setEvidenceExportState("unavailable");
+      return;
+    }
+    const objectUrl = URL.createObjectURL(new Blob([redactedEvidenceText(drilldown)], { type: "application/json" }));
+    try {
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = `habersoft-ms027b-redacted-evidence-${new Date().toISOString().replace(/[:.]/gu, "-")}.json`;
+      anchor.rel = "noopener";
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setEvidenceExportState("downloaded");
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
+  const redactedEvidenceText = (drilldown: OperationsDrilldownData) =>
+    serializeRedactedBrowserEvidence(createRedactedBrowserEvidence(drilldown, feedRechecks, feedOnboardingResult));
 
   const beginRecheckConfirmation = (row: FeedDrilldownRow) => {
     setFeedRechecks((current) => ({
@@ -192,8 +214,9 @@ export function OperationsDrilldown({
           drilldown={state.result.drilldown}
           refreshing={state.phase === "refreshing"}
           feedRechecks={feedRechecks}
-          evidenceCopyState={evidenceCopyState}
+          evidenceExportState={evidenceExportState}
           onCopyRedactedEvidence={copyRedactedEvidence}
+          onDownloadRedactedEvidence={downloadRedactedEvidence}
           csrfToken={csrfToken}
           requestOnboarding={requestOnboarding}
           onFeedOnboardingAccepted={refreshAfterFeedOnboarding}
@@ -213,8 +236,9 @@ function DrilldownView({
   drilldown,
   refreshing,
   feedRechecks,
-  evidenceCopyState,
+  evidenceExportState,
   onCopyRedactedEvidence,
+  onDownloadRedactedEvidence,
   csrfToken,
   requestOnboarding,
   onFeedOnboardingAccepted,
@@ -226,8 +250,9 @@ function DrilldownView({
   readonly drilldown: OperationsDrilldownData;
   readonly refreshing: boolean;
   readonly feedRechecks: Readonly<Record<string, FeedRecheckState>>;
-  readonly evidenceCopyState: EvidenceCopyState;
+  readonly evidenceExportState: EvidenceExportState;
   readonly onCopyRedactedEvidence: (drilldown: OperationsDrilldownData) => Promise<void>;
+  readonly onDownloadRedactedEvidence: (drilldown: OperationsDrilldownData) => void;
   readonly csrfToken?: string;
   readonly requestOnboarding?: (options: { readonly feedUrl: string; readonly label?: string; readonly csrfToken: string; readonly signal?: AbortSignal }) => Promise<FeedOnboardingResult>;
   readonly onFeedOnboardingAccepted: () => void;
@@ -262,9 +287,16 @@ function DrilldownView({
             <button type="button" className="secondary-button compact-button" onClick={() => void onCopyRedactedEvidence(drilldown)}>
               Copy redacted evidence
             </button>
-            {evidenceCopyState === "idle" ? null : (
+            <button type="button" className="secondary-button compact-button" onClick={() => onDownloadRedactedEvidence(drilldown)}>
+              Download redacted evidence JSON
+            </button>
+            {evidenceExportState === "idle" ? null : (
               <p className="action-note" role="status" aria-live="polite">
-                {evidenceCopyState === "copied" ? "Redacted evidence copied." : "Clipboard is unavailable."}
+                {evidenceExportState === "copied"
+                  ? "Redacted evidence copied."
+                  : evidenceExportState === "downloaded"
+                    ? "Redacted evidence download prepared."
+                    : "Redacted evidence export is unavailable."}
               </p>
             )}
           </div>

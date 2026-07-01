@@ -17,7 +17,7 @@ const dryRun = args.includes("--dry-run") || (!apply && !retestOnly);
 const receiptOut = optionValue("--receipt-out") ?? optionValue("--receipt-file") ?? process.env.OPERATOR_PROMOTION_RECEIPT_FILE;
 const endpoint = optionValue("--endpoint") ?? optionValue("--base-url") ?? process.env.OPERATOR_RETEST_BASE_URL ?? "http://127.0.0.1:8081";
 const nginxConfigFile = optionValue("--nginx-config-file") ?? process.env.OPERATOR_NGINX_CONFIG_FILE;
-const browserEvidenceFile = optionValue("--browser-evidence") ?? process.env.OPERATOR_BROWSER_EVIDENCE_FILE;
+const browserEvidenceFile = optionValue("--browser-evidence-file") ?? optionValue("--browser-evidence") ?? process.env.OPERATOR_BROWSER_EVIDENCE_FILE;
 const skipBackendRecreate = args.includes("--skip-backend-recreate");
 const skipFrontendRecreate = args.includes("--skip-frontend-recreate");
 const migrationCheck = args.includes("--migration-check");
@@ -39,13 +39,18 @@ const operatorClassificationCatalog = [
   "PENDING_FEED_RECHECK_COOLDOWN",
   "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION",
   "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION",
-  "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON"
+  "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+  "NGINX_ROUTE_PROOF_ACCEPTED",
+  "NGINX_ROUTE_PROOF_MISSING_ADMIN_API_ROUTE",
+  "NGINX_ROUTE_PROOF_UNRESOLVED_TEMPLATE_MARKER",
+  "NGINX_ROUTE_PROOF_CONTAINER_NOT_RUNNING",
+  "NGINX_ROUTE_PROOF_UNAVAILABLE"
 ];
 
 if (args.includes("--help") || args.includes("-h")) {
   writeJson({
     status: "operator-production-promotion-retest-help",
-    usage: "npm run ops:production:retest -- [--dry-run|--retest-only|--apply] [--endpoint URL] [--nginx-config-file FILE] [--browser-evidence FILE] [--receipt-out FILE]",
+    usage: "npm run ops:production:retest -- [--dry-run|--retest-only|--apply] [--endpoint URL] [--nginx-config-file FILE] [--browser-evidence-file FILE] [--receipt-out FILE]",
     default: "dry-run plan, no mutation, no HTTP acceptance",
     apply_policy: "--apply allows operator-owned backend/frontend recreate helpers and then redacted retest",
     retest_only_policy: "--retest-only performs route/auth/admin-api acceptance without recreate",
@@ -70,9 +75,6 @@ const critical = [];
 const steps = [];
 const operatorClassifications = new Set(sourcePromotionClassifications(git));
 
-if (nginxConfigFile === undefined) {
-  warnings.push(riskClass("ROUTE_PROOF_NOT_AVAILABLE", "provide --nginx-config-file with running/generated Nginx config for route proof"));
-}
 if (browserEvidenceFile === undefined && !process.env.ADMIN_AUTH_SMOKE_USERNAME && !process.env.ADMIN_AUTH_SMOKE_PASSWORD) {
   warnings.push(riskClass("AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED", "credentials absent; browser evidence can close authenticated read-only checks"));
 }
@@ -139,7 +141,10 @@ if (apply && !skipFrontendRecreate) {
   steps.push(runStep("frontend-compose-recreate", frontendRoot, "ops:compose:recreate", ["--apply"]));
 }
 
-const routeProof = nginxConfigFile === undefined ? routeProofMissing() : routeProofFromFile(nginxConfigFile);
+const routeProof = nginxConfigFile === undefined ? routeProofFromRunningContainer() : routeProofFromFile(nginxConfigFile);
+if (routeProof.classification !== undefined && operatorClassificationCatalog.includes(routeProof.classification)) {
+  operatorClassifications.add(routeProof.classification);
+}
 if (routeProof.status !== "NGINX_ROUTE_PROOF_ACCEPTED") {
   const routeRisk = routeProof.critical === true ? riskClass("NGINX_EXACT_ADMIN_ROUTE_MISSING", routeProof.reason) : riskClass("ROUTE_PROOF_NOT_AVAILABLE", routeProof.reason);
   if (routeProof.classification !== undefined) operatorClassifications.add(routeProof.classification);
@@ -150,6 +155,8 @@ if (routeProof.status !== "NGINX_ROUTE_PROOF_ACCEPTED") {
 steps.push(runStep("frontend-redacted-acceptance", frontendRoot, "ops:production:acceptance:redacted", [
   "--endpoint",
   baseUrl.origin,
+  ...(browserEvidenceFile === undefined ? [] : ["--browser-evidence-file", browserEvidenceFile]),
+  ...(nginxConfigFile === undefined ? [] : ["--nginx-config-file", nginxConfigFile]),
   ...(attemptFeedRecheck ? ["--attempt-feed-recheck"] : [])
 ]));
 
@@ -284,11 +291,57 @@ function runBrowserEvidenceVerifier(file) {
   };
 }
 
-function routeProofMissing() {
+function routeProofFromRunningContainer() {
+  const container = runningAdminUiContainer();
+  if (container.status !== "ok") return container;
+  const result = spawnSync("docker", ["exec", container.container, "nginx", "-T"], {
+    cwd: frontendRoot,
+    encoding: "utf8",
+    shell: false,
+    timeout: 30000
+  });
+  if (result.status !== 0) {
+    return {
+      status: "NGINX_ROUTE_PROOF_UNAVAILABLE",
+      reason: "running container did not return generated Nginx config",
+      classification: "NGINX_ROUTE_PROOF_UNAVAILABLE",
+      critical: false,
+      output: "redacted"
+    };
+  }
+  return routeProofFromText(`${result.stdout}\n${result.stderr}`, "running_container");
+}
+
+function runningAdminUiContainer() {
+  const byLabel = spawnSync("docker", ["ps", "--filter", "label=com.docker.compose.service=rss-admin-ui", "--format", "{{.ID}}"], {
+    cwd: frontendRoot,
+    encoding: "utf8",
+    shell: false,
+    timeout: 15000
+  });
+  if (byLabel.error !== undefined || byLabel.status !== 0) {
+    return {
+      status: "NGINX_ROUTE_PROOF_UNAVAILABLE",
+      reason: "docker ps unavailable",
+      classification: "NGINX_ROUTE_PROOF_UNAVAILABLE",
+      critical: false,
+      output: "redacted"
+    };
+  }
+  const labelMatches = byLabel.stdout.split(/\r?\n/u).filter(Boolean);
+  if (labelMatches.length > 0) return { status: "ok", container: labelMatches[0] };
+  const byName = spawnSync("docker", ["ps", "--filter", "name=rss-admin-ui", "--format", "{{.ID}}"], {
+    cwd: frontendRoot,
+    encoding: "utf8",
+    shell: false,
+    timeout: 15000
+  });
+  const nameMatches = byName.status === 0 ? byName.stdout.split(/\r?\n/u).filter(Boolean) : [];
+  if (nameMatches.length > 0) return { status: "ok", container: nameMatches[0] };
   return {
-    status: "ROUTE_PROOF_NOT_AVAILABLE",
-    reason: "no --nginx-config-file supplied",
-    classification: "frontend_route_missing",
+    status: "NGINX_ROUTE_PROOF_CONTAINER_NOT_RUNNING",
+    reason: "no running admin UI container was found",
+    classification: "NGINX_ROUTE_PROOF_CONTAINER_NOT_RUNNING",
     critical: false
   };
 }
@@ -300,17 +353,21 @@ function routeProofFromFile(file) {
     text = readFileSync(absolute, "utf8");
   } catch {
     return {
-      status: "ROUTE_PROOF_NOT_AVAILABLE",
+      status: "NGINX_ROUTE_PROOF_UNAVAILABLE",
       reason: "nginx config file could not be read",
-      classification: "frontend_route_missing",
+      classification: "NGINX_ROUTE_PROOF_UNAVAILABLE",
       critical: false
     };
   }
+  return routeProofFromText(text, "file");
+}
+
+function routeProofFromText(text, source) {
   if (/__ADMIN_UI_/u.test(text)) {
     return {
-      status: "NGINX_ROUTE_PROOF_REJECTED",
+      status: "NGINX_ROUTE_PROOF_ATTENTION_REQUIRED",
       reason: "unresolved __ADMIN_UI_ marker present",
-      classification: "nginx_template_marker_unresolved",
+      classification: "NGINX_ROUTE_PROOF_UNRESOLVED_TEMPLATE_MARKER",
       critical: true
     };
   }
@@ -322,15 +379,16 @@ function routeProofFromFile(file) {
   ].filter((route) => !text.includes(route));
   if (missing.length > 0) {
     return {
-      status: "NGINX_ROUTE_PROOF_REJECTED",
+      status: "NGINX_ROUTE_PROOF_ATTENTION_REQUIRED",
       reason: "exact admin route missing",
-      classification: "frontend_route_missing",
+      classification: "NGINX_ROUTE_PROOF_MISSING_ADMIN_API_ROUTE",
       missing_routes: missing,
       critical: true
     };
   }
   return {
     status: "NGINX_ROUTE_PROOF_ACCEPTED",
+    classification: "NGINX_ROUTE_PROOF_ACCEPTED",
     required_routes: [
       "/admin-api/operations/summary",
       "/admin-api/operations/drilldown",
@@ -338,6 +396,7 @@ function routeProofFromFile(file) {
       "/admin-api/operations/feed-onboarding-requests"
     ],
     unresolved_markers: false,
+    source,
     output: "redacted"
   };
 }

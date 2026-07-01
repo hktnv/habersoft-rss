@@ -135,6 +135,10 @@ function assertBrowserEvidenceBoundary() {
 }
 
 function assertNoFeedEffectOverclaim(docs) {
+  const c1ScopedDocs = docs
+    .split(/\r?\n/u)
+    .filter((line) => !isMs027bR1EffectAcceptanceLine(line))
+    .join("\n");
   const forbidden = [
     /feed recheck effect acceptance is closed/iu,
     /feed recheck effect accepted(?:\s|:)/iu,
@@ -142,17 +146,24 @@ function assertNoFeedEffectOverclaim(docs) {
     /SUCCESS_MS_026C_R1[^\n]{0,240}BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED/iu
   ];
   for (const pattern of forbidden) {
-    if (pattern.test(docs)) failures.push(`docs overclaim feed recheck effect acceptance: ${pattern}`);
+    if (pattern.test(c1ScopedDocs)) failures.push(`docs overclaim feed recheck effect acceptance: ${pattern}`);
   }
 
   for (const line of docs.split(/\r?\n/u)) {
     if (
       line.includes("BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED") &&
+      !isMs027bR1EffectAcceptanceLine(line) &&
       !/\b(future|reserved|only when|may close only when)\b/iu.test(line)
     ) {
       failures.push("docs mention feed effect accepted classification outside future-only context");
     }
   }
+}
+
+function isMs027bR1EffectAcceptanceLine(line) {
+  return /\b(?:MS-027B|MS-027B-R1|SUCCESS_MS_027B_R1|FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTED|production-feed-effect-acceptance|ms-027b-r1-feed-onboarding-recheck-effect)\b/u.test(
+    line
+  );
 }
 
 function assertNoSeedOrFakeAcceptancePath(docs) {

@@ -1,6 +1,6 @@
 # Admin Operations Dashboard
 
-Status: `SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED`.
+Status: `SUCCESS_MS_027B_R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTANCE_CLOSED_OPERATOR_REPORTED_EVIDENCE_AUTOMATION_LANDED`.
 
 MS-025A adds the first authenticated read-only admin operations slice after the MS-024F operator-reported status/auth shell acceptance. It is a local repository package with synthetic acceptance coverage. MS-025A-R2 records later operator-reported production acceptance for the read-only operations summary dashboard.
 
@@ -13,6 +13,8 @@ MS-026B records the operator-reported MS-026A production route smoke without cla
 MS-026C adds one-command operator automation and the redacted browser evidence bridge. MS-026C-R1 records `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET` from operator-reported production retest evidence: `OPERATOR_PROMOTION_RETEST_REDACTED_OK`, `NGINX_ROUTE_PROOF_ACCEPTED`, `browser-evidence-verify-ok`, `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`, and critical risk `none`. The feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`; Feed recheck effect acceptance remains future work requiring a real eligible production feed. No production feed was created, seeded, or faked. No fake actionRef was generated. There was no production contact by Codex. The local guard is `npm run verify:operator-automation-acceptance`.
 
 MS-027A-R2 records `SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED` from operator-reported production retest evidence: `OPERATOR_PROMOTION_RETEST_REDACTED_OK`, `NGINX_ROUTE_PROOF_ACCEPTED`, `browser-evidence-verify-ok`, `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`, `MS-027A-R2_PRODUCTION_PROMOTION_IMAGE_FRESHNESS_ACCEPTED_OPERATOR_REPORTED`, and `MS-027A-R2_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED_OPERATOR_REPORTED`. The operator-reported evidence says image freshness accepted, backend runtime image revision matched current HEAD, frontend runtime image revision matched current HEAD, feed onboarding route smoke accepted, and authenticated browser evidence accepted. Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`; Feed recheck effect acceptance remains future work requiring a naturally existing eligible target and redacted browser evidence. No production feed was created, seeded, or faked. No fake actionRef was generated. There was no production contact by Codex. The local guard is `npm run verify:production-feed-onboarding-acceptance`.
+
+MS-027B-R1 records `SUCCESS_MS_027B_R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTANCE_CLOSED_OPERATOR_REPORTED_EVIDENCE_AUTOMATION_LANDED` from operator-reported evidence only. Status is `MS-027B-R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`; source type is `operator_reported`; accepted classes include `FEED_ONBOARDING_EFFECT_ACCEPTED`, `FEED_RECHECK_EFFECT_ACCEPTED`, `browser-evidence-verify-ok`, and `NGINX_ROUTE_PROOF_ACCEPTED`. `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET is closed for the bounded MS-027B feed onboarding plus recheck effect scope`. Operators can use **Download redacted evidence JSON**, `ops:production:acceptance:redacted -- --browser-evidence-stdin`, `--browser-evidence-file`, and `npm run verify:production-feed-effect-acceptance`. Codex did not independently perform a credentialed production login; no production contact by Codex; no production mutation by Codex. The durable receipt is `operator-state/admin-ui-production-activation/ms-027b-r1-feed-onboarding-recheck-effect-accepted-operator-reported-receipt.json`.
 
 MS-025A-R1 remediates the operator-reported follow-up where production sign-in and `/admin-auth/session` worked, but `/admin-api/operations/summary` returned HTTP 200 `text/html` with the SPA fallback. The reported container showed generated auth/status routes in `/tmp/nginx/conf.d/default.conf`, but no `/admin-api` route because the running frontend image's active template lacked the admin-api insertion marker. Codex did not contact production to re-check that R1 evidence; the remediation is repository-local and synthetic.
 
@@ -65,9 +67,10 @@ The browser route is exact and same-origin:
 GET /admin-api/operations/summary
 GET /admin-api/operations/drilldown
 POST /admin-api/operations/feed-recheck-requests
+POST /admin-api/operations/feed-onboarding-requests
 ```
 
-The read clients use `credentials: "same-origin"`, `cache: "no-store"`, `redirect: "manual"`, and `Accept: application/json`. The feed recheck action client also sends JSON only, `X-Admin-CSRF`, and `X-Admin-Idempotency-Key`. They use no Authorization bearer header, no Tenant bearer token, no Agent key, no custom credential header, and no browser credential persistence. They must not use localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie.
+The read clients use `credentials: "same-origin"`, `cache: "no-store"`, `redirect: "manual"`, and `Accept: application/json`. The feed recheck and feed onboarding action clients also send JSON only, `X-Admin-CSRF`, and `X-Admin-Idempotency-Key`. They use no Authorization bearer header, no Tenant bearer token, no Agent key, no custom credential header, and no browser credential persistence. They must not use localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie.
 
 The overview and drilldown each perform one load after the protected shell is authenticated and then only manual refreshes. They do not poll, persist history, render raw upstream errors, or display raw response bodies. The feed recheck action requires explicit confirmation and does not auto-repeat.
 
@@ -80,12 +83,13 @@ The generated Nginx route:
 - allows only `GET /admin-api/operations/summary`;
 - allows only `GET /admin-api/operations/drilldown`;
 - allows only `POST /admin-api/operations/feed-recheck-requests`;
+- allows only `POST /admin-api/operations/feed-onboarding-requests`;
 - rejects non-GET with safe `405`;
 - rejects unknown `/admin-api/**` with safe `404`;
 - strips query strings with `set $args ""`;
 - does not forward request bodies on read routes and caps the action body at 2k;
 - forwards only minimum session context: `Host`, `Accept: application/json`, and `Cookie`;
-- forwards only `Cookie`, `Content-Type: application/json`, `X-Admin-CSRF`, and `X-Admin-Idempotency-Key` on the action route;
+- forwards only `Cookie`, `Content-Type: application/json`, `X-Admin-CSRF`, and `X-Admin-Idempotency-Key` on the action routes;
 - does not forward Authorization, Proxy-Authorization, Tenant bearer, Agent key, or credential-like custom headers;
 - hides upstream `Set-Cookie`, `WWW-Authenticate`, and `Access-Control-*` response headers;
 - maps upstream `401/403` to safe unauthenticated JSON;
