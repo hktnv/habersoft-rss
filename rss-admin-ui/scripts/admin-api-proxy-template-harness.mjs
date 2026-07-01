@@ -77,17 +77,28 @@ try {
   assert(results.authenticatedFeedRecheck.json?.status === "accepted", "authenticated feed recheck body mismatch");
   assert(results.authenticatedFeedRecheck.headers.setCookie === null, "admin-api feed recheck relayed upstream Set-Cookie");
   assertAdminApiJson(results.authenticatedFeedRecheckQuery, 202, "admin-api feed recheck query stripping");
+  assertAdminApiJson(results.unauthenticatedFeedOnboarding, 401, "unauthenticated admin-api feed onboarding");
+  assert(results.unauthenticatedFeedOnboarding.json?.authenticated === false, "unauthenticated feed onboarding body mismatch");
+  assertAdminApiJson(results.missingCsrfFeedOnboarding, 403, "missing CSRF admin-api feed onboarding");
+  assert(results.missingCsrfFeedOnboarding.json?.reason === "csrf_failed", "missing CSRF feed onboarding body mismatch");
+  assertAdminApiJson(results.authenticatedFeedOnboarding, 201, "authenticated admin-api feed onboarding");
+  assert(results.authenticatedFeedOnboarding.json?.status === "created", "authenticated feed onboarding body mismatch");
+  assert(results.authenticatedFeedOnboarding.headers.setCookie === null, "admin-api feed onboarding relayed upstream Set-Cookie");
+  assertAdminApiJson(results.authenticatedFeedOnboardingQuery, 201, "admin-api feed onboarding query stripping");
   assertAdminApiJson(results.unknownAdminApiExact, 404, "exact unknown /admin-api");
   assertAdminApiJson(results.unknownAdminApiPrefix, 404, "unknown /admin-api path");
   assertAdminApiJson(results.postAdminSummary, 405, "POST admin-api summary");
   assertAdminApiJson(results.postAdminDrilldown, 405, "POST admin-api drilldown");
   assertAdminApiJson(results.getAdminFeedRecheck, 405, "GET admin-api feed recheck");
+  assertAdminApiJson(results.getAdminFeedOnboarding, 405, "GET admin-api feed onboarding");
 
   const adminRecords = adminApiRecords();
-  assert(adminRecords.length === 10, `expected 10 upstream admin-api records, received ${adminRecords.length}`);
+  assert(adminRecords.length === 14, `expected 14 upstream admin-api records, received ${adminRecords.length}`);
   for (const record of adminRecords) {
     const isReadRoute = record.path === "/admin-api/operations/summary" || record.path === "/admin-api/operations/drilldown";
-    const isActionRoute = record.path === "/admin-api/operations/feed-recheck-requests";
+    const isActionRoute =
+      record.path === "/admin-api/operations/feed-recheck-requests" ||
+      record.path === "/admin-api/operations/feed-onboarding-requests";
     assert(isReadRoute || isActionRoute, "admin-api upstream path mismatch");
     assert(record.method === (isActionRoute ? "POST" : "GET"), "admin-api upstream method mismatch");
     assert(record.search === "", "admin-api query string reached upstream");
@@ -110,6 +121,15 @@ try {
     actionRecords.some((record) => record.sensitiveHeaders.cookie && !record.adminActionHeaders.csrf && record.adminActionHeaders.idempotency),
     "missing-CSRF feed recheck negative path was not exercised"
   );
+  const onboardingRecords = adminRecords.filter((record) => record.path === "/admin-api/operations/feed-onboarding-requests");
+  assert(
+    onboardingRecords.some((record) => record.sensitiveHeaders.cookie && record.adminActionHeaders.csrf && record.adminActionHeaders.idempotency),
+    "authenticated feed onboarding did not forward CSRF and idempotency headers"
+  );
+  assert(
+    onboardingRecords.some((record) => record.sensitiveHeaders.cookie && !record.adminActionHeaders.csrf && record.adminActionHeaders.idempotency),
+    "missing-CSRF feed onboarding negative path was not exercised"
+  );
   assert(adminRecords.some((record) => record.sensitiveHeaders.cookie === false), "unauthenticated admin-api request should not invent a cookie");
   assert(adminRecords.some((record) => record.sensitiveHeaders.cookie === true), "authenticated admin-api request did not forward session cookie");
 
@@ -118,18 +138,22 @@ try {
   const staticSummary = runSingleRequest("frontend-static", "/admin-api/operations/summary");
   const staticDrilldown = runSingleRequest("frontend-static", "/admin-api/operations/drilldown");
   const staticFeedRecheck = runSingleRequest("frontend-static", "/admin-api/operations/feed-recheck-requests", { method: "POST" });
+  const staticFeedOnboarding = runSingleRequest("frontend-static", "/admin-api/operations/feed-onboarding-requests", { method: "POST" });
   assertAdminApiJson(staticSummary, 501, "static no-auth-upstream admin-api summary");
   assertAdminApiJson(staticDrilldown, 501, "static no-auth-upstream admin-api drilldown");
   assertAdminApiJson(staticFeedRecheck, 501, "static no-auth-upstream admin-api feed recheck");
+  assertAdminApiJson(staticFeedOnboarding, 501, "static no-auth-upstream admin-api feed onboarding");
 
   startFrontend(unreachableFrontendName, "frontend-unreachable", "http://missing-admin-api-r1:3100");
   await waitForFrontend("frontend-unreachable");
   const unreachableSummary = runSingleRequest("frontend-unreachable", "/admin-api/operations/summary");
   const unreachableDrilldown = runSingleRequest("frontend-unreachable", "/admin-api/operations/drilldown");
   const unreachableFeedRecheck = runSingleRequest("frontend-unreachable", "/admin-api/operations/feed-recheck-requests", { method: "POST" });
+  const unreachableFeedOnboarding = runSingleRequest("frontend-unreachable", "/admin-api/operations/feed-onboarding-requests", { method: "POST" });
   assertAdminApiJson(unreachableSummary, 502, "unreachable admin-api upstream summary");
   assertAdminApiJson(unreachableDrilldown, 502, "unreachable admin-api upstream drilldown");
   assertAdminApiJson(unreachableFeedRecheck, 502, "unreachable admin-api upstream feed recheck");
+  assertAdminApiJson(unreachableFeedOnboarding, 502, "unreachable admin-api upstream feed onboarding");
 
   console.log(
     JSON.stringify(
@@ -137,15 +161,22 @@ try {
         status: "admin-api-proxy-template-harness-ok",
         image,
         generated_config: "/tmp/nginx/conf.d/default.conf",
-        exact_routes: ["/admin-api/operations/summary", "/admin-api/operations/drilldown", "/admin-api/operations/feed-recheck-requests"],
+        exact_routes: [
+          "/admin-api/operations/summary",
+          "/admin-api/operations/drilldown",
+          "/admin-api/operations/feed-recheck-requests",
+          "/admin-api/operations/feed-onboarding-requests"
+        ],
         no_spa_fallback_for_admin_api: true,
         upstream_records: adminRecords.length,
         static_no_auth_status: staticSummary.status,
         static_no_auth_drilldown_status: staticDrilldown.status,
         static_no_auth_feed_recheck_status: staticFeedRecheck.status,
+        static_no_auth_feed_onboarding_status: staticFeedOnboarding.status,
         unreachable_status: unreachableSummary.status,
         unreachable_drilldown_status: unreachableDrilldown.status,
-        unreachable_feed_recheck_status: unreachableFeedRecheck.status
+        unreachable_feed_recheck_status: unreachableFeedRecheck.status,
+        unreachable_feed_onboarding_status: unreachableFeedOnboarding.status
       },
       null,
       2
@@ -186,6 +217,7 @@ function assertGeneratedConfig(generatedConfig, nginxDump) {
     assert(text.includes("location = /admin-api/operations/summary"), "generated Nginx config lacks exact admin-api summary route");
     assert(text.includes("location = /admin-api/operations/drilldown"), "generated Nginx config lacks exact admin-api drilldown route");
     assert(text.includes("location = /admin-api/operations/feed-recheck-requests"), "generated Nginx config lacks exact admin-api feed recheck route");
+    assert(text.includes("location = /admin-api/operations/feed-onboarding-requests"), "generated Nginx config lacks exact admin-api feed onboarding route");
     assert(text.includes("proxy_set_header X-Admin-CSRF"), "generated Nginx config lacks admin CSRF forwarding");
     assert(text.includes("proxy_set_header X-Admin-Idempotency-Key"), "generated Nginx config lacks admin idempotency forwarding");
     assert(/location\s*=\s*\/admin-api\s*\{/u.test(text), "generated Nginx config lacks exact /admin-api JSON 404 route");
@@ -195,6 +227,7 @@ function assertGeneratedConfig(generatedConfig, nginxDump) {
   const summaryIndex = generatedConfig.indexOf("location = /admin-api/operations/summary");
   const drilldownIndex = generatedConfig.indexOf("location = /admin-api/operations/drilldown");
   const feedRecheckIndex = generatedConfig.indexOf("location = /admin-api/operations/feed-recheck-requests");
+  const feedOnboardingIndex = generatedConfig.indexOf("location = /admin-api/operations/feed-onboarding-requests");
   const exactFallbackIndex = indexOfRegex(generatedConfig, /location\s*=\s*\/admin-api\s*\{/u);
   const prefixFallbackIndex = indexOfRegex(generatedConfig, /location\s*\^~\s*\/admin-api\/\s*\{/u);
   const spaFallbackIndex = indexOfRegex(generatedConfig, /location\s+\/\s*\{/u);
@@ -202,6 +235,7 @@ function assertGeneratedConfig(generatedConfig, nginxDump) {
       summaryIndex !== -1 &&
       drilldownIndex !== -1 &&
       feedRecheckIndex !== -1 &&
+      feedOnboardingIndex !== -1 &&
       exactFallbackIndex !== -1 &&
       prefixFallbackIndex !== -1 &&
       spaFallbackIndex !== -1,
@@ -210,6 +244,7 @@ function assertGeneratedConfig(generatedConfig, nginxDump) {
   assert(summaryIndex < spaFallbackIndex, "admin-api summary route appears after SPA fallback");
   assert(drilldownIndex < spaFallbackIndex, "admin-api drilldown route appears after SPA fallback");
   assert(feedRecheckIndex < spaFallbackIndex, "admin-api feed recheck route appears after SPA fallback");
+  assert(feedOnboardingIndex < spaFallbackIndex, "admin-api feed onboarding route appears after SPA fallback");
   assert(exactFallbackIndex < spaFallbackIndex, "exact /admin-api fallback appears after SPA fallback");
   assert(prefixFallbackIndex < spaFallbackIndex, "/admin-api/ fallback appears after SPA fallback");
 }
@@ -297,6 +332,36 @@ function runFrontendRequests(host) {
         },
         body: JSON.stringify({ actionRef: "feed_recheck_v1." + "A".repeat(64), reason: "operator_request" })
       }),
+      unauthenticatedFeedOnboarding: await request("/admin-api/operations/feed-onboarding-requests", {
+        method: "POST",
+        headers: { ...sensitiveHeaders, "content-type": "application/json" },
+        body: JSON.stringify({ feedUrl: "https://news.example.org/feed.xml", label: "Example News" })
+      }),
+      missingCsrfFeedOnboarding: await request("/admin-api/operations/feed-onboarding-requests", {
+        method: "POST",
+        headers: { ...authedHeaders, "content-type": "application/json", "x-admin-idempotency-key": "onboard_1234567890abcdef" },
+        body: JSON.stringify({ feedUrl: "https://news.example.org/feed.xml", label: "Example News" })
+      }),
+      authenticatedFeedOnboarding: await request("/admin-api/operations/feed-onboarding-requests", {
+        method: "POST",
+        headers: {
+          ...authedHeaders,
+          "content-type": "application/json",
+          "x-admin-csrf": "csrf_token_value_at_least_32_characters",
+          "x-admin-idempotency-key": "onboard_1234567890abcdef"
+        },
+        body: JSON.stringify({ feedUrl: "https://news.example.org/feed.xml", label: "Example News" })
+      }),
+      authenticatedFeedOnboardingQuery: await request("/admin-api/operations/feed-onboarding-requests?token=example", {
+        method: "POST",
+        headers: {
+          ...authedHeaders,
+          "content-type": "application/json",
+          "x-admin-csrf": "csrf_token_value_at_least_32_characters",
+          "x-admin-idempotency-key": "onboard_abcdef1234567890"
+        },
+        body: JSON.stringify({ feedUrl: "https://news.example.org/feed.xml", label: "Example News" })
+      }),
       unknownAdminApiExact: await request("/admin-api", { headers: authedHeaders }),
       unknownAdminApiPrefix: await request("/admin-api/unknown", { headers: authedHeaders }),
       postAdminSummary: await request("/admin-api/operations/summary", {
@@ -310,6 +375,9 @@ function runFrontendRequests(host) {
         body: "mutate=true"
       }),
       getAdminFeedRecheck: await request("/admin-api/operations/feed-recheck-requests", {
+        headers: authedHeaders
+      }),
+      getAdminFeedOnboarding: await request("/admin-api/operations/feed-onboarding-requests", {
         headers: authedHeaders
       })
     };
@@ -599,6 +667,35 @@ function sentinelProgram() {
             cooldownSeconds: 300,
             message: "Feed recheck was requested through the existing due-feed path.",
             generatedAt: "2026-06-30T06:01:00.000Z"
+          }));
+          return;
+        }
+
+        if (parsed.pathname === "/admin-api/operations/feed-onboarding-requests") {
+          response.setHeader("Set-Cookie", "should_not_relay=1; HttpOnly; Path=/; SameSite=Lax");
+          if (!isAuthenticated(request)) {
+            response.statusCode = 401;
+            response.end(JSON.stringify({ authenticated: false, reason: "unauthenticated" }));
+            return;
+          }
+          if (request.headers["x-admin-csrf"] === undefined) {
+            response.statusCode = 403;
+            response.end(JSON.stringify({ authenticated: true, reason: "csrf_failed" }));
+            return;
+          }
+          response.statusCode = 201;
+          response.end(JSON.stringify({
+            status: "created",
+            requestRef: "onboard_abc123def456",
+            feed: {
+              displayId: "feed_123456abcd",
+              sourceHost: "news.example.org",
+              state: "active",
+              eligibleForRecheck: true
+            },
+            nextSteps: ["Refresh Operations Drilldown."],
+            message: "Feed onboarding was accepted through the existing due-feed path.",
+            generatedAt: "2026-07-01T06:01:00.000Z"
           }));
           return;
         }

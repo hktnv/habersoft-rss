@@ -1,10 +1,11 @@
-export const riskModelVersion = "MS-026C_RISK_BALANCED_GUARDRAILS";
+export const riskModelVersion = "MS-027A_RISK_BALANCED_GUARDRAILS";
 
 export const riskTiers = {
   CRITICAL: [
     "secret credential session cookie CSRF token idempotency key actionRef leakage",
     "browser persistence of auth material",
     "unsafe admin write route or missing CSRF/idempotency on bounded action",
+    "unsafe admin feed onboarding route or raw feed URL evidence exposure",
     "unknown /admin-api/* fallback to HTML",
     "unresolved Nginx template markers or generated config missing exact admin routes",
     "production mutation attempted by Codex",
@@ -15,12 +16,14 @@ export const riskTiers = {
     "frontend backend-network overlay missing for service-DNS upstream",
     "backend auth env not wired for apply",
     "image tag missing for apply plan",
-    "route proof unavailable for final operator acceptance"
+    "route proof unavailable for final operator acceptance",
+    "feed onboarding exact route missing from generated Nginx proof"
   ],
   MEDIUM: [
     "optional/defaulted env values missing",
     "host Node/npm mismatch when declared runtime or Docker validation passes",
     "no eligible feed recheck target",
+    "feed onboarding available but operator action still required",
     "credential-free auth smoke requires browser evidence",
     "operator browser evidence missing"
   ],
@@ -37,6 +40,8 @@ const classToTier = new Map([
   ["BROWSER_AUTH_PERSISTENCE_DETECTED", "CRITICAL"],
   ["ADMIN_API_HTML_FALLBACK_REGRESSION", "CRITICAL"],
   ["ADMIN_WRITE_ROUTE_UNSAFE", "CRITICAL"],
+  ["ADMIN_FEED_ONBOARDING_ROUTE_UNSAFE", "CRITICAL"],
+  ["FEED_ONBOARDING_RAW_URL_EVIDENCE", "CRITICAL"],
   ["MISSING_CSRF_OR_IDEMPOTENCY", "CRITICAL"],
   ["NGINX_TEMPLATE_MARKER_UNRESOLVED", "CRITICAL"],
   ["NGINX_EXACT_ADMIN_ROUTE_MISSING", "CRITICAL"],
@@ -47,9 +52,11 @@ const classToTier = new Map([
   ["BACKEND_AUTH_ENV_NOT_WIRED", "HIGH"],
   ["IMAGE_TAG_MISSING_FOR_APPLY", "HIGH"],
   ["ROUTE_PROOF_NOT_AVAILABLE", "HIGH"],
+  ["FEED_ONBOARDING_ROUTE_PROOF_MISSING", "HIGH"],
   ["OPTIONAL_ENV_DEFAULTED", "MEDIUM"],
   ["HOST_NODE_NPM_VERSION_WARNING", "MEDIUM"],
   ["PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET", "MEDIUM"],
+  ["FEED_ONBOARDING_OPERATOR_ACTION_REQUIRED", "MEDIUM"],
   ["AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED", "MEDIUM"],
   ["BROWSER_EVIDENCE_MISSING", "MEDIUM"],
   ["NPM_UPDATE_NOTICE", "LOW"],

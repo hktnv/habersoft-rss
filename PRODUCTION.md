@@ -178,6 +178,19 @@ MS-026C-R1 operator automation production acceptance closure:
 - feed recheck boundary: effect status remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`; Feed recheck effect acceptance remains future work requiring a real eligible production feed and redacted browser evidence;
 - safety boundary: No production feed was created, seeded, or faked; No fake actionRef was generated; no production contact by Codex occurred; no secrets, cookies, sessions, CSRF tokens, idempotency keys, actionRefs, raw feed URLs, raw bodies, or raw logs are accepted in evidence.
 
+MS-027A authenticated admin feed onboarding:
+
+- bounded status: `SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`;
+- new exact action route: `POST /admin-api/operations/feed-onboarding-requests`;
+- action semantics: authenticated admin feed onboarding only, JSON only, no query strings, CSRF via `X-Admin-CSRF`, idempotency via `X-Admin-Idempotency-Key`, explicit UI confirmation, and bounded host cooldown;
+- backend behavior: validates an HTTPS public feed URL, rejects localhost/private/internal style targets, stores a reserved admin onboarding relation, and makes the resulting safe target eligible for the existing due-feed/recheck path without a synchronous external feed fetch;
+- response and evidence boundary: safe `displayId`, public `sourceHost`, state, eligibility, message, and next steps only; no raw feed URL in response or evidence, no CSRF token, no idempotency key, no cookie/session, no raw logs, no Agent key, and no Tenant bearer token;
+- proxy contract: exact allowlist route, POST-only, 4k body limit, query stripping, only `Cookie`, `Content-Type: application/json`, `X-Admin-CSRF`, and `X-Admin-Idempotency-Key` forwarded, upstream `Set-Cookie`, `WWW-Authenticate`, and CORS headers hidden;
+- operator automation: `FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED` proves unauthenticated POST returns JSON `401` and GET returns JSON `405`; Nginx route proof now requires summary, drilldown, feed-recheck, and feed-onboarding;
+- browser evidence: `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE` plus `feed_onboarding_available`, `feed_onboarding_status`, `no_eligible_target`, and `critical_risk`;
+- validation: `npm run verify:admin-feed-onboarding`, `npm run test:admin-api-proxy-template`, `npm run test:fullstack`, and `npm run test:production-mode-rc`;
+- residual: operator deploy/retest required. Codex did not perform production contact, did not independently perform a credentialed production login, and did not mutate production. No production feed was created, seeded, or faked.
+
 MS-024C production overlay canonicalization result:
 
 - operator-reported: MS-024B diagnose/ps/logs helpers improved, but a plain frontend `deploy/production/compose.yaml` recreate with `main-service-api` service DNS failed with `host not found in upstream "main-service-api"` and hid `/healthz` behind a restart-loop;

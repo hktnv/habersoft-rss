@@ -58,3 +58,22 @@ The local tracked status verifier is:
 ```bash
 npm run verify:operator-automation-acceptance
 ```
+
+## MS-027A Extension Note
+
+MS-027A does not reopen this MS-026C-R1 acceptance closure. It adds
+authenticated admin feed onboarding source with
+`SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+The new safe route-smoke classification is `FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED`;
+redacted browser evidence may include `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`,
+`feed_onboarding_available`, `feed_onboarding_status`, `no_eligible_target`,
+and `critical_risk`. Evidence still must not include raw feed URLs, cookies,
+sessions, CSRF tokens, idempotency keys, actionRefs, raw bodies, raw logs, or
+secrets. Codex did not perform production contact. No production feed was
+created, seeded, or faked.
+
+Local validation for that extension is:
+
+```bash
+npm run verify:admin-feed-onboarding
+```

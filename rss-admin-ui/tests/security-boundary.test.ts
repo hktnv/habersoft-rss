@@ -21,6 +21,7 @@ describe("frontend security boundary", () => {
         relative === "src/adminOperations/operationsSummaryClient.ts" ||
         relative === "src/adminOperations/operationsDrilldownClient.ts";
       const feedRecheckClient = relative === "src/adminOperations/feedRecheckClient.ts";
+      const feedOnboardingClient = relative === "src/adminOperations/feedOnboardingClient.ts";
       const forbidden = [
         /AGENT_KEY\s*=/u,
         /X-Agent-Key/iu,
@@ -30,10 +31,10 @@ describe("frontend security boundary", () => {
         /document\.cookie/u,
         workstationPathPattern,
         oldWorkspacePattern,
-        authClient || feedRecheckClient
+        authClient || feedRecheckClient || feedOnboardingClient
           ? /method:\s*["'](?:PUT|PATCH|DELETE)["']/iu
           : /method:\s*["'](?:POST|PUT|PATCH|DELETE)["']/iu,
-        authClient || operationsClient || feedRecheckClient
+        authClient || operationsClient || feedRecheckClient || feedOnboardingClient
           ? /credentials:\s*["']include["']/iu
           : /credentials:\s*["'](?:include|same-origin)["']/iu
       ];

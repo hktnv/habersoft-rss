@@ -1,10 +1,10 @@
 # Admin Auth Session Boundary
 
-Status: `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
+Status: `SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
 
 Historical foundation status: `MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY - NOT_DEPLOYED`.
 
-MS-022A adds a local/tested same-origin admin auth/session foundation. MS-025A keeps that session model and uses it for the protected read-only admin operations summary route, later accepted by operator-reported MS-025A-R2 production evidence. MS-025B uses the same session model for a protected read-only operations drilldown route. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence. MS-026A adds the first bounded feed recheck action and keeps operator deploy/retest required.
+MS-022A adds a local/tested same-origin admin auth/session foundation. MS-025A keeps that session model and uses it for the protected read-only admin operations summary route, later accepted by operator-reported MS-025A-R2 production evidence. MS-025B uses the same session model for a protected read-only operations drilldown route. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence. MS-026A adds the first bounded feed recheck action. MS-027A adds authenticated admin feed onboarding and keeps operator deploy/retest required.
 
 ## Current Boundary
 
@@ -30,6 +30,8 @@ POST /admin-auth/login
 POST /admin-auth/logout
 GET  /admin-api/operations/summary
 GET  /admin-api/operations/drilldown
+POST /admin-api/operations/feed-recheck-requests
+POST /admin-api/operations/feed-onboarding-requests
 ```
 
 Requests are relative same-origin requests with `cache: "no-store"` and no custom credential headers. The client uses browser cookie semantics only for the HttpOnly session cookie; it does not read or write cookies directly and does not use localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie.
@@ -46,6 +48,22 @@ requests the existing due-feed path with no synchronous external feed fetch.
 It must not expose raw feed URLs, internal database IDs, Agent keys, Tenant
 bearer tokens, CSRF tokens, idempotency keys, cookies, stack traces, or raw
 logs. No production deployment was performed by Codex for MS-026A.
+
+The authenticated admin feed onboarding action is
+`POST /admin-api/operations/feed-onboarding-requests`. It is exact-route only,
+JSON only, CSRF-protected with `X-Admin-CSRF`, idempotency-protected with
+`X-Admin-Idempotency-Key`, and requires explicit confirmation. It validates a
+public HTTPS feed URL, rejects unsafe local/private/internal targets, stores a
+reserved admin onboarding relation, and performs no synchronous external feed
+fetch. It returns only safe `displayId`, public `sourceHost`, state,
+eligibility, message, and next steps. It must not expose raw feed URLs, Agent
+keys, Tenant bearer tokens, CSRF tokens, idempotency keys, cookies, stack
+traces, or raw logs. Browser evidence includes
+`BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`, `feed_onboarding_available`,
+`feed_onboarding_status`, `no_eligible_target`, and `critical_risk`. Operator
+route smoke classifies `FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED`. Codex did not
+perform production contact. No production feed was created, seeded, or faked.
+Validate with `npm run verify:admin-feed-onboarding`.
 
 ## Future Production Gates
 

@@ -143,6 +143,39 @@ Raw feed URL paths or queries, internal IDs, entry content, raw logs, stack
 traces, cookies, CSRF tokens, idempotency keys, session secrets, Agent key
 values, and Tenant bearer tokens are excluded.
 
+## Authenticated Admin Feed Onboarding
+
+MS-027A adds:
+
+```text
+POST /admin-api/operations/feed-onboarding-requests
+```
+
+The route accepts only JSON with a public HTTPS `feedUrl` and optional safe
+label. It requires the existing admin session, `X-Admin-CSRF`, and
+`X-Admin-Idempotency-Key`; rejects query strings, unsafe targets, unknown body
+keys, credentials/userinfo, fragments, localhost/private/internal-style hosts,
+and unsafe labels; and enforces Redis idempotency plus host cooldown.
+
+Accepted requests store a reserved admin onboarding relation and update only
+the existing feed/subscription state needed for an eligible target to appear.
+The HTTP route performs no synchronous external feed fetch, does not mutate
+entries, does not use Agent keys or Tenant bearer tokens from the browser, and
+does not require a Prisma migration. Tenant JWT validation rejects the reserved
+admin site client ID so tenant callers cannot claim that relation.
+
+Safe response fields are limited to `status`, `requestRef`, `feed.displayId`,
+`feed.sourceHost`, `feed.state`, `feed.eligibleForRecheck`, `nextSteps`,
+`message`, and `generatedAt`. There is no raw feed URL in response or evidence.
+
+Operator route smoke classifies `FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED`.
+Browser evidence includes `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`,
+`feed_onboarding_available`, `feed_onboarding_status`, `no_eligible_target`,
+and `critical_risk`. Status:
+`SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+Codex did not perform production contact. No production feed was created,
+seeded, or faked. Operator deploy/retest required remains.
+
 ## Validation
 
 Focused backend coverage:
@@ -163,6 +196,7 @@ npm run test:admin-operations-proxy
 npm run test:fullstack
 npm run test:production-mode-rc
 npm run verify:admin-feed-recheck-action
+npm run verify:admin-feed-onboarding
 ```
 
 The proxy harness proves the generated active Nginx config at

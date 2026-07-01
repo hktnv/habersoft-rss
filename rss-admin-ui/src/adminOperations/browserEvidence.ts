@@ -7,6 +7,7 @@ export const redactedBrowserEvidenceMaxBytes = 32768;
 export type BrowserEvidenceClassification =
   | "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY"
   | "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET"
+  | "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE"
   | "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
   | "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET"
   | "BROWSER_EVIDENCE_INVALID";
@@ -46,6 +47,12 @@ export type RedactedBrowserEvidence = {
       | "FEED_RECHECK_ACTION_RATE_LIMITED"
       | null;
   };
+  readonly feedOnboarding: {
+    readonly feed_onboarding_available: boolean;
+    readonly feed_onboarding_status: "available" | "pending_operator_action";
+    readonly no_eligible_target: boolean;
+    readonly critical_risk: "none";
+  };
   readonly classifications: readonly BrowserEvidenceClassification[];
 };
 
@@ -82,6 +89,7 @@ export function createRedactedBrowserEvidence(
       ? "FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
       : "PENDING_OPERATOR_ACTION";
   const classifications: BrowserEvidenceClassification[] = ["BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY"];
+  classifications.push("BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE");
   if (noEligible) {
     classifications.push("BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET");
   } else if (acceptedEffect) {
@@ -116,6 +124,12 @@ export function createRedactedBrowserEvidence(
       effectStatus,
       lastActionClassification
     },
+    feedOnboarding: {
+      feed_onboarding_available: true,
+      feed_onboarding_status: "available",
+      no_eligible_target: noEligible,
+      critical_risk: "none"
+    },
     classifications
   };
 }
@@ -144,7 +158,7 @@ export function validateRedactedBrowserEvidence(value: unknown): BrowserEvidence
   const forbidden = findForbiddenEvidenceSurface(value);
   if (forbidden === "field") return { valid: false, classification: "BROWSER_EVIDENCE_INVALID", reason: "forbidden_field" };
   if (forbidden === "value") return { valid: false, classification: "BROWSER_EVIDENCE_INVALID", reason: "forbidden_value" };
-  if (!hasOnlyKeys(value, ["schema", "source", "milestone", "generatedAt", "authenticated", "operations", "feedRecheck", "classifications"])) {
+  if (!hasOnlyKeys(value, ["schema", "source", "milestone", "generatedAt", "authenticated", "operations", "feedRecheck", "feedOnboarding", "classifications"])) {
     return { valid: false, classification: "BROWSER_EVIDENCE_INVALID", reason: "unknown_field" };
   }
   if (
@@ -155,6 +169,7 @@ export function validateRedactedBrowserEvidence(value: unknown): BrowserEvidence
     !isIso(value.generatedAt) ||
     !isOperationsEvidence(value.operations) ||
     !isFeedRecheckEvidence(value.feedRecheck) ||
+    !isFeedOnboardingEvidence(value.feedOnboarding) ||
     !isClassifications(value.classifications)
   ) {
     return { valid: false, classification: "BROWSER_EVIDENCE_INVALID", reason: "invalid_schema" };
@@ -165,6 +180,19 @@ export function validateRedactedBrowserEvidence(value: unknown): BrowserEvidence
     evidence: value as RedactedBrowserEvidence,
     classifications: value.classifications as readonly BrowserEvidenceClassification[]
   };
+}
+
+function isFeedOnboardingEvidence(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (!hasOnlyKeys(value, ["feed_onboarding_available", "feed_onboarding_status", "no_eligible_target", "critical_risk"])) {
+    return false;
+  }
+  return (
+    value.feed_onboarding_available === true &&
+    (value.feed_onboarding_status === "available" || value.feed_onboarding_status === "pending_operator_action") &&
+    typeof value.no_eligible_target === "boolean" &&
+    value.critical_risk === "none"
+  );
 }
 
 function latestSafeActionClassification(feedRechecks: Readonly<Record<string, { readonly result?: FeedRecheckResult }>>): RedactedBrowserEvidence["feedRecheck"]["lastActionClassification"] {
@@ -228,10 +256,11 @@ function isFeedRecheckEvidence(value: unknown): boolean {
 }
 
 function isClassifications(value: unknown): boolean {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 4) return false;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 5) return false;
   const allowed = new Set<BrowserEvidenceClassification>([
     "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
     "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET",
+    "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
     "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED",
     "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET"
   ]);

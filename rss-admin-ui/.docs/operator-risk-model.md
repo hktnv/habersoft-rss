@@ -1,10 +1,12 @@
 # Operator Risk Model and Evidence Bridge
 
-Status: `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET`.
+Status: `SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
 
 MS-026C keeps the accepted status dashboard, authenticated admin shell, read-only Operations Overview, read-only Operations Drilldown, and MS-026B route/proxy/auth smoke boundaries intact. It improves operator automation only; Codex still does not deploy, restart, rebuild, mutate production, perform a credentialed production login, read real secrets, seed production, create a tag, create a release, or create a PR.
 
 MS-026C-R1 closes the MS-026C operator automation/retest residual by operator-reported production evidence only. The reported classes are `OPERATOR_PROMOTION_RETEST_REDACTED_OK`, `NGINX_ROUTE_PROOF_ACCEPTED`, `browser-evidence-verify-ok`, `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, and `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`; critical risk `none`; no production contact by Codex. Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`. No production feed was created, seeded, or faked. No fake actionRef was generated. The local closure guard is `npm run verify:operator-automation-acceptance`.
+
+MS-027A extends the model with authenticated admin feed onboarding and keeps production action ownership with the operator. The route smoke class is `FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED`, browser evidence includes `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`, and the source-delivery result is `SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`. Codex did not perform production contact. No production feed was created, seeded, or faked.
 
 ## One-command path
 
@@ -26,6 +28,7 @@ npm run ops:production:acceptance:redacted -- --endpoint https://rss-panel.haber
 npm run ops:feed-recheck:eligibility:redacted -- --endpoint https://rss-panel.habersoft.com
 npm run ops:browser-evidence:verify -- --file <redacted-browser-evidence.json>
 npm run verify:browser-evidence
+npm run verify:admin-feed-onboarding
 npm run verify:operator-automation
 ```
 
@@ -38,8 +41,9 @@ CRITICAL / BLOCKING:
 - secret, credential, cookie, session, CSRF, idempotency, actionRef, raw body, raw log, Agent key, Tenant bearer/JWT, or raw feed URL leakage;
 - browser persistence of auth material;
 - unsafe admin write route, missing CSRF/idempotency on the bounded action, or wildcard admin proxy expansion;
+- unsafe admin feed onboarding route, missing CSRF/idempotency, or raw feed URL in response or evidence;
 - unknown `/admin-api/*` falling back to HTML;
-- unresolved `__ADMIN_UI_` markers or generated Nginx missing exact summary, drilldown, or feed-recheck routes;
+- unresolved `__ADMIN_UI_` markers or generated Nginx missing exact summary, drilldown, feed-recheck, or feed-onboarding routes;
 - production mutation by Codex;
 - real credential supplied through a CLI argument.
 
@@ -50,12 +54,14 @@ HIGH / APPLY ATTENTION:
 - backend auth env not wired for apply;
 - image tag missing for an apply plan;
 - route proof unavailable for final operator acceptance.
+- feed onboarding exact route missing from generated Nginx proof.
 
 MEDIUM / DIAGNOSTIC WARNING:
 
 - optional/defaulted env values missing;
 - host Node/npm mismatch when Docker or declared runtime validation passes;
 - no eligible feed recheck target;
+- feed onboarding available but an explicit operator action/retest is still required;
 - credential-free auth smoke cannot close authenticated checks;
 - operator browser evidence missing.
 
@@ -68,9 +74,13 @@ LOW / INFO:
 
 ## Browser evidence bridge
 
-Authenticated admins can use **Copy redacted evidence** in Operations Drilldown. The exported JSON contains only schema, source, milestone, generated timestamp, authenticated boolean, drilldown status, aggregate feed/ingestion counts, eligible-target count, effect status, and safe classifications such as `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`, and future `BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED`.
+Authenticated admins can use **Copy redacted evidence** in Operations Drilldown. The exported JSON contains only schema, source, milestone, generated timestamp, authenticated boolean, drilldown status, aggregate feed/ingestion counts, eligible-target count, effect status, feed onboarding availability fields, and safe classifications such as `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`, `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`, and future `BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED`.
 
 The browser evidence schema and verifier reject cookies, session IDs, CSRF tokens, idempotency keys, raw `actionRef`, raw feed URLs, private hostnames, local filesystem paths, browser storage values, stack traces, raw response bodies, secrets, password material, Authorization/Bearer values, Agent keys, Tenant tokens, and unknown fields.
+
+MS-027A browser evidence includes `feed_onboarding_available`,
+`feed_onboarding_status`, `no_eligible_target`, and `critical_risk`; it still
+rejects raw feed URLs and credential material.
 
 ## Feed-recheck closure flow
 

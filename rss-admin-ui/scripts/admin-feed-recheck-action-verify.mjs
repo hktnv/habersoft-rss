@@ -168,7 +168,8 @@ function assertFrontendContract() {
 
   for (const fragment of [
     `sameOriginAdminFeedRecheckPath: "${route}"`,
-    'adminApiWritesImplemented: "bounded_feed_recheck_request_only"'
+    'sameOriginAdminFeedOnboardingPath: "/admin-api/operations/feed-onboarding-requests"',
+    'adminApiWritesImplemented: "bounded_feed_recheck_and_feed_onboarding_requests_only"'
   ]) {
     if (!boundary.includes(fragment)) failures.push(`admin session boundary missing ${fragment}`);
   }

@@ -1,10 +1,10 @@
 # rss-admin-ui API/Auth Contract
 
-Status: `MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+Status: `SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
 
 Historical foundation status: `MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY - NOT_DEPLOYED`.
 
-MS-022A adds a local/tested admin auth/session foundation and keeps production activation separate. MS-025A adds a protected read-only operations summary route, later accepted in production by operator-reported MS-025A-R2 evidence. MS-025B adds a protected read-only operations drilldown route locally. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence. MS-026A adds one bounded feed recheck action and leaves operator deploy/retest required.
+MS-022A adds a local/tested admin auth/session foundation and keeps production activation separate. MS-025A adds a protected read-only operations summary route, later accepted in production by operator-reported MS-025A-R2 evidence. MS-025B adds a protected read-only operations drilldown route locally. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence. MS-026A adds one bounded feed recheck action. MS-027A adds authenticated admin feed onboarding and leaves operator deploy/retest required.
 
 ## Health Transport
 
@@ -77,6 +77,29 @@ bearer tokens, CSRF tokens, idempotency keys, cookies, or session secrets.
 
 Business API writes remain out of scope. Tenant APIs keep their existing bearer-token semantics. Agent APIs keep their existing `X-Agent-Key` semantics. No Tenant bearer or Agent key is introduced into the browser. Broader future business/admin write features are not accepted.
 
+MS-027A adds one more exact bounded action:
+
+```text
+POST /admin-api/operations/feed-onboarding-requests
+```
+
+The action uses `credentials: "same-origin"`, JSON only,
+`X-Admin-CSRF`, `X-Admin-Idempotency-Key`, explicit confirmation, and a
+reserved admin onboarding relation. It validates a public HTTPS feed URL,
+rejects unsafe local/private/internal targets, performs no synchronous external
+feed fetch, and returns only safe `displayId`, public `sourceHost`, state,
+eligibility, message, and next steps. There is no raw feed URL in response or
+evidence. Browser evidence includes `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`
+with `feed_onboarding_available`, `feed_onboarding_status`,
+`no_eligible_target`, and `critical_risk`.
+
+Operator route smoke classifies `FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED`. Validate
+locally with `npm run verify:admin-feed-onboarding`,
+`npm run test:admin-api-proxy-template`, `npm run test:fullstack`, and
+`npm run test:production-mode-rc`. Codex did not perform production contact.
+No production feed was created, seeded, or faked. Operator deploy/retest
+required remains.
+
 ## Production Boundary
 
-No production deployment, production edge mutation, backend CORS broadening, registry publication, Git tag, or release is part of MS-026A. Production env/secret provisioning remains operator-authorized work. MS-025B-R1 drilldown production acceptance is closed by operator report. No production deployment was performed by Codex for MS-026A.
+No production deployment, production edge mutation, backend CORS broadening, registry publication, Git tag, or release is part of MS-026A or MS-027A. Production env/secret provisioning remains operator-authorized work. MS-025B-R1 drilldown production acceptance is closed by operator report. No production deployment was performed by Codex for MS-027A.

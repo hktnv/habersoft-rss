@@ -36,8 +36,8 @@ if (args.includes("--help") || args.includes("-h")) {
   process.exit(0);
 }
 
-if (args.some((arg) => /^--(?:username|password|cookie|csrf|token|idempotency|actionRef|secret|authorization|bearer)(?:=|$)/iu.test(arg))) {
-  fail("credentials, cookies, CSRF tokens, idempotency keys, actionRefs, and secrets must not be supplied on command lines");
+if (args.some((arg) => /^--(?:username|password|cookie|csrf|token|idempotency|actionRef|secret|authorization|bearer|feedUrl|feed-url)(?:=|$)/iu.test(arg))) {
+  fail("credentials, cookies, CSRF tokens, idempotency keys, actionRefs, feed URLs, and secrets must not be supplied on command lines");
 }
 if (apply && args.includes("--dry-run")) fail("--apply and --dry-run cannot be combined");
 if (apply && retestOnly) fail("--apply and --retest-only cannot be combined");
@@ -126,6 +126,9 @@ const acceptanceStep = steps.find((step) => step.name === "frontend-redacted-acc
 const acceptanceClasses = acceptanceStep?.classification === undefined ? [] : [acceptanceStep.classification];
 const noEligible = acceptanceStep?.feed_recheck_effect_status === "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET" || browserEvidence.classifications.includes("BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET");
 if (noEligible) warnings.push(riskClass("PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET", "route/auth/proxy checks can pass while effect remains pending until a real eligible feed exists"));
+if (acceptanceStep?.feed_onboarding_classification === "FEED_ONBOARDING_ROUTE_SMOKE_ATTENTION_REQUIRED") {
+  critical.push(riskClass("ADMIN_FEED_ONBOARDING_ROUTE_UNSAFE", "feed onboarding route smoke did not pass exact JSON auth-gated checks"));
+}
 const highApplyWarnings = apply && warnings.some((warning) => warning.tier === "HIGH");
 
 await finish({
@@ -139,6 +142,7 @@ await finish({
   steps,
   classifications: [...acceptanceClasses, ...browserEvidence.classifications],
   feed_recheck_effect_status: noEligible ? "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET" : acceptanceStep?.feed_recheck_effect_status ?? "PENDING_OPERATOR_ACTION_OR_BROWSER_EVIDENCE",
+  feed_onboarding_status: acceptanceStep?.feed_onboarding_status ?? "PENDING_ROUTE_SMOKE_OR_BROWSER_EVIDENCE",
   risk: {
     warnings,
     critical,
@@ -154,7 +158,7 @@ function plannedSteps() {
     "optional backend migration status check with --migration-check",
     "operator-owned backend API/worker recreate only when --apply is used",
     "operator-owned frontend compose recreate only when --apply is used",
-    "running/generated Nginx route proof when --nginx-config-file is provided",
+    "running/generated Nginx route proof for summary, drilldown, feed-recheck, and feed-onboarding when --nginx-config-file is provided",
     "redacted health/status/auth/admin-api acceptance through ops:production:acceptance:redacted when --apply or --retest-only is used",
     "browser evidence verifier when --browser-evidence is provided",
     "durable redacted receipt when --apply/--retest-only or --receipt-out is used"
@@ -172,6 +176,8 @@ function runStep(name, cwd, npmScript, npmArgs) {
     classification: parsed?.auth?.classification ?? parsed?.classification ?? parsed?.status ?? "none",
     feed_recheck_classification: parsed?.feed_recheck?.classification ?? "none",
     feed_recheck_effect_status: parsed?.feed_recheck?.effect_status ?? "none",
+    feed_onboarding_classification: parsed?.feed_onboarding?.classification ?? "none",
+    feed_onboarding_status: parsed?.feed_onboarding?.feed_onboarding_status ?? "none",
     output: "redacted"
   };
 }
@@ -222,7 +228,12 @@ function routeProofFromFile(file) {
       critical: true
     };
   }
-  const missing = ["/admin-api/operations/summary", "/admin-api/operations/drilldown", "/admin-api/operations/feed-recheck-requests"].filter((route) => !text.includes(route));
+  const missing = [
+    "/admin-api/operations/summary",
+    "/admin-api/operations/drilldown",
+    "/admin-api/operations/feed-recheck-requests",
+    "/admin-api/operations/feed-onboarding-requests"
+  ].filter((route) => !text.includes(route));
   if (missing.length > 0) {
     return {
       status: "NGINX_ROUTE_PROOF_REJECTED",
@@ -233,7 +244,12 @@ function routeProofFromFile(file) {
   }
   return {
     status: "NGINX_ROUTE_PROOF_ACCEPTED",
-    required_routes: ["/admin-api/operations/summary", "/admin-api/operations/drilldown", "/admin-api/operations/feed-recheck-requests"],
+    required_routes: [
+      "/admin-api/operations/summary",
+      "/admin-api/operations/drilldown",
+      "/admin-api/operations/feed-recheck-requests",
+      "/admin-api/operations/feed-onboarding-requests"
+    ],
     unresolved_markers: false,
     output: "redacted"
   };

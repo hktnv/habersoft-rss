@@ -208,6 +208,7 @@ The RC harness builds local backend/frontend images, starts PostgreSQL, Redis, t
 - frontend runtime and backend admin-auth env templates remain separated;
 - unknown auth/status paths and wrong methods reject safely;
 - generated admin-api proxy template config contains the exact summary route, contains no unresolved admin UI markers, and rejects admin-api fallthroughs as JSON instead of SPA HTML;
+- generated admin-api proxy template config contains exact summary, drilldown, feed-recheck, and feed-onboarding routes before SPA fallback;
 - generated admin-api proxy template config contains the exact drilldown route before SPA fallback and rejects drilldown fallthroughs as JSON instead of SPA HTML;
 - browser static assets and runtime config do not contain upstream origins, password, password hash, session secret, Agent key, Tenant bearer token, or browser auth persistence calls;
 - harness containers, networks, and volumes are removed after validation.
@@ -289,3 +290,37 @@ Operator-reported production evidence closes the MS-026C one-command automation/
 Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`. Feed recheck effect acceptance remains future work requiring a real eligible production feed and an operator-owned redacted browser evidence receipt. No production feed was created, seeded, or faked. No fake actionRef was generated. There was no production contact by Codex.
 
 The local tracked verifier is `npm run verify:operator-automation-acceptance`. The durable sanitized receipt lives outside Git under `operator-state/admin-ui-production-activation/ms-026c-r1-operator-automation-accepted-feed-recheck-pending-no-target-receipt.json`.
+
+## MS-027A Authenticated Admin Feed Onboarding
+
+Bounded status: `SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+
+MS-027A adds authenticated admin feed onboarding at
+`POST /admin-api/operations/feed-onboarding-requests`. The action is
+same-origin, JSON-only, admin-session-only, protected by `X-Admin-CSRF` and
+`X-Admin-Idempotency-Key`, and guarded by explicit confirmation plus host
+cooldown. The backend validates a public HTTPS feed URL, rejects unsafe
+localhost/private/internal-style targets, stores a reserved admin onboarding
+relation, and performs no synchronous external feed fetch.
+
+The proxy route is exact allowlist only, POST-only, has a 4k body limit, strips
+queries, forwards only `Cookie`, `Content-Type: application/json`,
+`X-Admin-CSRF`, and `X-Admin-Idempotency-Key`, and hides upstream `Set-Cookie`,
+`WWW-Authenticate`, and CORS headers. Route proof must include summary,
+drilldown, feed-recheck, and feed-onboarding before SPA fallback.
+
+Browser evidence now includes `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`,
+`feed_onboarding_available`, `feed_onboarding_status`, `no_eligible_target`,
+and `critical_risk`. The route smoke classification is
+`FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED`. There is no raw feed URL in response or
+evidence. Codex did not perform production contact or mutation. No production
+feed was created, seeded, or faked. Operator deploy/retest required remains.
+
+Local validation:
+
+```bash
+npm run verify:admin-feed-onboarding
+npm run test:admin-api-proxy-template
+npm run test:fullstack
+npm run test:production-mode-rc
+```

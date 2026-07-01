@@ -26,7 +26,7 @@ if (args.includes("--help") || args.includes("-h")) {
     usage: "node scripts/operator-production-retest.mjs [--dry-run|--acceptance-only] [--feed-recheck-only] [--attempt-feed-recheck] [--endpoint URL] [--receipt-file PATH]",
     default: "dry-run diagnostics",
     credential_policy: "admin credentials must be supplied only through ADMIN_AUTH_SMOKE_USERNAME and ADMIN_AUTH_SMOKE_PASSWORD",
-    action_policy: "feed recheck action attempt requires --attempt-feed-recheck and an authenticated eligible actionRef",
+    action_policy: "feed recheck action attempt requires --attempt-feed-recheck and an authenticated eligible actionRef; feed onboarding is route-smoked only by this automation",
     output: "redacted"
   });
   process.exit(0);
@@ -55,7 +55,8 @@ if (dryRun) {
     acceptance: {
       performed: false,
       command: "npm run ops:production:acceptance:redacted -- --endpoint <panel-origin>",
-      feed_recheck_action_attempt_requires: "--attempt-feed-recheck"
+      feed_recheck_action_attempt_requires: "--attempt-feed-recheck",
+      feed_onboarding_action_attempt: "manual authenticated operator action only; not automatic"
     },
     risk_tier: riskTierSummary(),
     output: "redacted"
@@ -84,12 +85,18 @@ async function runAcceptance() {
     "content-type": "application/json"
   }, JSON.stringify({ actionRef: syntheticActionRef(), reason: "operator_request" }));
   const getFeedRecheck = await requestJson("GET", "/admin-api/operations/feed-recheck-requests");
+  const unauthFeedOnboarding = await requestJson("POST", "/admin-api/operations/feed-onboarding-requests", {
+    "content-type": "application/json"
+  }, syntheticFeedOnboardingBody());
+  const getFeedOnboarding = await requestJson("GET", "/admin-api/operations/feed-onboarding-requests");
   const unknownAdminApi = await requestJson("GET", "/admin-api/foo");
 
   if (!feedRecheckOnly) checks.push(summarize("GET /admin-api/operations/summary unauthenticated", unauthSummary));
   checks.push(summarize("GET /admin-api/operations/drilldown unauthenticated", unauthDrilldown));
   checks.push(summarize("POST /admin-api/operations/feed-recheck-requests unauthenticated", unauthFeedRecheck));
   checks.push(summarize("GET /admin-api/operations/feed-recheck-requests", getFeedRecheck));
+  checks.push(summarize("POST /admin-api/operations/feed-onboarding-requests unauthenticated", unauthFeedOnboarding));
+  checks.push(summarize("GET /admin-api/operations/feed-onboarding-requests", getFeedOnboarding));
   checks.push(summarize("GET /admin-api/foo", unknownAdminApi));
 
   let auth = {
@@ -103,6 +110,7 @@ async function runAcceptance() {
     effect_status: credentialsProvided ? "PENDING_AUTHENTICATED_ELIGIBILITY_CHECK" : "PENDING_BROWSER_EVIDENCE_OR_ENV_CREDENTIALS",
     action_attempted: false
   };
+  const feedOnboarding = classifyFeedOnboardingRouteSmoke({ unauthFeedOnboarding, getFeedOnboarding });
 
   if (credentialsProvided) {
     const login = await requestJson("POST", "/admin-auth/login", {
@@ -171,7 +179,18 @@ async function runAcceptance() {
     }
   }
 
-  const routeClassifications = classifyRoutes({ healthz, live, ready, unauthSummary, unauthDrilldown, unauthFeedRecheck, getFeedRecheck, unknownAdminApi });
+  const routeClassifications = classifyRoutes({
+    healthz,
+    live,
+    ready,
+    unauthSummary,
+    unauthDrilldown,
+    unauthFeedRecheck,
+    getFeedRecheck,
+    unauthFeedOnboarding,
+    getFeedOnboarding,
+    unknownAdminApi
+  });
   const status = routeClassifications.critical.length === 0 && auth.classification !== "AUTH_LOGIN_ATTEMPT_FAILED"
     ? "OPERATOR_ACCEPTANCE_REDACTED_OK"
     : "OPERATOR_ACCEPTANCE_REDACTED_ATTENTION_REQUIRED";
@@ -183,6 +202,7 @@ async function runAcceptance() {
     checks,
     auth,
     feed_recheck: feedRecheck,
+    feed_onboarding: feedOnboarding,
     route_classifications: routeClassifications,
     risk_tier: riskTierSummary(),
     output: "redacted"
@@ -218,7 +238,7 @@ function frontendReadinessSummary() {
     compose_config: "npm run ops:compose:config",
     recreate_dry_run: "npm run ops:compose:recreate",
     recreate_apply: "npm run ops:compose:recreate -- --apply",
-    route_proof: "running generated Nginx config must contain summary, drilldown, feed-recheck, and no __ADMIN_UI_* markers",
+    route_proof: "running generated Nginx config must contain summary, drilldown, feed-recheck, feed-onboarding, and no __ADMIN_UI_* markers",
     output: "redacted"
   };
 }
@@ -237,12 +257,24 @@ function classifyRoutes(results) {
   if (!isJsonStatus(results.unknownAdminApi, 404)) critical.push("ADMIN_API_ROUTE_UNAVAILABLE");
   if (!isJsonStatus(results.getFeedRecheck, 405)) critical.push("FEED_RECHECK_GET_NOT_405_JSON");
   if (!isJsonStatus(results.unauthFeedRecheck, 401)) critical.push("FEED_RECHECK_UNAUTH_POST_NOT_401_JSON");
+  if (!isJsonStatus(results.getFeedOnboarding, 405)) critical.push("FEED_ONBOARDING_GET_NOT_405_JSON");
+  if (!isJsonStatus(results.unauthFeedOnboarding, 401)) critical.push("FEED_ONBOARDING_UNAUTH_POST_NOT_401_JSON");
   if (!results.healthz.ok || results.healthz.httpStatus !== 200) warnings.push("HEALTHZ_UNAVAILABLE");
   if (!results.live.skipped && !isJsonStatus(results.live, 200)) warnings.push("STATUS_API_ROUTE_UNAVAILABLE");
   if (!results.ready.skipped && !isJsonStatus(results.ready, 200)) warnings.push("STATUS_API_ROUTE_UNAVAILABLE");
   if (!results.unauthSummary.skipped && !isJsonStatus(results.unauthSummary, 401)) warnings.push("ADMIN_API_SUMMARY_UNAUTH_UNEXPECTED");
   if (!isJsonStatus(results.unauthDrilldown, 401)) warnings.push("ADMIN_API_DRILLDOWN_UNAUTH_UNEXPECTED");
   return { critical, warnings };
+}
+
+function classifyFeedOnboardingRouteSmoke(results) {
+  const accepted = isJsonStatus(results.unauthFeedOnboarding, 401) && isJsonStatus(results.getFeedOnboarding, 405);
+  return {
+    classification: accepted ? "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED" : "FEED_ONBOARDING_ROUTE_SMOKE_ATTENTION_REQUIRED",
+    feed_onboarding_status: accepted ? "available" : "route_smoke_attention_required",
+    action_attempted: false,
+    manual_operator_action_required: true
+  };
 }
 
 function classifySession(result) {
@@ -408,6 +440,10 @@ function syntheticActionRef() {
   return `feed_recheck_v1.${"A".repeat(64)}`;
 }
 
+function syntheticFeedOnboardingBody() {
+  return JSON.stringify({ feedUrl: "https://onboarding.example.org/feed.xml", label: "Operator onboarding smoke" });
+}
+
 function createIdempotencyKey() {
   const random = globalThis.crypto?.randomUUID?.().replaceAll("-", "") ?? `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
   return `recheck_${random.slice(0, 40)}`;
@@ -498,7 +534,9 @@ function allowlistedValue(value) {
     "accepted",
     "already_pending",
     "auth_unavailable",
+    "created",
     "csrf_failed",
+    "feed_onboarding_requires_post",
     "invalid_upstream_origin",
     "logged_out",
     "method_not_allowed",

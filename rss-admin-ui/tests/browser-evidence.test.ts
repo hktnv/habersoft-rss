@@ -16,9 +16,16 @@ describe("redacted browser evidence", () => {
 
     expect(result).toMatchObject({
       valid: true,
-      classifications: ["BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY", "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET"]
+      classifications: [
+        "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+        "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+        "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET"
+      ]
     });
-    expect(serializeRedactedBrowserEvidence(evidence)).not.toMatch(/feed_recheck_v1\.|csrf|cookie|https?:\/\//iu);
+    const serialized = serializeRedactedBrowserEvidence(evidence);
+    expect(serialized).toContain("feed_onboarding_available");
+    expect(serialized).toContain("critical_risk");
+    expect(serialized).not.toMatch(/feed_recheck_v1\.|csrf|cookie|https?:\/\//iu);
   });
 
   it("classifies no eligible feed evidence without failing the browser bridge", () => {
@@ -35,7 +42,11 @@ describe("redacted browser evidence", () => {
     expect(evidence.feedRecheck.effectStatus).toBe("PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET");
     expect(validateRedactedBrowserEvidence(evidence)).toMatchObject({
       valid: true,
-      classifications: ["BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY", "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET"]
+      classifications: [
+        "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+        "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+        "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET"
+      ]
     });
   });
 
@@ -104,7 +115,17 @@ function minimalEvidence() {
       effectStatus: "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
       lastActionClassification: null
     },
-    classifications: ["BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY", "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET"]
+    feedOnboarding: {
+      feed_onboarding_available: true,
+      feed_onboarding_status: "available",
+      no_eligible_target: true,
+      critical_risk: "none"
+    },
+    classifications: [
+      "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+      "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+      "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET"
+    ]
   } as const;
 }
 

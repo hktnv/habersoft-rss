@@ -34,6 +34,7 @@ const productionComposeEnv = {
 console.log(JSON.stringify({ status: "production-readiness-verify-start", image }, null, 2));
 const drilldownAcceptanceStatus = "MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED";
 const feedRecheckStatus = "MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED";
+const feedOnboardingStatus = "SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED";
 const operatorAutomationStatus = "SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET";
 
 run("node", ["--version"]);
@@ -46,6 +47,7 @@ run("npm", ["run", "build"]);
 run("npm", ["run", "verify:admin-operations-dashboard"]);
 run("npm", ["run", "verify:admin-operations-drilldown"]);
 run("npm", ["run", "verify:admin-feed-recheck-action"]);
+run("npm", ["run", "verify:admin-feed-onboarding"]);
 run("npm", ["run", "verify:operator-automation"]);
 run("npm", ["run", "verify:operator-automation-acceptance"]);
 run("npm", ["run", "verify:browser-evidence"]);
@@ -120,12 +122,14 @@ console.log(
       image,
       drilldown_acceptance: drilldownAcceptanceStatus,
       feed_recheck_action: feedRecheckStatus,
+      feed_onboarding: feedOnboardingStatus,
       operator_automation: operatorAutomationStatus,
       checks: [
         "production build exists",
         "admin operations dashboard source/docs/proxy verifier passes",
         "admin operations drilldown source/docs/proxy verifier passes",
         "bounded admin feed recheck action verifier passes",
+        "authenticated admin feed onboarding verifier passes",
         "MS-026C operator automation verifier passes",
         "MS-026C-R1 operator automation acceptance verifier passes",
         "MS-026C browser evidence verifier passes",

@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { OperationsDrilldown } from "../src/adminOperations/OperationsDrilldown";
 import type { OperationsDrilldown as OperationsDrilldownData, OperationsDrilldownResult } from "../src/adminOperations/operationsDrilldownClient";
+import type { FeedOnboardingResult } from "../src/adminOperations/feedOnboardingClient";
 import type { FeedRecheckResult } from "../src/adminOperations/feedRecheckClient";
 
 describe("OperationsDrilldown", () => {
@@ -52,6 +53,53 @@ describe("OperationsDrilldown", () => {
       actionRef,
       csrfToken
     }));
+  });
+
+  it("submits feed onboarding with explicit confirmation and renders only safe response fields", async () => {
+    const requestOnboarding = vi.fn<(options: { readonly feedUrl: string; readonly label?: string; readonly csrfToken: string; readonly signal?: AbortSignal }) => Promise<FeedOnboardingResult>>()
+      .mockResolvedValue({
+        kind: "created",
+        httpStatus: 201,
+        response: {
+          status: "created",
+          requestRef: "onboard_abc123def456",
+          feed: {
+            displayId: "feed_123456abcd",
+            sourceHost: "news.example.org",
+            state: "active",
+            eligibleForRecheck: true
+          },
+          nextSteps: ["Refresh Operations Drilldown."],
+          message: "Feed onboarding was accepted through the existing due-feed path.",
+          generatedAt: "2026-07-01T06:00:00.000Z"
+        }
+      });
+    const onAccepted = vi.fn();
+
+    render(
+      <OperationsDrilldown
+        loadDrilldown={vi.fn().mockResolvedValue(successResult({ feeds: { ...validDrilldown().feeds, rows: [] }, ingestion: { ...validDrilldown().ingestion, rows: [] } }))}
+        csrfToken={csrfToken}
+        requestOnboarding={requestOnboarding}
+        onFeedOnboardingAccepted={onAccepted}
+      />
+    );
+
+    fireEvent.change(await screen.findByLabelText("Feed URL"), { target: { value: "https://news.example.org/feed.xml?private=1" } });
+    fireEvent.change(screen.getByLabelText("Label"), { target: { value: "Example News" } });
+    fireEvent.click(screen.getByLabelText("This creates a real feed target after operator deployment."));
+    fireEvent.click(screen.getByRole("button", { name: "Onboard feed" }));
+
+    expect(await screen.findByText("Feed onboarding was accepted through the existing due-feed path.")).toBeInTheDocument();
+    expect(screen.getByText("feed_123456abcd")).toBeInTheDocument();
+    expect(screen.getByText("news.example.org")).toBeInTheDocument();
+    expect(screen.queryByText(/private=1|feed\.xml|onboard_abc123def456/iu)).not.toBeInTheDocument();
+    expect(requestOnboarding).toHaveBeenCalledWith(expect.objectContaining({
+      feedUrl: "https://news.example.org/feed.xml?private=1",
+      label: "Example News",
+      csrfToken
+    }));
+    expect(onAccepted).toHaveBeenCalledTimes(1);
   });
 
   it("copies redacted browser evidence without leaking action metadata", async () => {

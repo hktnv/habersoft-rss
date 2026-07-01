@@ -65,7 +65,7 @@ describe("admin auth/session boundary", () => {
       browserCredentialPersistenceImplemented: false,
       fakeAdminIdentityAllowed: false,
       privilegedBusinessDataAllowed: false,
-      adminApiWritesImplemented: "bounded_feed_recheck_request_only",
+      adminApiWritesImplemented: "bounded_feed_recheck_and_feed_onboarding_requests_only",
       futureAuthorityRequiredBeforeBusinessAdminFeatures: true
     });
   });

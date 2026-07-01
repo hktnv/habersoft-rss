@@ -6,6 +6,8 @@ import {
   type OperationsDrilldown as OperationsDrilldownData,
   type OperationsDrilldownResult
 } from "./operationsDrilldownClient";
+import { FeedOnboardingPanel } from "./FeedOnboardingPanel";
+import type { FeedOnboardingResult } from "./feedOnboardingClient";
 import { requestFeedRecheck, type FeedRecheckResult } from "./feedRecheckClient";
 import { createRedactedBrowserEvidence, serializeRedactedBrowserEvidence } from "./browserEvidence";
 
@@ -27,11 +29,15 @@ type EvidenceCopyState = "idle" | "copied" | "unavailable";
 export function OperationsDrilldown({
   loadDrilldown = fetchOperationsDrilldown,
   csrfToken,
-  requestRecheck = requestFeedRecheck
+  requestRecheck = requestFeedRecheck,
+  requestOnboarding,
+  onFeedOnboardingAccepted
 }: {
   readonly loadDrilldown?: (options?: { readonly signal?: AbortSignal }) => Promise<OperationsDrilldownResult>;
   readonly csrfToken?: string;
   readonly requestRecheck?: (options: { readonly actionRef: string; readonly csrfToken: string; readonly signal?: AbortSignal }) => Promise<FeedRecheckResult>;
+  readonly requestOnboarding?: (options: { readonly feedUrl: string; readonly label?: string; readonly csrfToken: string; readonly signal?: AbortSignal }) => Promise<FeedOnboardingResult>;
+  readonly onFeedOnboardingAccepted?: () => void;
 }) {
   const [state, setState] = useState<DrilldownState>({ phase: "loading" });
   const [feedRechecks, setFeedRechecks] = useState<Record<string, FeedRecheckState>>({});
@@ -84,6 +90,11 @@ export function OperationsDrilldown({
 
   const refresh = () => {
     if (isBusy) return;
+    startRequest(hasCompletedResult ? "refreshing" : "loading");
+  };
+
+  const refreshAfterFeedOnboarding = () => {
+    onFeedOnboardingAccepted?.();
     startRequest(hasCompletedResult ? "refreshing" : "loading");
   };
 
@@ -182,6 +193,9 @@ export function OperationsDrilldown({
           feedRechecks={feedRechecks}
           evidenceCopyState={evidenceCopyState}
           onCopyRedactedEvidence={copyRedactedEvidence}
+          csrfToken={csrfToken}
+          requestOnboarding={requestOnboarding}
+          onFeedOnboardingAccepted={refreshAfterFeedOnboarding}
           onBeginRecheckConfirmation={beginRecheckConfirmation}
           onCancelRecheckConfirmation={cancelRecheckConfirmation}
           onConfirmRecheck={confirmRecheck}
@@ -199,6 +213,9 @@ function DrilldownView({
   feedRechecks,
   evidenceCopyState,
   onCopyRedactedEvidence,
+  csrfToken,
+  requestOnboarding,
+  onFeedOnboardingAccepted,
   onBeginRecheckConfirmation,
   onCancelRecheckConfirmation,
   onConfirmRecheck
@@ -208,6 +225,9 @@ function DrilldownView({
   readonly feedRechecks: Readonly<Record<string, FeedRecheckState>>;
   readonly evidenceCopyState: EvidenceCopyState;
   readonly onCopyRedactedEvidence: (drilldown: OperationsDrilldownData) => Promise<void>;
+  readonly csrfToken?: string;
+  readonly requestOnboarding?: (options: { readonly feedUrl: string; readonly label?: string; readonly csrfToken: string; readonly signal?: AbortSignal }) => Promise<FeedOnboardingResult>;
+  readonly onFeedOnboardingAccepted: () => void;
   readonly onBeginRecheckConfirmation: (row: FeedDrilldownRow) => void;
   readonly onCancelRecheckConfirmation: (row: FeedDrilldownRow) => void;
   readonly onConfirmRecheck: (row: FeedDrilldownRow) => void;
@@ -248,15 +268,29 @@ function DrilldownView({
       </section>
 
       {emptyRows ? (
-        <section className="status-summary" role="status" aria-live="polite">
-          <p className="summary-value">No eligible feed recheck target is currently available.</p>
-          <p className="safe-message">
-            The bounded window returned no feed action targets. Feed recheck effect acceptance remains pending until an
-            eligible feed exists.
-          </p>
-        </section>
+        <>
+          <section className="status-summary" role="status" aria-live="polite">
+            <p className="summary-value">No eligible feed recheck target is currently available.</p>
+            <p className="safe-message">
+              The bounded window returned no feed action targets. Feed recheck effect acceptance remains pending until an
+              eligible feed exists.
+            </p>
+          </section>
+          <div className="feed-onboarding-empty">
+            <FeedOnboardingPanel
+              csrfToken={csrfToken}
+              requestOnboarding={requestOnboarding}
+              onAccepted={onFeedOnboardingAccepted}
+            />
+          </div>
+        </>
       ) : (
         <section className="panel-grid drilldown-grid" aria-label="Operations drilldown rows">
+          <FeedOnboardingPanel
+            csrfToken={csrfToken}
+            requestOnboarding={requestOnboarding}
+            onAccepted={onFeedOnboardingAccepted}
+          />
           <FeedDrilldownPanel
             drilldown={drilldown}
             hasRecheckableFeed={hasRecheckableFeed}

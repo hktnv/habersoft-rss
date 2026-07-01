@@ -2,6 +2,7 @@ import { JwksCacheService } from "../../src/tenant-auth/jwks-cache.service";
 import type { JwksFetchResult, JwksFetcher } from "../../src/tenant-auth/jwks-http.client";
 import { TenantJwtVerifier } from "../../src/tenant-auth/tenant-jwt.verifier";
 import type { ScheduledTask, TimerScheduler } from "../../src/tenant-auth/timer-scheduler";
+import { ADMIN_FEED_ONBOARDING_SITE_CLIENT_ID } from "../../src/tenant-feeds/reserved-site-client-ids";
 import { generateTestKeyPair, jwks, runtimeConfig, signTenantToken } from "./tenant-auth-test-helpers";
 
 class SequenceFetcher implements JwksFetcher {
@@ -79,6 +80,22 @@ describe("TenantJwtVerifier", () => {
     const key = generateTestKeyPair("kid-a");
     const verifier = await verifierWith(new SequenceFetcher([{ ok: true, body: jwks([key]) }]));
     const token = signTenantToken({ key, subject: "site-a", clientId: "site-b" });
+
+    await expect(verifier.verify(token)).resolves.toEqual({
+      ok: false,
+      outcome: "unauthenticated",
+      reason: "jwt_client_id_invalid"
+    });
+  });
+
+  it("rejects the reserved admin feed onboarding site client id", async () => {
+    const key = generateTestKeyPair("kid-a");
+    const verifier = await verifierWith(new SequenceFetcher([{ ok: true, body: jwks([key]) }]));
+    const token = signTenantToken({
+      key,
+      subject: ADMIN_FEED_ONBOARDING_SITE_CLIENT_ID,
+      clientId: ADMIN_FEED_ONBOARDING_SITE_CLIENT_ID
+    });
 
     await expect(verifier.verify(token)).resolves.toEqual({
       ok: false,

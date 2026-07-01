@@ -5,6 +5,7 @@ import { JwksCacheService } from "./jwks-cache.service";
 import { loadJoseRuntime } from "./jose-runtime";
 import { createTenantPrincipal } from "./tenant-principal";
 import { TenantJwtVerificationResult } from "./tenant-auth.types";
+import { isReservedSiteClientId } from "../tenant-feeds/reserved-site-client-ids";
 
 @Injectable()
 export class TenantJwtVerifier {
@@ -102,6 +103,13 @@ function validateTenantClaims(
   }
 
   if (typeof payload.client_id !== "string" || payload.client_id.trim() === "" || payload.client_id !== payload.sub) {
+    return {
+      ok: false,
+      failure: { ok: false, outcome: "unauthenticated", reason: "jwt_client_id_invalid" }
+    };
+  }
+
+  if (isReservedSiteClientId(payload.client_id)) {
     return {
       ok: false,
       failure: { ok: false, outcome: "unauthenticated", reason: "jwt_client_id_invalid" }

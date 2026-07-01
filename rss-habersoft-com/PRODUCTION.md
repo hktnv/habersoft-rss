@@ -1242,6 +1242,43 @@ Root guide: [../PRODUCTION.md](../PRODUCTION.md)
 
 Bu kosullar tamamlanmadan `rss-panel.habersoft.com` production-ready sayilmaz.
 
+## 21A. MS-027A authenticated admin feed onboarding boundary
+
+Status:
+`SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+
+Backend route:
+
+```text
+POST /admin-api/operations/feed-onboarding-requests
+```
+
+The route is authenticated admin feed onboarding only. It requires the existing
+admin session, JSON input, `X-Admin-CSRF`, and `X-Admin-Idempotency-Key`;
+rejects query strings and unsafe public-feed targets; stores a reserved admin
+onboarding relation; and performs no synchronous external feed fetch. Tenant
+JWT validation rejects the reserved admin site client ID so tenant callers
+cannot claim that relation. Safe responses expose only `displayId`, public
+`sourceHost`, state, eligibility, safe message, and safe next steps. There is
+no raw feed URL in response or evidence.
+
+Operator/frontend validation is:
+
+```bash
+npm run verify:admin-feed-onboarding
+npm run test:admin-api-proxy-template
+npm run test:fullstack
+npm run test:production-mode-rc
+```
+
+Browser evidence includes `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`,
+`feed_onboarding_available`, `feed_onboarding_status`, `no_eligible_target`,
+and `critical_risk`; operator route smoke classifies
+`FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED`. Codex did not perform production
+contact, did not perform a credentialed production login, and did not mutate
+production. No production feed was created, seeded, or faked. Operator
+deploy/retest required remains.
+
 ## 22. Ilgili ayrintili belgeler
 
 - [README.md](README.md)

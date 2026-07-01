@@ -246,6 +246,40 @@ entry content, raw logs, raw upstream bodies, stack traces, cookies, session
 secrets, CSRF tokens, idempotency keys, Agent key values, Tenant bearer tokens,
 or arbitrary admin write controls.
 
+## Feed Onboarding Action
+
+MS-027A adds authenticated admin feed onboarding:
+
+```text
+POST /admin-api/operations/feed-onboarding-requests
+```
+
+Action contract:
+
+- requires an authenticated admin session and explicit UI confirmation;
+- accepts only JSON with a public HTTPS feed URL and optional safe label;
+- rejects query strings, non-JSON bodies, credentials/userinfo, fragments,
+  localhost/private/internal-style targets, and unsafe labels;
+- sends `X-Admin-CSRF` and `X-Admin-Idempotency-Key`;
+- stores raw input, CSRF, idempotency keys, and response state only in memory;
+- uses a reserved admin onboarding relation so the target can become eligible
+  for Operations Drilldown without exposing tenant credentials;
+- performs no synchronous external feed fetch;
+- returns only status, requestRef, `displayId`, public `sourceHost`, state,
+  eligibility, safe message, safe next steps, and generatedAt.
+
+The action must not expose raw feed URL paths or queries in response or
+evidence. It must not expose internal database IDs, entry content, raw logs,
+raw upstream bodies, stack traces, cookies, session secrets, CSRF tokens,
+idempotency keys, Agent key values, Tenant bearer tokens, or arbitrary admin
+write controls.
+
+Browser evidence includes `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`,
+`feed_onboarding_available`, `feed_onboarding_status`, `no_eligible_target`,
+and `critical_risk`. Operator automation classifies the route smoke as
+`FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED` when unauthenticated POST returns JSON
+`401` and GET returns JSON `405`.
+
 ## Local Acceptance
 
 MS-025A local acceptance uses synthetic credentials and local Docker/full-stack infrastructure only:
@@ -256,13 +290,14 @@ npm run test:admin-api-proxy-template
 npm run verify:admin-operations-dashboard
 npm run verify:admin-operations-drilldown
 npm run verify:admin-feed-recheck-action
+npm run verify:admin-feed-onboarding
 npm run test:fullstack
 npm run test:production-mode-rc
 ```
 
 The harnesses prove disabled auth returns no metrics, unauthenticated sessions return no metrics, valid synthetic login unlocks the route, the frontend proxy strips unsafe headers, the operations UI renders aggregate fields, logout blocks the route again, and browser assets do not contain upstream origins or credential material.
 
-`npm run test:admin-api-proxy-template` specifically proves the generated effective config contains `location = /admin-api/operations/summary` and `location = /admin-api/operations/drilldown`, contains JSON rejection routes for `/admin-api` and `/admin-api/*`, contains no unresolved template markers, orders all admin-api routes before `location /`, and returns JSON for unauthenticated, authenticated, wrong-method, unknown-path, no-auth-upstream, and unreachable-upstream cases. No tested `/admin-api/*` path may return `text/html` or the SPA root element.
+`npm run test:admin-api-proxy-template` specifically proves the generated effective config contains `location = /admin-api/operations/summary`, `location = /admin-api/operations/drilldown`, `location = /admin-api/operations/feed-recheck-requests`, and `location = /admin-api/operations/feed-onboarding-requests`, contains JSON rejection routes for `/admin-api` and `/admin-api/*`, contains no unresolved template markers, orders all admin-api routes before `location /`, and returns JSON for unauthenticated, authenticated, wrong-method, unknown-path, no-auth-upstream, and unreachable-upstream cases. No tested `/admin-api/*` path may return `text/html` or the SPA root element.
 
 ## Regression Runbook After R2
 
@@ -296,6 +331,8 @@ For MS-025B operator deploy/retest, also check unauthenticated `/admin-api/opera
 
 For MS-026A operator deploy/retest, pull main, rebuild/update backend and frontend images as required by current runbooks, recreate backend API/worker if runtime changed, run `npm run ops:compose:recreate`, verify health/status/auth, login in browser, request one safe feed recheck from Operations Drilldown, verify safe JSON/UI states for accepted, already-pending, and rate-limited outcomes, then logout to locked state. Do not paste credentials, cookies, sessions, CSRF tokens, idempotency keys, raw response bodies with sensitive values, raw feed URLs, raw logs, or secrets.
 
+For MS-027A operator deploy/retest, also verify the running generated Nginx config contains summary, drilldown, feed-recheck, and feed-onboarding routes before the SPA fallback. The operator can use the authenticated Feed Onboarding panel to onboard a real target only through the UI with explicit confirmation. Evidence must report only safe status classes such as `FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED` and `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`; do not paste raw feed URLs, credentials, cookies, sessions, CSRF tokens, idempotency keys, raw response bodies, raw logs, or secrets.
+
 MS-026B operator automation replaces the manual micro-step list with redacted, composable commands:
 
 ```bash
@@ -327,3 +364,5 @@ Credential-free authenticated checks produce `AUTHENTICATED_BROWSER_EVIDENCE_REQ
 Accepted redacted browser classes are `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`, and future `BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED`. The evidence schema rejects cookies, session IDs, CSRF tokens, idempotency keys, raw `actionRef`, raw feed URLs, private hostnames, browser storage values, local filesystem paths, raw bodies, raw logs, stack traces, secrets, Agent keys, Tenant bearer/JWT values, and unknown fields.
 
 Feed recheck effect remains `NO_ELIGIBLE_FEED_RECHECK_TARGET` and `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` until a real eligible feed appears through normal production operation. The future closure flow is: operator logs in, opens Operations Drilldown, identifies an eligible row without exposing raw actionRef, triggers one bounded recheck with explicit confirmation, verifies accepted/already-pending UI classification, exports redacted browser evidence, runs the verifier, and reports only the classification plus durable receipt path/hash.
+
+MS-027A status is `SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`. Codex did not perform production contact. No production feed was created, seeded, or faked. Operator deploy/retest required remains.

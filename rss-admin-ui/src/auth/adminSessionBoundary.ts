@@ -53,6 +53,7 @@ export const adminAuthBoundaryContract = {
   sameOriginAdminOperationsSummaryPath: "/admin-api/operations/summary",
   sameOriginAdminOperationsDrilldownPath: "/admin-api/operations/drilldown",
   sameOriginAdminFeedRecheckPath: "/admin-api/operations/feed-recheck-requests",
+  sameOriginAdminFeedOnboardingPath: "/admin-api/operations/feed-onboarding-requests",
   sameOriginAdminSessionSentinelOnly: false,
   realAuthImplemented: true,
   defaultAllowsProtectedContent: false,
@@ -60,7 +61,7 @@ export const adminAuthBoundaryContract = {
   browserCredentialPersistenceImplemented: false,
   fakeAdminIdentityAllowed: false,
   privilegedBusinessDataAllowed: false,
-  adminApiWritesImplemented: "bounded_feed_recheck_request_only",
+  adminApiWritesImplemented: "bounded_feed_recheck_and_feed_onboarding_requests_only",
   futureAuthorityRequiredBeforeBusinessAdminFeatures: true,
   requiredFutureAuthority: futureAdminAuthorityRequirements
 } as const;

@@ -15,6 +15,8 @@ import {
 } from "@nestjs/common";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { AdminAuthService } from "../admin-auth/admin-auth.service";
+import { AdminFeedOnboardingService } from "./admin-feed-onboarding.service";
+import type { AdminFeedOnboardingResponse } from "./admin-feed-onboarding.types";
 import { AdminFeedRecheckService } from "./admin-feed-recheck.service";
 import type { AdminFeedRecheckResponse } from "./admin-feed-recheck.types";
 import { AdminOperationsDrilldownService } from "./admin-operations-drilldown.service";
@@ -28,7 +30,8 @@ export class AdminOperationsSummaryController {
     private readonly adminAuth: AdminAuthService,
     private readonly summary: AdminOperationsSummaryService,
     private readonly drilldown: AdminOperationsDrilldownService,
-    private readonly feedRecheck: AdminFeedRecheckService
+    private readonly feedRecheck: AdminFeedRecheckService,
+    private readonly feedOnboarding: AdminFeedOnboardingService
   ) {}
 
   @Get("summary")
@@ -143,6 +146,61 @@ export class AdminOperationsSummaryController {
     return result.body;
   }
 
+  @Post("feed-onboarding-requests")
+  public async requestFeedOnboarding(
+    @Req() request: FastifyRequest,
+    @Body() body: unknown,
+    @Res({ passthrough: true }) reply: FastifyReply
+  ): Promise<AdminFeedOnboardingResponse | { readonly configured: false; readonly authenticated: false; readonly reason: "not_configured"; readonly message: string }> {
+    noStore(reply);
+    const session = await this.adminAuth.authenticatedSession(request);
+
+    if (!session.configured) {
+      reply.status(501);
+      return {
+        configured: false,
+        authenticated: false,
+        reason: "not_configured",
+        message: "Admin authentication is not configured."
+      };
+    }
+
+    if (!session.authenticated) {
+      throw new UnauthorizedException({
+        authenticated: false,
+        reason: "unauthenticated"
+      });
+    }
+
+    if (!isJsonRequest(request) || hasQueryString(request)) {
+      reply.status(400);
+      return {
+        status: "unavailable",
+        requestRef: null,
+        feed: null,
+        nextSteps: [],
+        message: "Feed onboarding request was not accepted.",
+        generatedAt: new Date().toISOString()
+      };
+    }
+
+    const csrf = singleHeader(request.headers["x-admin-csrf"]);
+    if (!this.adminAuth.isValidCsrfToken(session.session, csrf)) {
+      throw new ForbiddenException({
+        authenticated: true,
+        reason: "csrf_failed"
+      });
+    }
+
+    const result = await this.feedOnboarding.requestFeedOnboarding({
+      body,
+      idempotencyKey: singleHeader(request.headers["x-admin-idempotency-key"]) ?? "",
+      sessionKey: session.session.sessionKey
+    });
+    reply.status(result.httpStatus);
+    return result.body;
+  }
+
   @Post("summary")
   @HttpCode(405)
   public rejectSummaryPost(): never {
@@ -214,6 +272,30 @@ export class AdminOperationsSummaryController {
   public rejectFeedRecheckDelete(): never {
     return actionMethodNotAllowed();
   }
+
+  @Get("feed-onboarding-requests")
+  @HttpCode(405)
+  public rejectFeedOnboardingGet(): never {
+    return feedOnboardingMethodNotAllowed();
+  }
+
+  @Put("feed-onboarding-requests")
+  @HttpCode(405)
+  public rejectFeedOnboardingPut(): never {
+    return feedOnboardingMethodNotAllowed();
+  }
+
+  @Patch("feed-onboarding-requests")
+  @HttpCode(405)
+  public rejectFeedOnboardingPatch(): never {
+    return feedOnboardingMethodNotAllowed();
+  }
+
+  @Delete("feed-onboarding-requests")
+  @HttpCode(405)
+  public rejectFeedOnboardingDelete(): never {
+    return feedOnboardingMethodNotAllowed();
+  }
 }
 
 function methodNotAllowed(): never {
@@ -231,6 +313,13 @@ function actionMethodNotAllowed(): never {
   throw new MethodNotAllowedException({
     status: "method_not_allowed",
     reason: "feed_recheck_requires_post"
+  });
+}
+
+function feedOnboardingMethodNotAllowed(): never {
+  throw new MethodNotAllowedException({
+    status: "method_not_allowed",
+    reason: "feed_onboarding_requires_post"
   });
 }
 

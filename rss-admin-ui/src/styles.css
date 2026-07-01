@@ -136,6 +136,96 @@ dd {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
+.feed-onboarding-panel {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+
+.feed-onboarding-empty {
+  margin-top: 24px;
+}
+
+.feed-onboarding-copy {
+  margin-bottom: 16px;
+}
+
+.feed-onboarding-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 0.8fr) minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.feed-onboarding-form label {
+  color: #64717d;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.feed-onboarding-form input[type="url"],
+.feed-onboarding-form input[type="text"] {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #b9c4cd;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #182027;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.feed-onboarding-form input:focus-visible {
+  outline: 3px solid #8fcbbd;
+  outline-offset: 2px;
+}
+
+.feed-onboarding-form label[for="feed-onboarding-url"],
+.feed-onboarding-form input[name="feedUrl"] {
+  grid-column: 1;
+}
+
+.feed-onboarding-form label[for="feed-onboarding-label"],
+.feed-onboarding-form input[name="label"] {
+  grid-column: 2;
+}
+
+.confirmation-check {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+}
+
+.confirmation-check input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.feed-onboarding-form button {
+  grid-column: 4;
+  grid-row: 2;
+}
+
+.feed-onboarding-result {
+  margin-top: 14px;
+}
+
+.onboarding-result-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.onboarding-result-list div {
+  min-height: 58px;
+  border: 1px solid #eef2f5;
+  border-radius: 8px;
+  background: #f8fafb;
+  padding: 10px;
+}
+
 .drilldown-panel {
   grid-column: auto;
   min-height: 260px;
@@ -502,6 +592,11 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .feed-onboarding-form,
+  .onboarding-result-list {
+    grid-template-columns: 1fr;
+  }
+
   .admin-login-form label:nth-of-type(1),
   .admin-login-form input:nth-of-type(1),
   .admin-login-form label:nth-of-type(2),
@@ -512,6 +607,18 @@ button:disabled {
   }
 
   .admin-login-form button {
+    grid-row: auto;
+  }
+
+  .feed-onboarding-form label[for="feed-onboarding-url"],
+  .feed-onboarding-form input[name="feedUrl"],
+  .feed-onboarding-form label[for="feed-onboarding-label"],
+  .feed-onboarding-form input[name="label"],
+  .feed-onboarding-form button {
+    grid-column: 1;
+  }
+
+  .feed-onboarding-form button {
     grid-row: auto;
   }
 

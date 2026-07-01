@@ -74,6 +74,7 @@ function assertBoundarySource() {
     'sameOriginAdminLogoutPath: "/admin-auth/logout"',
     'sameOriginAdminOperationsSummaryPath: "/admin-api/operations/summary"',
     'sameOriginAdminOperationsDrilldownPath: "/admin-api/operations/drilldown"',
+    'sameOriginAdminFeedOnboardingPath: "/admin-api/operations/feed-onboarding-requests"',
     "sameOriginAdminSessionSentinelOnly: false",
     "realAuthImplemented: true",
     "defaultAllowsProtectedContent: false",
@@ -81,7 +82,7 @@ function assertBoundarySource() {
     "browserCredentialPersistenceImplemented: false",
     "fakeAdminIdentityAllowed: false",
     "privilegedBusinessDataAllowed: false",
-    'adminApiWritesImplemented: "bounded_feed_recheck_request_only"',
+    'adminApiWritesImplemented: "bounded_feed_recheck_and_feed_onboarding_requests_only"',
     "sameOriginAdminFeedRecheckPath",
     "canRenderProtectedAdminContent",
     'sessionStatus?.kind === "authenticated"'

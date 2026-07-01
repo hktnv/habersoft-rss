@@ -86,6 +86,14 @@ async function runDisabledScenario() {
     assert(feedRecheck.status === 501, "disabled admin feed recheck did not fail closed");
     assert(!JSON.stringify(feedRecheck.body).includes("feed_"), "disabled feed recheck leaked target data");
 
+    const feedOnboarding = await requestJson(`${base}/admin-api/operations/feed-onboarding-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedUrl: "https://onboarding.example.org/feed.xml", label: "Onboarding Example" })
+    });
+    assert(feedOnboarding.status === 501, "disabled admin feed onboarding did not fail closed");
+    assert(!JSON.stringify(feedOnboarding.body).includes("feed_"), "disabled feed onboarding leaked target data");
+
     scenarioResults.push({
       name: "disabled-default",
       session_status: session.status,
@@ -93,6 +101,7 @@ async function runDisabledScenario() {
       operations_summary_status: summary.status,
       operations_drilldown_status: drilldown.status,
       feed_recheck_status: feedRecheck.status,
+      feed_onboarding_status: feedOnboarding.status,
       health_live: live.body?.status
     });
   });
@@ -139,6 +148,14 @@ async function runEnabledScenario() {
     const unauthenticatedDrilldown = await requestJson(`${base}/admin-api/operations/drilldown`);
     assert(unauthenticatedDrilldown.status === 401, "admin operations drilldown did not require an admin session");
     assert(!JSON.stringify(unauthenticatedDrilldown.body).includes("rows"), "unauthenticated drilldown leaked operations data");
+
+    const unauthenticatedFeedOnboarding = await requestJson(`${base}/admin-api/operations/feed-onboarding-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedUrl: "https://onboarding.example.org/feed.xml", label: "Onboarding Example" })
+    });
+    assert(unauthenticatedFeedOnboarding.status === 401, "admin feed onboarding did not require an admin session");
+    assert(!JSON.stringify(unauthenticatedFeedOnboarding.body).includes("feed_"), "unauthenticated feed onboarding leaked target data");
 
     const invalidLogin = await requestJson(`${base}/admin-auth/login`, {
       method: "POST",
@@ -261,6 +278,49 @@ async function runEnabledScenario() {
     assert(cooldownFeedRecheck.status === 429, "admin feed recheck did not enforce cooldown");
     assert(cooldownFeedRecheck.body?.status === "rate_limited", "cooldown feed recheck status mismatch");
 
+    const missingCsrfFeedOnboarding = await requestJson(`${base}/admin-api/operations/feed-onboarding-requests`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+        "X-Admin-Idempotency-Key": "onboard_rc_missing_csrf_123456"
+      },
+      body: JSON.stringify({ feedUrl: "https://onboarding.example.org/feed.xml?private=1", label: "Onboarding Example" })
+    });
+    assert(missingCsrfFeedOnboarding.status === 403, "admin feed onboarding did not enforce CSRF");
+
+    const feedOnboardingIdempotencyKey = "onboard_rc_1234567890abc";
+    const feedOnboarding = await requestJson(`${base}/admin-api/operations/feed-onboarding-requests`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": authenticated.body.csrfToken,
+        "X-Admin-Idempotency-Key": feedOnboardingIdempotencyKey
+      },
+      body: JSON.stringify({ feedUrl: "https://onboarding.example.org/feed.xml?private=1", label: "Onboarding Example" })
+    });
+    assert(feedOnboarding.status === 201, `admin feed onboarding was not accepted: ${feedOnboarding.status}`);
+    assert(feedOnboarding.body?.status === "created", "admin feed onboarding response status mismatch");
+    assert(feedOnboarding.body?.feed?.sourceHost === "onboarding.example.org", "admin feed onboarding response source host mismatch");
+    assert(feedOnboarding.body?.feed?.eligibleForRecheck === true, "admin feed onboarding did not create an eligible target");
+    assert(feedOnboarding.headers.setCookie === null, "admin feed onboarding relayed Set-Cookie");
+    assert(!JSON.stringify(feedOnboarding.body).includes("https://onboarding.example.org/feed.xml"), "admin feed onboarding leaked a raw feed URL");
+    assert(!JSON.stringify(feedOnboarding.body).includes("private=1"), "admin feed onboarding leaked a raw feed URL query");
+
+    const duplicateFeedOnboarding = await requestJson(`${base}/admin-api/operations/feed-onboarding-requests`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": authenticated.body.csrfToken,
+        "X-Admin-Idempotency-Key": feedOnboardingIdempotencyKey
+      },
+      body: JSON.stringify({ feedUrl: "https://onboarding.example.org/feed.xml?private=1", label: "Onboarding Example" })
+    });
+    assert(duplicateFeedOnboarding.status === 200, "duplicate admin feed onboarding did not dedupe");
+    assert(duplicateFeedOnboarding.body?.status === "created", "duplicate admin feed onboarding status mismatch");
+
     const live = await requestJson(`${base}/status-api/health/live`, {
       headers: {
         Authorization: "Bearer redacted",
@@ -327,6 +387,18 @@ async function runEnabledScenario() {
     });
     assert(feedRecheckAfterLogout.status === 401, "admin feed recheck remained available after logout");
 
+    const feedOnboardingAfterLogout = await requestJson(`${base}/admin-api/operations/feed-onboarding-requests`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": authenticated.body.csrfToken,
+        "X-Admin-Idempotency-Key": "onboard_rc_after_logout_123456"
+      },
+      body: JSON.stringify({ feedUrl: "https://after-logout.example.org/feed.xml", label: "After Logout" })
+    });
+    assert(feedOnboardingAfterLogout.status === 401, "admin feed onboarding remained available after logout");
+
     const staticSurface = [index.body, envConfig.body, ...(await staticAssets(base, index.body))].join("\n");
     assert(!staticSurface.includes(adminPassword), "admin password leaked to static surface");
     assert(!staticSurface.includes(adminPasswordHash), "admin password hash leaked to static surface");
@@ -343,12 +415,15 @@ async function runEnabledScenario() {
       authenticated_session: authenticated.body?.authenticated,
       operations_drilldown_status: adminDrilldown.status,
       feed_recheck_status: feedRecheck.status,
+      feed_onboarding_status: feedOnboarding.status,
       duplicate_feed_recheck_status: duplicateFeedRecheck.status,
+      duplicate_feed_onboarding_status: duplicateFeedOnboarding.status,
       cooldown_feed_recheck_status: cooldownFeedRecheck.status,
       logout_status: logout.status,
       after_logout_authenticated: afterLogout.body?.authenticated,
       operations_drilldown_after_logout_status: drilldownAfterLogout.status,
       feed_recheck_after_logout_status: feedRecheckAfterLogout.status,
+      feed_onboarding_after_logout_status: feedOnboardingAfterLogout.status,
       readiness: ready.body?.dependencies
     });
   });

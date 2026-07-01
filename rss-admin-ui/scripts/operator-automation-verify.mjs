@@ -30,6 +30,7 @@ console.log(
       browser_evidence_script: "ops:browser-evidence:verify",
       no_eligible_target_classification: "NO_ELIGIBLE_FEED_RECHECK_TARGET",
       feed_recheck_effect_status: "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
+      feed_onboarding_route_smoke: "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED",
       production_contact: false,
       output: "redacted"
     },
@@ -51,6 +52,7 @@ function assertStaticContracts() {
     "ops:feed-recheck:eligibility:redacted": "node scripts/operator-production-retest.mjs --acceptance-only --feed-recheck-only",
     "ops:browser-evidence:verify": "node scripts/browser-evidence-verify.mjs",
     "verify:browser-evidence": "node scripts/browser-evidence-verify.mjs --self-test",
+    "verify:admin-feed-onboarding": "node scripts/admin-feed-onboarding-verify.mjs",
     "verify:operator-automation": "node scripts/operator-automation-verify.mjs"
   };
   for (const [name, command] of Object.entries(requiredFrontend)) {
@@ -64,6 +66,7 @@ function assertStaticContracts() {
     "scripts/operator-production-promotion-retest.mjs",
     "scripts/operator-production-retest.mjs",
     "scripts/operator-automation-verify.mjs",
+    "scripts/admin-feed-onboarding-verify.mjs",
     "scripts/browser-evidence-verify.mjs",
     "scripts/operator-risk-model.mjs",
     "src/adminOperations/browserEvidence.ts",
@@ -95,11 +98,16 @@ function assertStaticContracts() {
     "NO_ELIGIBLE_FEED_RECHECK_TARGET",
     "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
     "FEED_RECHECK_ACTION_ACCEPTED",
+    "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED",
+    "FEED_ONBOARDING_ROUTE_SMOKE_ATTENTION_REQUIRED",
+    "FEED_ONBOARDING_UNAUTH_POST_NOT_401_JSON",
+    "FEED_ONBOARDING_GET_NOT_405_JSON",
     "AUTH_CONFIGURED_UNAUTHENTICATED",
     "AUTHENTICATED_ADMIN_ACCEPTED",
     "AUTH_LOGIN_ATTEMPT_FAILED",
     "ADMIN_API_ROUTE_UNAVAILABLE",
     "FEED_RECHECK_UNAUTH_POST_NOT_401_JSON",
+    "feed_onboarding_status",
     "--attempt-feed-recheck"
   ]) {
     if (!operatorRetest.includes(fragment)) failures.push(`operator retest script missing classification: ${fragment}`);
@@ -115,7 +123,8 @@ function assertStaticContracts() {
     "--nginx-config-file",
     "--browser-evidence",
     "ROUTE_PROOF_NOT_AVAILABLE",
-    "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET"
+    "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
+    "/admin-api/operations/feed-onboarding-requests"
   ]) {
     if (!promotion.includes(fragment)) failures.push(`promotion retest script missing fragment: ${fragment}`);
   }
@@ -124,6 +133,7 @@ function assertStaticContracts() {
   for (const fragment of [
     "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
     "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET",
+    "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
     "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED",
     "BROWSER_EVIDENCE_INVALID",
     "--self-test"
@@ -145,16 +155,20 @@ function assertStaticContracts() {
   for (const fragment of [
     "MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET",
     "SUCCESS_MS_026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_CLOSURE_FLOW_LANDED_OPERATOR_RETEST_REQUIRED",
+    "SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED",
     "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
     "NO_ELIGIBLE_FEED_RECHECK_TARGET",
     "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED",
     "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+    "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+    "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED",
     "ops:production:retest",
     "ops:production:retest:redacted",
     "ops:production:acceptance:redacted",
     "ops:feed-recheck:eligibility:redacted",
     "ops:browser-evidence:verify",
     "verify:browser-evidence",
+    "verify:admin-feed-onboarding",
     "ops:production:recreate:api-worker -- --dry-run",
     "ops:production:recreate:api-worker -- --apply",
     "ops:compose:recreate -- --apply",
@@ -176,7 +190,8 @@ async function assertRuntimeClassifications() {
     [
       "location = /admin-api/operations/summary {}",
       "location = /admin-api/operations/drilldown {}",
-      "location = /admin-api/operations/feed-recheck-requests {}"
+      "location = /admin-api/operations/feed-recheck-requests {}",
+      "location = /admin-api/operations/feed-onboarding-requests {}"
     ].join("\n")
   );
   const server = createServer(async (request, response) => {
@@ -192,6 +207,9 @@ async function assertRuntimeClassifications() {
     assertJson(noCredentials, "OPERATOR_ACCEPTANCE_REDACTED_OK", "no-credentials acceptance");
     if (noCredentials.json.auth?.classification !== "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED") {
       failures.push("no-credentials acceptance did not classify authenticated browser evidence required");
+    }
+    if (noCredentials.json.feed_onboarding?.classification !== "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED") {
+      failures.push("no-credentials acceptance did not classify FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED");
     }
 
     scenario = "no-feeds";
@@ -315,6 +333,34 @@ async function handleRequest(request, response, scenarioProvider) {
     });
     return;
   }
+  if (parsed.pathname === "/admin-api/operations/feed-onboarding-requests") {
+    if (request.method !== "POST") {
+      json(response, 405, { status: "method_not_allowed", reason: "feed_onboarding_requires_post" });
+      return;
+    }
+    if (!authenticated) {
+      json(response, 401, { authenticated: false, reason: "unauthenticated" });
+      return;
+    }
+    if (request.headers["x-admin-csrf"] === undefined) {
+      json(response, 403, { authenticated: true, reason: "csrf_failed" });
+      return;
+    }
+    json(response, 201, {
+      status: "created",
+      requestRef: "onboard_abc123def456",
+      feed: {
+        displayId: "feed_123456abcd",
+        sourceHost: "onboarding.example.org",
+        state: "active",
+        eligibleForRecheck: true
+      },
+      nextSteps: ["Refresh Operations Drilldown after deployment."],
+      message: "Feed onboarding was accepted through the existing due-feed path.",
+      generatedAt: "2026-07-01T10:01:00.000Z"
+    });
+    return;
+  }
   if (parsed.pathname.startsWith("/admin-api/")) {
     json(response, 404, { status: "not_found", reason: "admin_api_route_not_found" });
     return;
@@ -411,6 +457,7 @@ function assertSanitized(text) {
     /habersoft_admin_session=valid/iu,
     /csrf_token_value_at_least_32_characters/iu,
     /feed_recheck_v1\./iu,
+    /https:\/\/onboarding\.example\.org\/feed\.xml/iu,
     /Set-Cookie/iu,
     /Authorization/iu,
     /raw response/iu

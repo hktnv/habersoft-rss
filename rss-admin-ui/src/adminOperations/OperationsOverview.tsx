@@ -102,7 +102,7 @@ export function OperationsOverview({
         <UnavailableView result={state.result} />
       )}
 
-      <OperationsDrilldown loadDrilldown={loadDrilldown} csrfToken={csrfToken} />
+      <OperationsDrilldown loadDrilldown={loadDrilldown} csrfToken={csrfToken} onFeedOnboardingAccepted={refresh} />
     </section>
   );
 }

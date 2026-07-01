@@ -20,6 +20,7 @@ if (args.includes("--help") || args.includes("-h")) {
     accepted_classifications: [
       "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
       "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET",
+      "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
       "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
     ],
     output: "redacted"
@@ -73,6 +74,10 @@ export async function verifyEvidenceFile(file) {
     classifications: validation.classifications,
     feed_recheck_effect_status: validation.evidence.feedRecheck.effectStatus,
     no_eligible_feed_recheck_target: validation.evidence.operations.feeds.noEligibleFeedRecheckTarget,
+    feed_onboarding_available: validation.evidence.feedOnboarding.feed_onboarding_available,
+    feed_onboarding_status: validation.evidence.feedOnboarding.feed_onboarding_status,
+    no_eligible_target: validation.evidence.feedOnboarding.no_eligible_target,
+    critical_risk: validation.evidence.feedOnboarding.critical_risk,
     evidence_sha256: digest,
     bytes,
     output: "redacted"
@@ -95,7 +100,7 @@ export function validateEvidence(value) {
   const forbidden = findForbiddenEvidenceSurface(value);
   if (forbidden === "field") return invalidValidation("forbidden_field");
   if (forbidden === "value") return invalidValidation("forbidden_value");
-  if (!hasOnlyKeys(value, ["schema", "source", "milestone", "generatedAt", "authenticated", "operations", "feedRecheck", "classifications"])) {
+  if (!hasOnlyKeys(value, ["schema", "source", "milestone", "generatedAt", "authenticated", "operations", "feedRecheck", "feedOnboarding", "classifications"])) {
     return invalidValidation("unknown_field");
   }
   if (
@@ -106,6 +111,7 @@ export function validateEvidence(value) {
     !isIso(value.generatedAt) ||
     !isOperationsEvidence(value.operations) ||
     !isFeedRecheckEvidence(value.feedRecheck) ||
+    !isFeedOnboardingEvidence(value.feedOnboarding) ||
     !isClassifications(value.classifications)
   ) {
     return invalidValidation("invalid_schema");
@@ -193,8 +199,15 @@ function validEvidence({ eligible }) {
       effectStatus: eligible ? "PENDING_OPERATOR_ACTION" : "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
       lastActionClassification: null
     },
+    feedOnboarding: {
+      feed_onboarding_available: true,
+      feed_onboarding_status: "available",
+      no_eligible_target: !eligible,
+      critical_risk: "none"
+    },
     classifications: [
       "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+      "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
       eligible ? "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET" : "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET"
     ]
   };
@@ -246,11 +259,25 @@ function isFeedRecheckEvidence(value) {
   return effectStatusAllowed.has(value.effectStatus) && actionAllowed.has(value.lastActionClassification);
 }
 
+function isFeedOnboardingEvidence(value) {
+  if (!isRecord(value)) return false;
+  if (!hasOnlyKeys(value, ["feed_onboarding_available", "feed_onboarding_status", "no_eligible_target", "critical_risk"])) {
+    return false;
+  }
+  return (
+    value.feed_onboarding_available === true &&
+    (value.feed_onboarding_status === "available" || value.feed_onboarding_status === "pending_operator_action") &&
+    typeof value.no_eligible_target === "boolean" &&
+    value.critical_risk === "none"
+  );
+}
+
 function isClassifications(value) {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 4) return false;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 5) return false;
   const allowed = new Set([
     "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
     "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET",
+    "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
     "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED",
     "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET"
   ]);
