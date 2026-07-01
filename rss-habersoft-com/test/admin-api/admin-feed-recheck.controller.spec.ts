@@ -348,7 +348,7 @@ function feedProjection() {
     url: "https://news.example.org/feed.xml?private=1",
     active: true,
     subscriberCount: 2,
-    nextCheckAt: new Date("2026-07-01T05:00:00.000Z")
+    nextCheckAt: new Date("2099-07-01T05:00:00.000Z")
   };
 }
 

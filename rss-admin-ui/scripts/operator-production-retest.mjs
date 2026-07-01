@@ -95,11 +95,12 @@ async function runAcceptance() {
   let auth = {
     credentials: credentialsProvided ? "environment" : "not_provided",
     login_attempted: false,
-    classification: classifySession(firstSession)
+    session_classification: classifySession(firstSession),
+    classification: credentialsProvided ? classifySession(firstSession) : "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED"
   };
   let feedRecheck = {
-    classification: credentialsProvided ? "AUTHENTICATED_DRILLDOWN_NOT_RUN" : "AUTH_CONFIGURED_UNAUTHENTICATED",
-    effect_status: "PENDING_AUTHENTICATED_ELIGIBILITY_CHECK",
+    classification: credentialsProvided ? "AUTHENTICATED_DRILLDOWN_NOT_RUN" : "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED",
+    effect_status: credentialsProvided ? "PENDING_AUTHENTICATED_ELIGIBILITY_CHECK" : "PENDING_BROWSER_EVIDENCE_OR_ENV_CREDENTIALS",
     action_attempted: false
   };
 
@@ -137,7 +138,7 @@ async function runAcceptance() {
       if (eligibility.kind === "none") {
         feedRecheck = {
           classification: "NO_ELIGIBLE_FEED_RECHECK_TARGET",
-          effect_status: "PENDING_NO_ELIGIBLE_TARGET",
+          effect_status: "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
           action_attempted: false,
           total_feeds: eligibility.totalFeeds,
           active_feeds: eligibility.activeFeeds,

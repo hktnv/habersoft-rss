@@ -7,6 +7,7 @@ import {
   type OperationsDrilldownResult
 } from "./operationsDrilldownClient";
 import { requestFeedRecheck, type FeedRecheckResult } from "./feedRecheckClient";
+import { createRedactedBrowserEvidence, serializeRedactedBrowserEvidence } from "./browserEvidence";
 
 type DrilldownPhase = "loading" | "refreshing" | "complete";
 type FeedRecheckPhase = "confirming" | "submitting" | "complete";
@@ -21,6 +22,8 @@ type FeedRecheckState = {
   readonly result?: FeedRecheckResult;
 };
 
+type EvidenceCopyState = "idle" | "copied" | "unavailable";
+
 export function OperationsDrilldown({
   loadDrilldown = fetchOperationsDrilldown,
   csrfToken,
@@ -32,6 +35,7 @@ export function OperationsDrilldown({
 }) {
   const [state, setState] = useState<DrilldownState>({ phase: "loading" });
   const [feedRechecks, setFeedRechecks] = useState<Record<string, FeedRecheckState>>({});
+  const [evidenceCopyState, setEvidenceCopyState] = useState<EvidenceCopyState>("idle");
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | undefined>(undefined);
   const actionAbortRef = useRef<AbortController | undefined>(undefined);
@@ -81,6 +85,21 @@ export function OperationsDrilldown({
   const refresh = () => {
     if (isBusy) return;
     startRequest(hasCompletedResult ? "refreshing" : "loading");
+  };
+
+  const copyRedactedEvidence = async (drilldown: OperationsDrilldownData) => {
+    if (navigator.clipboard?.writeText === undefined) {
+      setEvidenceCopyState("unavailable");
+      return;
+    }
+
+    const evidence = createRedactedBrowserEvidence(drilldown, feedRechecks);
+    try {
+      await navigator.clipboard.writeText(serializeRedactedBrowserEvidence(evidence));
+      setEvidenceCopyState("copied");
+    } catch {
+      setEvidenceCopyState("unavailable");
+    }
   };
 
   const beginRecheckConfirmation = (row: FeedDrilldownRow) => {
@@ -161,6 +180,8 @@ export function OperationsDrilldown({
           drilldown={state.result.drilldown}
           refreshing={state.phase === "refreshing"}
           feedRechecks={feedRechecks}
+          evidenceCopyState={evidenceCopyState}
+          onCopyRedactedEvidence={copyRedactedEvidence}
           onBeginRecheckConfirmation={beginRecheckConfirmation}
           onCancelRecheckConfirmation={cancelRecheckConfirmation}
           onConfirmRecheck={confirmRecheck}
@@ -176,6 +197,8 @@ function DrilldownView({
   drilldown,
   refreshing,
   feedRechecks,
+  evidenceCopyState,
+  onCopyRedactedEvidence,
   onBeginRecheckConfirmation,
   onCancelRecheckConfirmation,
   onConfirmRecheck
@@ -183,6 +206,8 @@ function DrilldownView({
   readonly drilldown: OperationsDrilldownData;
   readonly refreshing: boolean;
   readonly feedRechecks: Readonly<Record<string, FeedRecheckState>>;
+  readonly evidenceCopyState: EvidenceCopyState;
+  readonly onCopyRedactedEvidence: (drilldown: OperationsDrilldownData) => Promise<void>;
   readonly onBeginRecheckConfirmation: (row: FeedDrilldownRow) => void;
   readonly onCancelRecheckConfirmation: (row: FeedDrilldownRow) => void;
   readonly onConfirmRecheck: (row: FeedDrilldownRow) => void;
@@ -209,12 +234,22 @@ function DrilldownView({
             {refreshing ? "Refreshing; the last validated drilldown remains visible until the next result arrives. " : ""}
             Same-origin protected route: /admin-api/operations/drilldown.
           </p>
+          <div className="evidence-action">
+            <button type="button" className="secondary-button compact-button" onClick={() => void onCopyRedactedEvidence(drilldown)}>
+              Copy redacted evidence
+            </button>
+            {evidenceCopyState === "idle" ? null : (
+              <p className="action-note" role="status" aria-live="polite">
+                {evidenceCopyState === "copied" ? "Redacted evidence copied." : "Clipboard is unavailable."}
+              </p>
+            )}
+          </div>
         </div>
       </section>
 
       {emptyRows ? (
         <section className="status-summary" role="status" aria-live="polite">
-          <p className="summary-value">No recheckable feeds are currently available.</p>
+          <p className="summary-value">No eligible feed recheck target is currently available.</p>
           <p className="safe-message">
             The bounded window returned no feed action targets. Feed recheck effect acceptance remains pending until an
             eligible feed exists.
@@ -274,7 +309,7 @@ function FeedDrilldownPanel({
         ]}
       />
       {hasRecheckableFeed ? null : (
-        <p className="safe-message">No recheckable feeds are currently available.</p>
+        <p className="safe-message">No eligible feed recheck target is currently available.</p>
       )}
       <FeedRows
         rows={drilldown.feeds.rows}

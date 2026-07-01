@@ -120,7 +120,8 @@ function assertFrontendContract() {
   for (const fragment of [
     "Operations Drilldown",
     "Refresh Drilldown",
-    "No recheckable feeds are currently available.",
+    "No eligible feed recheck target is currently available.",
+    "Copy redacted evidence",
     "frontend canonical helper recreate",
     route,
     "requestIdRef",

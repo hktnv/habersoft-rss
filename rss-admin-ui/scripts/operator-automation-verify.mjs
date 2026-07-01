@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,12 +22,14 @@ console.log(
   JSON.stringify(
     {
       status: "operator-automation-verify-ok",
-      milestone: "MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET",
-      retest_script: "ops:production:retest:redacted",
+      milestone: "MS-026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_CLOSURE_FLOW",
+      retest_script: "ops:production:retest",
+      low_level_retest_script: "ops:production:retest:redacted",
       acceptance_script: "ops:production:acceptance:redacted",
       feed_recheck_eligibility_script: "ops:feed-recheck:eligibility:redacted",
+      browser_evidence_script: "ops:browser-evidence:verify",
       no_eligible_target_classification: "NO_ELIGIBLE_FEED_RECHECK_TARGET",
-      feed_recheck_effect_status: "PENDING_NO_ELIGIBLE_TARGET",
+      feed_recheck_effect_status: "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
       production_contact: false,
       output: "redacted"
     },
@@ -41,9 +44,13 @@ function assertStaticContracts() {
   const frontendScripts = frontendPackage.scripts ?? {};
   const backendScripts = backendPackage.scripts ?? {};
   const requiredFrontend = {
+    "ops:production:retest": "node scripts/operator-production-promotion-retest.mjs",
+    "ops:production:promote-retest:redacted": "node scripts/operator-production-promotion-retest.mjs",
     "ops:production:retest:redacted": "node scripts/operator-production-retest.mjs",
     "ops:production:acceptance:redacted": "node scripts/operator-production-retest.mjs --acceptance-only",
     "ops:feed-recheck:eligibility:redacted": "node scripts/operator-production-retest.mjs --acceptance-only --feed-recheck-only",
+    "ops:browser-evidence:verify": "node scripts/browser-evidence-verify.mjs",
+    "verify:browser-evidence": "node scripts/browser-evidence-verify.mjs --self-test",
     "verify:operator-automation": "node scripts/operator-automation-verify.mjs"
   };
   for (const [name, command] of Object.entries(requiredFrontend)) {
@@ -54,15 +61,19 @@ function assertStaticContracts() {
   }
 
   for (const file of [
+    "scripts/operator-production-promotion-retest.mjs",
     "scripts/operator-production-retest.mjs",
     "scripts/operator-automation-verify.mjs",
+    "scripts/browser-evidence-verify.mjs",
+    "scripts/operator-risk-model.mjs",
+    "src/adminOperations/browserEvidence.ts",
     "../rss-habersoft-com/scripts/production-api-worker-recreate.mjs"
   ]) {
     requireFile(path.resolve(frontendRoot, file), file);
   }
 
   const ui = readFrontend("src/adminOperations/OperationsDrilldown.tsx");
-  if (!ui.includes("No recheckable feeds are currently available.")) {
+  if (!ui.includes("No eligible feed recheck target is currently available.") || !ui.includes("Copy redacted evidence")) {
     failures.push("OperationsDrilldown missing no-eligible feed recheck empty state");
   }
 
@@ -80,8 +91,9 @@ function assertStaticContracts() {
   for (const fragment of [
     "OPERATOR_RETEST_DRY_RUN_READY",
     "OPERATOR_ACCEPTANCE_REDACTED_OK",
+    "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED",
     "NO_ELIGIBLE_FEED_RECHECK_TARGET",
-    "PENDING_NO_ELIGIBLE_TARGET",
+    "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
     "FEED_RECHECK_ACTION_ACCEPTED",
     "AUTH_CONFIGURED_UNAUTHENTICATED",
     "AUTHENTICATED_ADMIN_ACCEPTED",
@@ -91,6 +103,32 @@ function assertStaticContracts() {
     "--attempt-feed-recheck"
   ]) {
     if (!operatorRetest.includes(fragment)) failures.push(`operator retest script missing classification: ${fragment}`);
+  }
+
+  const promotion = readFrontend("scripts/operator-production-promotion-retest.mjs");
+  for (const fragment of [
+    "OPERATOR_PROMOTION_RETEST_DRY_RUN_READY",
+    "OPERATOR_PROMOTION_RETEST_REDACTED_OK",
+    "OPERATOR_PROMOTION_RETEST_ATTENTION_REQUIRED",
+    "--apply",
+    "--retest-only",
+    "--nginx-config-file",
+    "--browser-evidence",
+    "ROUTE_PROOF_NOT_AVAILABLE",
+    "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET"
+  ]) {
+    if (!promotion.includes(fragment)) failures.push(`promotion retest script missing fragment: ${fragment}`);
+  }
+
+  const browserEvidence = readFrontend("scripts/browser-evidence-verify.mjs");
+  for (const fragment of [
+    "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+    "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET",
+    "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED",
+    "BROWSER_EVIDENCE_INVALID",
+    "--self-test"
+  ]) {
+    if (!browserEvidence.includes(fragment)) failures.push(`browser evidence verifier missing fragment: ${fragment}`);
   }
 
   const docs = [
@@ -106,11 +144,17 @@ function assertStaticContracts() {
   ].join("\n");
   for (const fragment of [
     "MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET",
+    "SUCCESS_MS_026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_CLOSURE_FLOW_LANDED_OPERATOR_RETEST_REQUIRED",
     "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
     "NO_ELIGIBLE_FEED_RECHECK_TARGET",
+    "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED",
+    "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+    "ops:production:retest",
     "ops:production:retest:redacted",
     "ops:production:acceptance:redacted",
     "ops:feed-recheck:eligibility:redacted",
+    "ops:browser-evidence:verify",
+    "verify:browser-evidence",
     "ops:production:recreate:api-worker -- --dry-run",
     "ops:production:recreate:api-worker -- --apply",
     "ops:compose:recreate -- --apply",
@@ -119,12 +163,22 @@ function assertStaticContracts() {
     "MEDIUM",
     "LOW"
   ]) {
-    if (!docs.includes(fragment)) failures.push(`docs missing MS-026B automation/risk fragment: ${fragment}`);
+    if (!docs.includes(fragment)) failures.push(`docs missing MS-026C automation/risk fragment: ${fragment}`);
   }
 }
 
 async function assertRuntimeClassifications() {
   let scenario = "no-feeds";
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), "operator-automation-verify-"));
+  const nginxConfig = path.join(tempRoot, "default.conf");
+  writeFileSync(
+    nginxConfig,
+    [
+      "location = /admin-api/operations/summary {}",
+      "location = /admin-api/operations/drilldown {}",
+      "location = /admin-api/operations/feed-recheck-requests {}"
+    ].join("\n")
+  );
   const server = createServer(async (request, response) => {
     await handleRequest(request, response, () => scenario);
   });
@@ -136,8 +190,8 @@ async function assertRuntimeClassifications() {
 
     const noCredentials = await runRetest(["--acceptance-only", "--endpoint", endpoint]);
     assertJson(noCredentials, "OPERATOR_ACCEPTANCE_REDACTED_OK", "no-credentials acceptance");
-    if (noCredentials.json.auth?.classification !== "AUTH_CONFIGURED_UNAUTHENTICATED") {
-      failures.push("no-credentials acceptance did not classify configured unauthenticated auth state");
+    if (noCredentials.json.auth?.classification !== "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED") {
+      failures.push("no-credentials acceptance did not classify authenticated browser evidence required");
     }
 
     scenario = "no-feeds";
@@ -149,7 +203,7 @@ async function assertRuntimeClassifications() {
     if (noEligible.json.feed_recheck?.classification !== "NO_ELIGIBLE_FEED_RECHECK_TARGET") {
       failures.push("no eligible acceptance did not classify NO_ELIGIBLE_FEED_RECHECK_TARGET");
     }
-    if (noEligible.json.feed_recheck?.effect_status !== "PENDING_NO_ELIGIBLE_TARGET") {
+    if (noEligible.json.feed_recheck?.effect_status !== "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET") {
       failures.push("no eligible acceptance did not preserve pending effect status");
     }
 
@@ -163,11 +217,21 @@ async function assertRuntimeClassifications() {
       failures.push("eligible action acceptance did not classify FEED_RECHECK_ACTION_ACCEPTED");
     }
 
-    for (const result of [dryRun, noCredentials, noEligible, eligibleAccepted]) {
+    const browserEvidence = await runNode(["scripts/browser-evidence-verify.mjs", "--self-test"]);
+    assertJson(browserEvidence, "browser-evidence-verify-self-test-ok", "browser evidence self-test");
+
+    const promotionDryRun = await runPromotion(["--dry-run", "--endpoint", endpoint, "--nginx-config-file", nginxConfig]);
+    assertJson(promotionDryRun, "OPERATOR_PROMOTION_RETEST_DRY_RUN_READY", "promotion dry-run");
+
+    const promotionRetest = await runPromotion(["--retest-only", "--endpoint", endpoint, "--nginx-config-file", nginxConfig]);
+    assertJson(promotionRetest, "OPERATOR_PROMOTION_RETEST_REDACTED_OK", "promotion retest-only");
+
+    for (const result of [dryRun, noCredentials, noEligible, eligibleAccepted, browserEvidence, promotionDryRun, promotionRetest]) {
       assertSanitized(result.stdout);
     }
   } finally {
     await close(server);
+    rmSync(tempRoot, { recursive: true, force: true });
   }
 }
 
@@ -300,8 +364,16 @@ function drilldownBody(scenario) {
 }
 
 function runRetest(args, env = {}) {
+  return runNode(["scripts/operator-production-retest.mjs", ...args], env);
+}
+
+function runPromotion(args, env = {}) {
+  return runNode(["scripts/operator-production-promotion-retest.mjs", ...args], env);
+}
+
+function runNode(args, env = {}) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, ["scripts/operator-production-retest.mjs", ...args], {
+    const child = spawn(process.execPath, args, {
       cwd: frontendRoot,
       env: { ...process.env, ...env },
       shell: false

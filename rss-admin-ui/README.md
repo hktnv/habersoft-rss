@@ -2,7 +2,7 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET`.
+Status: `SUCCESS_MS_026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_CLOSURE_FLOW_LANDED_OPERATOR_RETEST_REQUIRED`.
 
 ## Scope
 
@@ -71,7 +71,8 @@ Included through MS-026A:
 - safe `displayId`, `sourceHost`, status, count, timestamp, and note fields,
 - MS-025B admin operations drilldown verifier.
 - MS-026A bounded admin feed recheck action verifier,
-- MS-026B redacted operator automation, no-eligible feed recheck classification, and risk-tiered apply guardrails.
+- MS-026B redacted operator automation, no-eligible feed recheck classification, and risk-tiered apply guardrails,
+- MS-026C one-command operator promotion/retest automation, browser evidence bridge, and future feed-recheck closure flow.
 
 Not included:
 
@@ -119,9 +120,13 @@ npm run verify:production-overlay-canonicalization
 npm run verify:admin-operations-dashboard
 npm run verify:admin-operations-drilldown
 npm run verify:operator-automation
+npm run verify:browser-evidence
+npm run ops:production:retest -- --dry-run
+npm run ops:production:retest -- --retest-only --endpoint https://rss-panel.habersoft.com
 npm run ops:production:retest:redacted
 npm run ops:production:acceptance:redacted -- --endpoint https://rss-panel.habersoft.com
 npm run ops:feed-recheck:eligibility:redacted -- --endpoint https://rss-panel.habersoft.com
+npm run ops:browser-evidence:verify -- --file redacted-browser-evidence.json
 npm run ops:compose:config
 npm run ops:compose:up -- --force-recreate rss-admin-ui
 npm run ops:compose:recreate -- --apply
@@ -156,7 +161,9 @@ MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED adds Opera
 
 MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED adds bounded feed recheck action UI and proxy support. Operators can request a recheck for one eligible feed from Operations Drilldown using `POST /admin-api/operations/feed-recheck-requests`. The UI requires explicit confirmation, keeps the authenticated `csrfToken`, `actionRef`, idempotency key, and response state in memory only, sends `X-Admin-CSRF` and `X-Admin-Idempotency-Key`, and displays accepted, already-pending, rate-limited, unavailable, unauthenticated, forbidden, timeout, and safe error states. The backend uses the existing due-feed path with no synchronous external feed fetch. No production deployment was performed by Codex for MS-026A; operator deploy/retest required remains.
 
-MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET records the operator-reported MS-026A production retest without overclaiming the action effect. The route/proxy/auth/HTML-fallback smoke is deployed by operator report, but production had zero feeds and no actionRef, so the UI and automation classify the effect as `NO_ELIGIBLE_FEED_RECHECK_TARGET` and `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` / `PENDING_NO_ELIGIBLE_TARGET`. The empty state says "No recheckable feeds are currently available." and does not invent an actionRef. The consolidated operator path is `npm run ops:production:retest:redacted`, `npm run ops:production:acceptance:redacted`, `npm run ops:feed-recheck:eligibility:redacted`, and `npm run verify:operator-automation`. Frontend recreate is dry-run by default and requires `npm run ops:compose:recreate -- --apply` for an operator-owned mutation.
+MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET records the operator-reported MS-026A production retest without overclaiming the action effect. The route/proxy/auth/HTML-fallback smoke is deployed by operator report, but production had zero feeds and no actionRef, so the UI and automation classify the effect as `NO_ELIGIBLE_FEED_RECHECK_TARGET` and `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` / `PENDING_NO_ELIGIBLE_TARGET`. The empty state now says "No eligible feed recheck target is currently available." and does not invent an actionRef. The lower-level operator path remains `npm run ops:production:retest:redacted`, `npm run ops:production:acceptance:redacted`, `npm run ops:feed-recheck:eligibility:redacted`, and `npm run verify:operator-automation`. Frontend recreate is dry-run by default and requires `npm run ops:compose:recreate -- --apply` for an operator-owned mutation.
+
+MS-026C adds `npm run ops:production:retest` as the one-command operator wrapper for dry-run planning, optional operator-owned apply/recreate, redacted route acceptance, generated Nginx route proof, durable receipts, and browser evidence verification. Credential-free authenticated checks are classified as `AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED`, not as a failed login. The browser evidence bridge exports and verifies `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`, and future `BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED` without cookies, sessions, CSRF tokens, idempotency keys, raw actionRefs, raw feed URLs, raw logs, raw bodies, private hostnames, or secrets.
 
 MS-024B changes the operator runtime posture to graduated guardrails. Missing, malformed, public-edge, or Docker bridge loopback upstreams no longer crash-loop the static frontend container. `/healthz` and the static app start, while exact proxy routes return bounded JSON with reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` remains available for strict synthetic checks.
 
@@ -325,5 +332,6 @@ npm run verify:auth-boundary
 - [Live status dashboard acceptance](.docs/live-status-dashboard-acceptance.md)
 - [Status-api upstream remediation](.docs/status-api-upstream-remediation.md)
 - [Admin auth production operator handoff](.docs/admin-auth-production-operator-handoff.md)
+- [Operator risk model and evidence bridge](.docs/operator-risk-model.md)
 - [Read-only status dashboard contract](.docs/read-only-status-dashboard.md)
 - [Same-origin health transport contract](.docs/same-origin-health-transport.md)

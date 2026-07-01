@@ -54,6 +54,24 @@ describe("OperationsDrilldown", () => {
     }));
   });
 
+  it("copies redacted browser evidence without leaking action metadata", async () => {
+    const writeText = vi.fn<(value: string) => Promise<void>>().mockResolvedValue();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    render(<OperationsDrilldown loadDrilldown={vi.fn().mockResolvedValue(successResult())} csrfToken={csrfToken} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Copy redacted evidence" }));
+
+    expect(await screen.findByText("Redacted evidence copied.")).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const copied = writeText.mock.calls[0]?.[0] ?? "";
+    expect(copied).toContain("BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY");
+    expect(copied).not.toMatch(/feed_recheck_v1\.|csrf|cookie|https?:\/\//iu);
+  });
+
   it("shows session-expired state without rendering drilldown rows", async () => {
     const loadDrilldown = vi.fn().mockResolvedValue({
       kind: "unauthenticated",
@@ -94,7 +112,7 @@ describe("OperationsDrilldown", () => {
       })
     );
     render(<OperationsDrilldown loadDrilldown={loadEmpty} />);
-    expect(await screen.findByText("No recheckable feeds are currently available.")).toBeInTheDocument();
+    expect(await screen.findByText("No eligible feed recheck target is currently available.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Request recheck" })).not.toBeInTheDocument();
   });
 
@@ -117,7 +135,7 @@ describe("OperationsDrilldown", () => {
 
     render(<OperationsDrilldown loadDrilldown={loadDrilldown} csrfToken={csrfToken} />);
 
-    expect(await screen.findByText("No recheckable feeds are currently available.")).toBeInTheDocument();
+    expect(await screen.findByText("No eligible feed recheck target is currently available.")).toBeInTheDocument();
     expect(screen.getByText("No subscribers")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Request recheck" })).not.toBeInTheDocument();
   });

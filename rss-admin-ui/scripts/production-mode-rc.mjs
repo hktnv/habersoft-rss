@@ -7,12 +7,12 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const stamp = Date.now();
-const frontendImage = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? "rss-admin-ui:ms026b-local";
-const backendImage = process.env.RSS_HABERSOFT_COM_TEST_IMAGE ?? "main-service-app:ms026b-rc-local";
+const frontendImage = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? "rss-admin-ui:ms026c-local";
+const backendImage = process.env.RSS_HABERSOFT_COM_TEST_IMAGE ?? "main-service-app:ms026c-rc-local";
 const adminUsername = "admin";
-const adminPassword = "synthetic-ms026b-admin-password";
-const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms026b-rc-salt-00", "utf8"));
-const adminSessionSecret = "synthetic_ms026b_admin_session_secret_48_bytes_minimum";
+const adminPassword = "synthetic-ms026c-admin-password";
+const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms026c-rc-salt-00", "utf8"));
+const adminSessionSecret = "synthetic_ms026c_admin_session_secret_48_bytes_minimum";
 const scenarioResults = [];
 
 await runDisabledScenario();
@@ -35,7 +35,7 @@ console.log(
 );
 
 async function runDisabledScenario() {
-  const projectName = `habersoft-rss-ms026b-disabled-${stamp}`;
+  const projectName = `habersoft-rss-ms026c-disabled-${stamp}`;
   const uiPort = await freePort();
   const apiPort = await freePort();
   const env = composeEnv({
@@ -99,7 +99,7 @@ async function runDisabledScenario() {
 }
 
 async function runEnabledScenario() {
-  const projectName = `habersoft-rss-ms026b-enabled-${stamp}`;
+  const projectName = `habersoft-rss-ms026c-enabled-${stamp}`;
   const uiPort = await freePort();
   const apiPort = await freePort();
   const env = composeEnv({
@@ -369,7 +369,7 @@ function composeEnv({ uiPort, apiPort, authMode, authValues }) {
     ADMIN_UI_SESSION_TTL_SECONDS: "900",
     ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
     ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-    ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms026b",
+    ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms026c",
     ADMIN_UI_ENVIRONMENT_NAME: "local-production-mode-rc",
     ADMIN_UI_HOST_PORT: String(uiPort),
     API_HOST_PORT: String(apiPort),
@@ -431,7 +431,7 @@ function inspectProjectLeftovers(projectName) {
 }
 
 function assertNoGlobalLeftovers() {
-  const pattern = "ms026b";
+  const pattern = "ms026c";
   const containers = run(["ps", "-a", "--format", "{{.Names}}"], { allowFailure: true });
   const networks = run(["network", "ls", "--format", "{{.Name}}"], { allowFailure: true });
   const volumes = run(["volume", "ls", "--format", "{{.Name}}"], { allowFailure: true });

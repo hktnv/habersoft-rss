@@ -165,3 +165,19 @@ MS-023D keeps rollback-baseline capture operator-managed. Codex does not capture
 ## Residuals
 
 Business admin features, feed/user/tenant management UI, Agent operations, and any browser use of Tenant/admin write APIs remain out of scope. The same-origin transport model remains the production activation model; CORS broadening is not part of this package.
+
+## MS-026C Operator Handoff
+
+MS-026C lands `SUCCESS_MS_026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_CLOSURE_FLOW_LANDED_OPERATOR_RETEST_REQUIRED` without production mutation by Codex. Operators can use:
+
+```bash
+npm run ops:production:retest -- --dry-run
+npm run ops:production:retest -- --retest-only --endpoint https://rss-panel.habersoft.com --nginx-config-file <operator-generated-nginx-conf>
+npm run ops:production:retest -- --apply --endpoint https://rss-panel.habersoft.com --nginx-config-file <operator-generated-nginx-conf>
+npm run ops:browser-evidence:verify -- --file <redacted-browser-evidence.json>
+npm run verify:browser-evidence
+```
+
+If environment credentials are absent, the scripts classify the remaining authenticated proof as `AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED`. The authenticated UI export and verifier use only redacted browser classes: `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`, and future `BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED`.
+
+Do not paste secrets, cookies, sessions, CSRF tokens, idempotency keys, raw actionRefs, raw feed URLs, raw request/response bodies, private hostnames, raw logs, Agent keys, Tenant bearer/JWT values, browser storage values, or filesystem paths into receipts. Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` until a real eligible production feed exists and the operator exports a verifier-accepted redacted receipt after one explicit bounded recheck action.

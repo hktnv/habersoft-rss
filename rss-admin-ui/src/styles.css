@@ -336,6 +336,13 @@ button:disabled {
   align-items: start;
 }
 
+.evidence-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
 .compact-button {
   min-width: 88px;
   min-height: 34px;
@@ -509,6 +516,11 @@ button:disabled {
   }
 
   .authenticated-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .evidence-action {
     align-items: stretch;
     flex-direction: column;
   }

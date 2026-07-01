@@ -313,3 +313,13 @@ Risk-based guardrails:
 - LOW: treat npm update notices, CRLF checkout warnings, and Prisma update notices as informational.
 
 MS-024F status/auth shell acceptance remains operator-reported. MS-025A-R2 records the read-only operations summary dashboard production acceptance by operator report. Durable operator-state receipt outside Git records the R2 closeout; temporary workplace paths are not durable operator artifacts.
+
+## MS-026C Operator Automation and Evidence Bridge
+
+MS-026C lands `SUCCESS_MS_026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_CLOSURE_FLOW_LANDED_OPERATOR_RETEST_REQUIRED` for automation and evidence flow only. The one-command operator entry is `npm run ops:production:retest`; use `--dry-run` for planning, `--retest-only --endpoint https://rss-panel.habersoft.com --nginx-config-file <operator-generated-nginx-conf>` for non-mutating route proof and acceptance, and `--apply` only when the operator intends backend/frontend recreate.
+
+Credential-free authenticated checks produce `AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED`. The authenticated Operations Drilldown UI includes **Copy redacted evidence**; the operator can verify that JSON with `npm run ops:browser-evidence:verify -- --file <redacted-browser-evidence.json>` or locally validate the contract with `npm run verify:browser-evidence`.
+
+Accepted redacted browser classes are `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`, and future `BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED`. The evidence schema rejects cookies, session IDs, CSRF tokens, idempotency keys, raw `actionRef`, raw feed URLs, private hostnames, browser storage values, local filesystem paths, raw bodies, raw logs, stack traces, secrets, Agent keys, Tenant bearer/JWT values, and unknown fields.
+
+Feed recheck effect remains `NO_ELIGIBLE_FEED_RECHECK_TARGET` and `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` until a real eligible feed appears through normal production operation. The future closure flow is: operator logs in, opens Operations Drilldown, identifies an eligible row without exposing raw actionRef, triggers one bounded recheck with explicit confirmation, verifies accepted/already-pending UI classification, exports redacted browser evidence, runs the verifier, and reports only the classification plus durable receipt path/hash.
