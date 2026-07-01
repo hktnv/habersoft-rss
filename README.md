@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status and operations dashboard with same-origin admin auth/session routes | `MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status and operations dashboard with same-origin admin auth/session routes plus one bounded feed recheck action | `MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -77,9 +77,13 @@ npm run verify:operator-ergonomics
 npm run verify:production-overlay-canonicalization
 npm run verify:admin-operations-dashboard
 npm run verify:admin-operations-drilldown
+npm run verify:operator-automation
+npm run ops:production:retest:redacted
+npm run ops:production:acceptance:redacted -- --endpoint https://rss-panel.habersoft.com
+npm run ops:feed-recheck:eligibility:redacted -- --endpoint https://rss-panel.habersoft.com
 npm run ops:compose:config
 npm run ops:compose:up -- --force-recreate rss-admin-ui
-npm run ops:compose:recreate
+npm run ops:compose:recreate -- --apply
 npm run auth-smoke:redacted
 npm run ops:compose:ps
 npm run ops:compose:logs -- rss-admin-ui
@@ -91,6 +95,8 @@ npm audit --omit=dev
 The admin UI uses fixed same-origin browser routes `/status-api/health/live`, `/status-api/health/ready`, `/admin-auth/session`, `/admin-auth/login`, `/admin-auth/logout`, protected read-only admin operations routes `GET /admin-api/operations/summary` and `GET /admin-api/operations/drilldown`, and the bounded action route `POST /admin-api/operations/feed-recheck-requests`. Its frontend runtime maps health routes to the configured server-only `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN` and maps auth plus admin-api routes through server-only `ADMIN_UI_AUTH_UPSTREAM_ORIGIN`. Health uses no credentials. The operations summary and drilldown use only the HttpOnly same-origin admin session cookie, strip query forwarding at the proxy, forward no Authorization, Tenant bearer, or Agent key headers, store no browser credentials in localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie, perform manual refresh only with no polling, and add no backend writes. MS-023D accepts only the read-only production status transport and `/healthz`. MS-024E intakes operator-reported evidence that `/admin-auth/session` returns `configured=true`, `authenticated=false`, `reason=unauthenticated` after frontend helper recreate. MS-024F records the operator-reported production retest that authenticated admin shell production acceptance is closed for the status/auth shell scope implemented at that time. Evidence source remains `operator_reported`; Codex did not independently perform a credentialed login, read credentials, mutate production, or capture rollback baseline. MS-025A locally accepted the first protected read-only admin operations dashboard package, MS-025A-R1 remediated the admin-api proxy template fallback blocker, and MS-025A-R2 records operator-reported production acceptance for that read-only operations dashboard scope. MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED adds the bounded drilldown route locally with `maxRows=20`, opaque `displayId`, public `sourceHost` only, and safe notes; raw feed URL paths, entry content, raw logs, secrets, Agent key values, and Tenant bearer tokens remain forbidden. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence. Broader future business/admin write features are not accepted; MS-026A is only the bounded feed recheck request action.
 
 MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED adds the first bounded admin action: an authenticated operator can request one eligible feed recheck from Operations Drilldown through `POST /admin-api/operations/feed-recheck-requests`. The action uses `X-Admin-CSRF`, `X-Admin-Idempotency-Key`, explicit confirmation, a 300 second cooldown, opaque `actionRef` values, public `sourceHost` only, and the existing due-feed path with no synchronous external feed fetch. No production deployment was performed by Codex for MS-026A, and operator deploy/retest required remains the residual. Do not paste credentials, cookies, sessions, CSRF tokens, idempotency keys, raw feed URLs, raw logs, or secrets into evidence.
+
+MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET records the operator-reported production rebuild/recreate/retest after MS-026A: backend/frontend health passed, exact summary/drilldown/feed-recheck Nginx routes were present, unknown `/admin-api/*` returned JSON `404`, feed-recheck `GET` returned JSON `405`, unauthenticated feed-recheck `POST` returned JSON `401`, browser login succeeded, and Operations Overview/Drilldown loaded. Production had `feeds.total=0`, `active=0`, and empty drilldown rows, so the feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` / `PENDING_NO_ELIGIBLE_TARGET` until a real eligible feed/actionRef exists. MS-026B adds risk-tiered operator automation: `npm run ops:production:retest:redacted`, `npm run ops:production:acceptance:redacted`, `npm run ops:feed-recheck:eligibility:redacted`, frontend recreate apply gating through `npm run ops:compose:recreate -- --apply`, backend API/worker recreate dry-run/apply guidance through `npm run ops:production:recreate:api-worker -- --dry-run` and `-- --apply`, and `npm run verify:operator-automation`. Codex did not mutate production, perform a credentialed production login, create feeds, seed data, or read real secrets.
 
 MS-020D adds the local-only production activation readiness package. It includes a public-data classification for the current status-only fields, an operator authority record template, a future post-deploy evidence checklist, and `npm run verify:production-readiness`. It does not authorize production mutation.
 

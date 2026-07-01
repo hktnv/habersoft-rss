@@ -10,12 +10,18 @@ const backendNetworkFile = path.join("deploy", "production", "compose.backend-ne
 const envFile = ".env.production";
 const command = process.argv[2] ?? "diagnose";
 const rawPassthrough = process.argv.slice(3);
-const dryRun = rawPassthrough.includes("--dry-run") || process.env.ADMIN_UI_COMPOSE_OPS_DRY_RUN === "true";
-const passthrough = rawPassthrough.filter((arg) => arg !== "--dry-run");
+const apply = rawPassthrough.includes("--apply") || process.env.ADMIN_UI_COMPOSE_OPS_APPLY === "true";
+const requestedDryRun = rawPassthrough.includes("--dry-run") || process.env.ADMIN_UI_COMPOSE_OPS_DRY_RUN === "true";
+const mutatingCommand = command === "up" || command === "recreate";
+const dryRun = requestedDryRun || (mutatingCommand && !apply);
+const passthrough = rawPassthrough.filter((arg) => arg !== "--dry-run" && arg !== "--apply");
 const credentialCliPattern = /^--(?:username|password)(?:=|$)/u;
 
 if (rawPassthrough.some((arg) => credentialCliPattern.test(arg))) {
   fail("credentials must not be supplied on compose helper command lines");
+}
+if (apply && requestedDryRun) {
+  fail("--apply and --dry-run cannot be combined");
 }
 
 const envFilePath = path.join(frontendRoot, envFile);
@@ -66,7 +72,7 @@ switch (command) {
     diagnose();
     break;
   default:
-    fail("usage: production-compose-ops.mjs <ps|logs|config|up|recreate|diagnose> [--dry-run] [docker compose args]");
+    fail("usage: production-compose-ops.mjs <ps|logs|config|up|recreate|diagnose> [--dry-run|--apply] [docker compose args]");
 }
 
 function diagnose() {
@@ -96,9 +102,9 @@ function diagnose() {
     next_steps: [
       "if nginx.conf or docker-entrypoint.sh changed, rebuild/update the frontend image before recreate",
       "npm run ops:compose:config",
-      "npm run ops:compose:recreate",
+      "npm run ops:compose:recreate -- --apply",
       "verify the running generated Nginx config contains /admin-api/operations/summary, /admin-api/operations/drilldown, and no unresolved __ADMIN_UI_*__ markers",
-      "after backend API/image/network/admin-auth env recreate, run npm run ops:compose:recreate so frontend Nginx refreshes backend upstream/network references",
+      "after backend API/image/network/admin-auth env recreate, run npm run ops:compose:recreate -- --apply so frontend Nginx refreshes backend upstream/network references",
       "npm run ops:compose:ps",
       "npm run ops:compose:logs -- rss-admin-ui",
       "curl -fsS http://127.0.0.1:8081/healthz",
@@ -132,7 +138,7 @@ function printBlocked(label) {
           "set ADMIN_UI_BACKEND_DOCKER_NETWORK to the existing backend Docker network name",
           "keep ADMIN_UI_HEALTH_UPSTREAM_ORIGIN and ADMIN_UI_AUTH_UPSTREAM_ORIGIN on the operator-approved backend service-DNS origin",
           "run npm run ops:compose:config",
-          "run npm run ops:compose:recreate"
+          "run npm run ops:compose:recreate -- --apply"
         ],
         output: "redacted"
       },
@@ -147,6 +153,8 @@ function printCommandSummary(label, args) {
     status: "frontend-production-compose-command-ready",
     command: label,
     dry_run: dryRun,
+    apply,
+    apply_required_for_mutation: mutatingCommand,
     compose_files: composeFiles(args.includes(backendNetworkFile)),
     env_file: envFilePresent ? envFile : "not-present",
     backend_network_overlay: args.includes(backendNetworkFile),

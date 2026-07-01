@@ -4,13 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultImage = "rss-admin-ui:ms026a-local";
+const defaultImage = "rss-admin-ui:ms026b-local";
 const image = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? defaultImage;
 const suffix = randomUUID().slice(0, 8);
-const network = `rss-admin-ui-ms026a-networking-${suffix}`;
-const internalBackendName = `rss-admin-ui-ms026a-internal-backend-${suffix}`;
-const forbiddenBackendName = `rss-admin-ui-ms026a-forbidden-backend-${suffix}`;
-const frontendName = `rss-admin-ui-ms026a-runtime-${suffix}`;
+const network = `rss-admin-ui-ms026b-networking-${suffix}`;
+const internalBackendName = `rss-admin-ui-ms026b-internal-backend-${suffix}`;
+const forbiddenBackendName = `rss-admin-ui-ms026b-forbidden-backend-${suffix}`;
+const frontendName = `rss-admin-ui-ms026b-runtime-${suffix}`;
 const sensitiveHeaders = {
   authorization: false,
   cookie: false,

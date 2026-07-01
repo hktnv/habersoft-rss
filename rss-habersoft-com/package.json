@@ -25,6 +25,7 @@
     "production:diagnose:redacted": "node scripts/production-compose-ops.mjs diagnose",
     "production:admin-auth:diagnose:redacted": "node -- scripts/production-admin-auth-diagnose.mjs",
     "production:admin-auth:compose:verify": "node -- scripts/production-admin-auth-compose-verify.mjs",
+    "ops:production:recreate:api-worker": "node scripts/production-api-worker-recreate.mjs",
     "release:package": "node scripts/release-package.mjs",
     "release:package:verify": "node scripts/release-package-verify.mjs",
     "production:backup": "node scripts/production-backup.mjs",

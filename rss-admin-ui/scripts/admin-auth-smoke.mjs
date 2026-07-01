@@ -391,21 +391,21 @@ function nextSteps(classification) {
     case "STATUS_API_ROUTE_UNAVAILABLE":
       return [
         "status-api route is unavailable or cannot reach the backend",
-        "after backend API/image/network/admin-auth env recreate, run npm run ops:compose:recreate from rss-admin-ui",
+        "after backend API/image/network/admin-auth env recreate, run npm run ops:compose:recreate -- --apply from rss-admin-ui",
         "do not use 127.0.0.1 inside Docker bridge; use backend service alias or proven host-gateway",
         ...common
       ];
     case "STATUS_API_UPSTREAM_MISCONFIGURED":
-      return ["admin UI health upstream is misconfigured", "after backend changes run npm run ops:compose:recreate from rss-admin-ui", "do not use 127.0.0.1 inside Docker bridge; use backend service alias or proven host-gateway", ...common];
+      return ["admin UI health upstream is misconfigured", "after backend changes run npm run ops:compose:recreate -- --apply from rss-admin-ui", "do not use 127.0.0.1 inside Docker bridge; use backend service alias or proven host-gateway", ...common];
     case "STATUS_API_UPSTREAM_UNAVAILABLE":
-      return ["status-api upstream is down, forbidden, or unreachable from the admin UI container", "after backend changes run npm run ops:compose:recreate from rss-admin-ui", "verify backend-network service DNS or proven host-gateway reachability", ...common];
+      return ["status-api upstream is down, forbidden, or unreachable from the admin UI container", "after backend changes run npm run ops:compose:recreate -- --apply from rss-admin-ui", "verify backend-network service DNS or proven host-gateway reachability", ...common];
     case "AUTH_NOT_CONFIGURED_RESIDUAL":
       return [
         "backend admin-auth env likely not loaded",
         "place backend admin-auth env in the backend API runtime, not only the frontend env",
         "run backend admin-auth config verifier with a redacted operator env file",
         "after operator rollback/config decision, recreate backend API/worker so the backend runtime sees admin-auth env",
-        "then recreate frontend admin UI with npm run ops:compose:recreate from rss-admin-ui",
+        "then recreate frontend admin UI with npm run ops:compose:recreate -- --apply from rss-admin-ui",
         "rerun npm run auth-smoke:redacted -- --endpoint https://rss-panel.habersoft.com"
       ];
     case "AUTH_CONFIGURED_UNAUTHENTICATED":

@@ -188,6 +188,7 @@ function DrilldownView({
   readonly onConfirmRecheck: (row: FeedDrilldownRow) => void;
 }) {
   const emptyRows = drilldown.feeds.rows.length === 0 && drilldown.ingestion.rows.length === 0;
+  const hasRecheckableFeed = drilldown.feeds.rows.some((row) => row.canRequestRecheck);
   const stateClass = drilldown.status === "ok" ? "state-healthy" : drilldown.status === "partial" ? "state-partial" : "state-unavailable";
 
   return (
@@ -213,13 +214,17 @@ function DrilldownView({
 
       {emptyRows ? (
         <section className="status-summary" role="status" aria-live="polite">
-          <p className="summary-value">No recent drilldown rows</p>
-          <p className="safe-message">The bounded window returned counts but no feed or ingestion rows to display.</p>
+          <p className="summary-value">No recheckable feeds are currently available.</p>
+          <p className="safe-message">
+            The bounded window returned no feed action targets. Feed recheck effect acceptance remains pending until an
+            eligible feed exists.
+          </p>
         </section>
       ) : (
         <section className="panel-grid drilldown-grid" aria-label="Operations drilldown rows">
           <FeedDrilldownPanel
             drilldown={drilldown}
+            hasRecheckableFeed={hasRecheckableFeed}
             feedRechecks={feedRechecks}
             onBeginRecheckConfirmation={onBeginRecheckConfirmation}
             onCancelRecheckConfirmation={onCancelRecheckConfirmation}
@@ -243,12 +248,14 @@ function DrilldownView({
 
 function FeedDrilldownPanel({
   drilldown,
+  hasRecheckableFeed,
   feedRechecks,
   onBeginRecheckConfirmation,
   onCancelRecheckConfirmation,
   onConfirmRecheck
 }: {
   readonly drilldown: OperationsDrilldownData;
+  readonly hasRecheckableFeed: boolean;
   readonly feedRechecks: Readonly<Record<string, FeedRecheckState>>;
   readonly onBeginRecheckConfirmation: (row: FeedDrilldownRow) => void;
   readonly onCancelRecheckConfirmation: (row: FeedDrilldownRow) => void;
@@ -266,6 +273,9 @@ function FeedDrilldownPanel({
           ["Recent failure", drilldown.feeds.withRecentFailure]
         ]}
       />
+      {hasRecheckableFeed ? null : (
+        <p className="safe-message">No recheckable feeds are currently available.</p>
+      )}
       <FeedRows
         rows={drilldown.feeds.rows}
         feedRechecks={feedRechecks}

@@ -94,7 +94,32 @@ describe("OperationsDrilldown", () => {
       })
     );
     render(<OperationsDrilldown loadDrilldown={loadEmpty} />);
-    expect(await screen.findByText("No recent drilldown rows")).toBeInTheDocument();
+    expect(await screen.findByText("No recheckable feeds are currently available.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Request recheck" })).not.toBeInTheDocument();
+  });
+
+  it("classifies feed rows without actionRefs as no eligible recheck target", async () => {
+    const loadDrilldown = vi.fn().mockResolvedValue(
+      successResult({
+        feeds: {
+          ...validDrilldown().feeds,
+          rows: [
+            {
+              ...validDrilldown().feeds.rows[0],
+              canRequestRecheck: false,
+              recheckUnavailableReason: "no_subscribers",
+              actionRef: null
+            }
+          ]
+        }
+      })
+    );
+
+    render(<OperationsDrilldown loadDrilldown={loadDrilldown} csrfToken={csrfToken} />);
+
+    expect(await screen.findByText("No recheckable feeds are currently available.")).toBeInTheDocument();
+    expect(screen.getByText("No subscribers")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Request recheck" })).not.toBeInTheDocument();
   });
 
   it("shows invalid or unavailable response states safely", async () => {

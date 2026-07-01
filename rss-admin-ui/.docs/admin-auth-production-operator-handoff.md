@@ -145,7 +145,16 @@ MS-025B drilldown retest residual:
 - forbidden fields: raw feed URL paths or queries, entry content, raw logs, raw request/response bodies, private hostnames, cookies, password hashes, session secrets, database/Redis URLs, Agent key values, Tenant bearer tokens, JWT claims, `localStorage`, `sessionStorage`, `IndexedDB`, `cookieStore`, `document.cookie`, and write controls;
 - MS-026A action fields: `POST /admin-api/operations/feed-recheck-requests`, `X-Admin-CSRF`, `X-Admin-Idempotency-Key`, explicit confirmation, opaque `actionRef`, 300 second cooldown, and existing due-feed path with no synchronous external feed fetch;
 - operator retest hygiene: Do not paste credentials, cookies, sessions, CSRF tokens, idempotency keys, raw response bodies with sensitive values, raw feed URLs, raw logs, or secrets;
-- next operator action: after pulling main and rebuilding/updating backend/frontend images as required, recreate the backend API if changed, recreate the frontend with `npm run ops:compose:recreate`, then test `/healthz`, `/status-api/health/live`, `/status-api/health/ready`, unauthenticated drilldown JSON `401`, authenticated Operations Drilldown JSON/UI data, and logout returning to locked state.
+- next operator action: after pulling main and rebuilding/updating backend/frontend images as required, run backend recreate diagnostics with `npm run ops:production:recreate:api-worker -- --dry-run`, use `npm run ops:production:recreate:api-worker -- --apply` only for an operator-owned mutation, recreate the frontend with `npm run ops:compose:recreate -- --apply` when intended, then test `/healthz`, `/status-api/health/live`, `/status-api/health/ready`, unauthenticated drilldown JSON `401`, authenticated Operations Drilldown JSON/UI data, and logout returning to locked state.
+
+MS-026B operator automation closeout:
+
+- bounded status: `MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET`;
+- production route smoke for MS-026A is operator-reported deployed, including summary/drilldown/feed-recheck exact routes, JSON 404/405/401 behavior, browser login, and Operations Overview/Drilldown load;
+- feed recheck effect remains pending because production reported zero feeds and no actionRef: `NO_ELIGIBLE_FEED_RECHECK_TARGET`, `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`, and `PENDING_NO_ELIGIBLE_TARGET`;
+- no production feed may be created, seeded, or faked for evidence;
+- preferred redacted commands are `npm run ops:production:retest:redacted`, `npm run ops:production:acceptance:redacted -- --endpoint https://rss-panel.habersoft.com`, `npm run ops:feed-recheck:eligibility:redacted -- --endpoint https://rss-panel.habersoft.com`, and `npm run verify:operator-automation`;
+- risk model: CRITICAL boundaries always fail closed, HIGH blocks production apply, MEDIUM warns/degrades in local or diagnose mode, and LOW remains informational.
 
 ## Rollback Boundary
 

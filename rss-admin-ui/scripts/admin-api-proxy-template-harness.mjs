@@ -4,15 +4,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultImage = "rss-admin-ui:ms026a-local";
+const defaultImage = "rss-admin-ui:ms026b-local";
 const image = process.env.RSS_ADMIN_UI_ADMIN_API_TEMPLATE_IMAGE ?? process.env.RSS_ADMIN_UI_TEST_IMAGE ?? defaultImage;
 const skipBuild = process.env.RSS_ADMIN_UI_ADMIN_API_TEMPLATE_SKIP_BUILD === "true";
 const suffix = randomUUID().slice(0, 8);
-const network = `rss-admin-ui-ms026a-admin-api-${suffix}`;
-const sentinelName = `rss-admin-ui-ms026a-sentinel-${suffix}`;
-const frontendName = `rss-admin-ui-ms026a-runtime-${suffix}`;
-const staticFrontendName = `rss-admin-ui-ms026a-static-${suffix}`;
-const unreachableFrontendName = `rss-admin-ui-ms026a-unreachable-${suffix}`;
+const network = `rss-admin-ui-ms026b-admin-api-${suffix}`;
+const sentinelName = `rss-admin-ui-ms026b-sentinel-${suffix}`;
+const frontendName = `rss-admin-ui-ms026b-runtime-${suffix}`;
+const staticFrontendName = `rss-admin-ui-ms026b-static-${suffix}`;
+const unreachableFrontendName = `rss-admin-ui-ms026b-unreachable-${suffix}`;
 
 try {
   if (!skipBuild || image === defaultImage) {

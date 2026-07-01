@@ -2,7 +2,7 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+Status: `MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET`.
 
 ## Scope
 
@@ -70,7 +70,8 @@ Included through MS-026A:
 - bounded feed and ingestion drilldown rows with `maxRows=20`,
 - safe `displayId`, `sourceHost`, status, count, timestamp, and note fields,
 - MS-025B admin operations drilldown verifier.
-- MS-026A bounded admin feed recheck action verifier.
+- MS-026A bounded admin feed recheck action verifier,
+- MS-026B redacted operator automation, no-eligible feed recheck classification, and risk-tiered apply guardrails.
 
 Not included:
 
@@ -117,9 +118,13 @@ npm run verify:operator-ergonomics
 npm run verify:production-overlay-canonicalization
 npm run verify:admin-operations-dashboard
 npm run verify:admin-operations-drilldown
+npm run verify:operator-automation
+npm run ops:production:retest:redacted
+npm run ops:production:acceptance:redacted -- --endpoint https://rss-panel.habersoft.com
+npm run ops:feed-recheck:eligibility:redacted -- --endpoint https://rss-panel.habersoft.com
 npm run ops:compose:config
 npm run ops:compose:up -- --force-recreate rss-admin-ui
-npm run ops:compose:recreate
+npm run ops:compose:recreate -- --apply
 npm run ops:compose:ps
 npm run ops:compose:logs -- rss-admin-ui
 npm run production:diagnose:redacted
@@ -150,6 +155,8 @@ MS-025A-R2 closes the read-only operations dashboard production acceptance from 
 MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED adds Operations Drilldown locally. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence. No production deployment was performed by Codex for MS-025B-R1. The drilldown performs one authenticated initial load and then manual refresh only; it uses no polling and no browser persistence in localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie. The response renders only bounded safe fields: `displayId`, `displayName`, public `sourceHost`, feed `health`, `lastCheckedAt`, `lastResult`, safe counts, `receivedAt`, status, safe notes, `capabilities`, and MS-026A action metadata. It excludes raw feed URL paths or queries, entry content, raw logs, raw request/response bodies, private hostnames, cookies, password hashes, session secrets, database/Redis URLs, Agent key values, Tenant bearer tokens, JWT claims, and no write controls beyond the bounded feed recheck request.
 
 MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED adds bounded feed recheck action UI and proxy support. Operators can request a recheck for one eligible feed from Operations Drilldown using `POST /admin-api/operations/feed-recheck-requests`. The UI requires explicit confirmation, keeps the authenticated `csrfToken`, `actionRef`, idempotency key, and response state in memory only, sends `X-Admin-CSRF` and `X-Admin-Idempotency-Key`, and displays accepted, already-pending, rate-limited, unavailable, unauthenticated, forbidden, timeout, and safe error states. The backend uses the existing due-feed path with no synchronous external feed fetch. No production deployment was performed by Codex for MS-026A; operator deploy/retest required remains.
+
+MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET records the operator-reported MS-026A production retest without overclaiming the action effect. The route/proxy/auth/HTML-fallback smoke is deployed by operator report, but production had zero feeds and no actionRef, so the UI and automation classify the effect as `NO_ELIGIBLE_FEED_RECHECK_TARGET` and `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` / `PENDING_NO_ELIGIBLE_TARGET`. The empty state says "No recheckable feeds are currently available." and does not invent an actionRef. The consolidated operator path is `npm run ops:production:retest:redacted`, `npm run ops:production:acceptance:redacted`, `npm run ops:feed-recheck:eligibility:redacted`, and `npm run verify:operator-automation`. Frontend recreate is dry-run by default and requires `npm run ops:compose:recreate -- --apply` for an operator-owned mutation.
 
 MS-024B changes the operator runtime posture to graduated guardrails. Missing, malformed, public-edge, or Docker bridge loopback upstreams no longer crash-loop the static frontend container. `/healthz` and the static app start, while exact proxy routes return bounded JSON with reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` remains available for strict synthetic checks.
 

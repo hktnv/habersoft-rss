@@ -302,7 +302,7 @@ function assertProxyContract() {
   }
 
   for (const fragment of [
-    "rss-admin-ui:ms026a-local",
+    "rss-admin-ui:ms026b-local",
     route,
     "nginx -T",
     "authenticated admin-api feed recheck",

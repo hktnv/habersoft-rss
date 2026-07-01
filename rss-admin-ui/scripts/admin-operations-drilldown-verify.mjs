@@ -120,7 +120,7 @@ function assertFrontendContract() {
   for (const fragment of [
     "Operations Drilldown",
     "Refresh Drilldown",
-    "No recent drilldown rows",
+    "No recheckable feeds are currently available.",
     "frontend canonical helper recreate",
     route,
     "requestIdRef",

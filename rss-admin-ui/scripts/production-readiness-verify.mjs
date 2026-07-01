@@ -8,10 +8,10 @@ const repoRoot = path.resolve(frontendRoot, "..");
 const image =
   process.env.RSS_ADMIN_UI_READINESS_IMAGE ??
   process.env.RSS_ADMIN_UI_TEST_IMAGE ??
-  "rss-admin-ui:ms026a-local";
+  "rss-admin-ui:ms026b-local";
 const productionHostPattern = /(?:^|[/:.])rss(?:-panel)?\.habersoft\.com(?:$|[/:])/iu;
 const rootComposeEnv = {
-  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms026a-local",
+  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms026b-local",
   RSS_ADMIN_UI_IMAGE: image,
   ADMIN_UI_HOST_PORT: "8081",
   ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
@@ -34,6 +34,7 @@ const productionComposeEnv = {
 console.log(JSON.stringify({ status: "production-readiness-verify-start", image }, null, 2));
 const drilldownAcceptanceStatus = "MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED";
 const feedRecheckStatus = "MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED";
+const operatorAutomationStatus = "MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET";
 
 run("node", ["--version"]);
 run("npm", ["--version"]);
@@ -45,6 +46,7 @@ run("npm", ["run", "build"]);
 run("npm", ["run", "verify:admin-operations-dashboard"]);
 run("npm", ["run", "verify:admin-operations-drilldown"]);
 run("npm", ["run", "verify:admin-feed-recheck-action"]);
+run("npm", ["run", "verify:operator-automation"]);
 run("npm", ["run", "verify:production-operations-acceptance"]);
 run("npm", ["run", "verify:production-operations-drilldown-acceptance"]);
 run("docker", ["build", "-t", image, "."], { printOutput: false, timeoutMs: 600000 });
@@ -116,11 +118,13 @@ console.log(
       image,
       drilldown_acceptance: drilldownAcceptanceStatus,
       feed_recheck_action: feedRecheckStatus,
+      operator_automation: operatorAutomationStatus,
       checks: [
         "production build exists",
         "admin operations dashboard source/docs/proxy verifier passes",
         "admin operations drilldown source/docs/proxy verifier passes",
         "bounded admin feed recheck action verifier passes",
+        "MS-026B operator automation verifier passes",
         "MS-025A-R2 operator-reported operations acceptance verifier passes",
         "MS-025B-R1 operator-reported operations drilldown acceptance verifier passes",
         "docker image builds",

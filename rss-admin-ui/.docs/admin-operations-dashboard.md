@@ -1,12 +1,14 @@
 # Admin Operations Dashboard
 
-Status: `MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+Status: `MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET`.
 
 MS-025A adds the first authenticated read-only admin operations slice after the MS-024F operator-reported status/auth shell acceptance. It is a local repository package with synthetic acceptance coverage. MS-025A-R2 records later operator-reported production acceptance for the read-only operations summary dashboard.
 
 MS-025B adds the next authenticated read-only Operations Drilldown slice locally. It is `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`: drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence, and No production deployment was performed by Codex for MS-025B-R1.
 
 MS-026A adds the first bounded admin action: `POST /admin-api/operations/feed-recheck-requests`. It is `MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`: local implementation and release-candidate validation only, with operator deploy/retest required. No production deployment was performed by Codex for MS-026A.
+
+MS-026B records the operator-reported MS-026A production route smoke without claiming feed recheck effect acceptance. The route/proxy/auth/HTML-fallback checks are deployed by operator report, but production had no feeds and no eligible actionRef. The effect classification is `NO_ELIGIBLE_FEED_RECHECK_TARGET`, with pending state `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` / `PENDING_NO_ELIGIBLE_TARGET`.
 
 MS-025A-R1 remediates the operator-reported follow-up where production sign-in and `/admin-auth/session` worked, but `/admin-api/operations/summary` returned HTTP 200 `text/html` with the SPA fallback. The reported container showed generated auth/status routes in `/tmp/nginx/conf.d/default.conf`, but no `/admin-api` route because the running frontend image's active template lacked the admin-api insertion marker. Codex did not contact production to re-check that R1 evidence; the remediation is repository-local and synthetic.
 
@@ -291,5 +293,23 @@ Then use `npm run auth-smoke:redacted`, browser login/logout sanity, and `/admin
 For MS-025B operator deploy/retest, also check unauthenticated `/admin-api/operations/drilldown` returns bounded JSON `401`, authenticated Operations Drilldown displays JSON data, and logout returns the UI to locked state. `auth-smoke:redacted` without credentials may report `AUTH_CONFIGURED_UNAUTHENTICATED`; that is an observation/sanity state, not a blocker by itself. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence.
 
 For MS-026A operator deploy/retest, pull main, rebuild/update backend and frontend images as required by current runbooks, recreate backend API/worker if runtime changed, run `npm run ops:compose:recreate`, verify health/status/auth, login in browser, request one safe feed recheck from Operations Drilldown, verify safe JSON/UI states for accepted, already-pending, and rate-limited outcomes, then logout to locked state. Do not paste credentials, cookies, sessions, CSRF tokens, idempotency keys, raw response bodies with sensitive values, raw feed URLs, raw logs, or secrets.
+
+MS-026B operator automation replaces the manual micro-step list with redacted, composable commands:
+
+```bash
+npm run ops:production:retest:redacted
+npm run ops:production:acceptance:redacted -- --endpoint https://rss-panel.habersoft.com
+npm run ops:feed-recheck:eligibility:redacted -- --endpoint https://rss-panel.habersoft.com
+npm run verify:operator-automation
+```
+
+Backend API/worker recreate guidance is dry-run by default through `npm run ops:production:recreate:api-worker -- --dry-run`; an operator-owned mutation requires `npm run ops:production:recreate:api-worker -- --apply`. Frontend recreate is also dry-run by default and requires `npm run ops:compose:recreate -- --apply` before it mutates production. Authenticated smoke credentials are environment variables only. Feed recheck action smoke is never automatic; it requires `--attempt-feed-recheck` and a real eligible actionRef. If no actionRef exists, report only `NO_ELIGIBLE_FEED_RECHECK_TARGET`.
+
+Risk-based guardrails:
+
+- CRITICAL: always fail closed for secret/credential/session/cookie/CSRF/token exposure, browser persistence APIs, unsafe auth boundary changes, write/action routes missing auth/CSRF/idempotency, admin API HTML fallback, production mutation by Codex, real secret reads, and unsafe production upstream anti-patterns.
+- HIGH: block production apply but allow local dry-run diagnostics for missing required env/image files, invalid upstreams, unresolved template markers, and missing action-route proxy generation.
+- MEDIUM: warn or degrade for optional/defaulted env, absent credentials for auth smoke, no eligible feed target, missing local Docker in non-critical checks, and host Node/npm warnings when Docker Node 24 validation passes.
+- LOW: treat npm update notices, CRLF checkout warnings, and Prisma update notices as informational.
 
 MS-024F status/auth shell acceptance remains operator-reported. MS-025A-R2 records the read-only operations summary dashboard production acceptance by operator report. Durable operator-state receipt outside Git records the R2 closeout; temporary workplace paths are not durable operator artifacts.

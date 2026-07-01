@@ -25,10 +25,13 @@ const requiredFiles = [
   "scripts/production-overlay-canonicalization-harness.mjs",
   "scripts/live-evidence-intake-verify.mjs",
   "scripts/production-operations-acceptance-verify.mjs",
+  "scripts/operator-production-retest.mjs",
+  "scripts/operator-automation-verify.mjs",
   "scripts/status-api-upstream-remediation-harness.mjs",
   "scripts/admin-api-proxy-template-harness.mjs",
   ".docs/status-api-upstream-remediation.md",
   "../rss-habersoft-com/scripts/admin-auth-provisioning.mjs",
+  "../rss-habersoft-com/scripts/production-api-worker-recreate.mjs",
   "../rss-habersoft-com/.docs/admin-auth-production-activation.md"
 ];
 
@@ -48,7 +51,8 @@ console.log(
   JSON.stringify(
     {
       status: "production-activation-package-verify-ok",
-      admin_ui_state: "MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED",
+      admin_ui_state: "MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET",
+      feed_recheck_effect_state: "PENDING_NO_ELIGIBLE_TARGET",
       prior_operations_drilldown_state: "MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
       prior_operations_summary_state: "MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
       authenticated_admin_shell_state: "MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED",
@@ -79,6 +83,7 @@ function assertPackageScripts() {
     "verify:production-operations-acceptance": "node scripts/production-operations-acceptance-verify.mjs",
     "verify:production-operations-drilldown-acceptance": "node scripts/production-operations-drilldown-acceptance-verify.mjs",
     "verify:admin-feed-recheck-action": "node scripts/admin-feed-recheck-action-verify.mjs",
+    "verify:operator-automation": "node scripts/operator-automation-verify.mjs",
     "verify:operator-ergonomics": "node scripts/operator-ergonomics-verify.mjs",
     "verify:production-overlay-canonicalization": "node scripts/production-overlay-canonicalization-harness.mjs",
     "verify:live-evidence-intake": "node scripts/live-evidence-intake-verify.mjs",
@@ -179,6 +184,16 @@ function assertDocsBoundary() {
     "MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
     "MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
     "MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED",
+    "MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET",
+    "NO_ELIGIBLE_FEED_RECHECK_TARGET",
+    "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
+    "ops:production:retest:redacted",
+    "ops:production:acceptance:redacted",
+    "ops:feed-recheck:eligibility:redacted",
+    "ops:production:recreate:api-worker -- --dry-run",
+    "ops:production:recreate:api-worker -- --apply",
+    "ops:compose:recreate -- --apply",
+    "verify:operator-automation",
     "read-only operations dashboard production acceptance is closed",
     "admin-api production proxy/template remediation is accepted",
     "/admin-api/operations/drilldown",
