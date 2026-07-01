@@ -1,8 +1,8 @@
 # Production Activation Package
 
-Status: `MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`.
+Status: `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
 
-MS-024A preserves MS-023D read-only production status-dashboard transport acceptance for the already operator-managed live admin UI surface and prepares the remaining authenticated-admin activation package. MS-024B adds operator ergonomics, classified auth-smoke diagnostics, and graduated guardrails for the operator-reported latest recreate blocker. MS-024C canonicalizes the backend-network overlay/helper path for production service-DNS upstreams, prevents missing service DNS from hiding `/healthz`, and sharpens backend-auth residual diagnostics. MS-024E records operator-reported evidence that backend admin-auth is configured and the frontend edge returns `AUTH_CONFIGURED_UNAUTHENTICATED` after `npm run ops:compose:recreate`. MS-024F records the operator-reported production retest statement that authenticated admin shell production acceptance is closed for the current implemented status/auth shell scope. MS-025A adds the protected read-only operations dashboard package locally. MS-025A-R1 remediates the operator-reported production proxy-template blocker by requiring generated Nginx config proof for `/tmp/nginx/conf.d/default.conf`, `nginx -T`, the exact admin-api summary route, and JSON fail-closed `/admin-api` fallback routes. MS-025A-R2 closes the read-only operations summary dashboard production acceptance and R1 proxy-template residual by operator report. MS-025B adds the protected read-only Operations Drilldown locally at `GET /admin-api/operations/drilldown`; new drilldown production acceptance is pending operator deploy/retest. This package preserves the no-secret, operator-managed production package, validates local production-mode release candidates with synthetic/local fixtures only, keeps proxy CORS-header hardening, improves backend admin-auth env-file validation, and keeps redacted auth smoke tooling as a regression/sanity tool. It does not mutate production, capture rollback baseline, perform production deployment, perform Codex credentialed login, publish a registry image, create a Git tag, create a GitHub Release, or create a PR. No production deployment was performed by Codex for MS-025B.
+MS-024A preserves MS-023D read-only production status-dashboard transport acceptance for the already operator-managed live admin UI surface and prepares the remaining authenticated-admin activation package. MS-024B adds operator ergonomics, classified auth-smoke diagnostics, and graduated guardrails for the operator-reported latest recreate blocker. MS-024C canonicalizes the backend-network overlay/helper path for production service-DNS upstreams, prevents missing service DNS from hiding `/healthz`, and sharpens backend-auth residual diagnostics. MS-024E records operator-reported evidence that backend admin-auth is configured and the frontend edge returns `AUTH_CONFIGURED_UNAUTHENTICATED` after `npm run ops:compose:recreate`. MS-024F records the operator-reported production retest statement that authenticated admin shell production acceptance is closed for the current implemented status/auth shell scope. MS-025A adds the protected read-only operations dashboard package locally. MS-025A-R1 remediates the operator-reported production proxy-template blocker by requiring generated Nginx config proof for `/tmp/nginx/conf.d/default.conf`, `nginx -T`, the exact admin-api summary route, and JSON fail-closed `/admin-api` fallback routes. MS-025A-R2 closes the read-only operations summary dashboard production acceptance and R1 proxy-template residual by operator report. MS-025B adds the protected read-only Operations Drilldown locally at `GET /admin-api/operations/drilldown`; drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence. This package preserves the no-secret, operator-managed production package, validates local production-mode release candidates with synthetic/local fixtures only, keeps proxy CORS-header hardening, improves backend admin-auth env-file validation, and keeps redacted auth smoke tooling as a regression/sanity tool. It does not mutate production, capture rollback baseline, perform production deployment, perform Codex credentialed login, publish a registry image, create a Git tag, create a GitHub Release, or create a PR. No production deployment was performed by Codex for MS-025B-R1.
 
 Rollback baseline is operator-managed. Server deployment/configuration is operator-managed. Codex-owned repository work is limited to templates, same-origin proxy configuration, local validation, and runbook guidance.
 
@@ -78,10 +78,10 @@ MS-025A operations dashboard package:
 
 - bounded status: `MS-025A_AUTHENTICATED_READ_ONLY_ADMIN_OPERATIONS_DASHBOARD_LOCAL_ACCEPTED_OPERATOR_DEPLOY_RETEST_REQUIRED`;
 - route: `GET /admin-api/operations/summary`;
-- source type: local synthetic validation only;
+- source type: operator_reported live retest evidence; local synthetic validation remains regression proof;
 - accepted locally: protected shell operations overview, aggregate dependency/feed/entry/ingestion metrics, exact same-origin admin-api proxy route, root-path admin session cookie, and no browser credential persistence;
 - excluded: raw feed URLs, entry content, tenant identifiers, raw logs, raw upstream bodies, upstream origins, cookies, password hashes, session secrets, Agent keys, Tenant tokens, and write controls;
-- historical production boundary: operator deploy/retest was required before any live production acceptance statement for the operations dashboard; MS-025A-R2 closes that residual by operator report.
+- historical production boundary: operator deploy/retest was required before any live production acceptance statement for the operations dashboard; MS-025A-R2 closes that summary residual by operator report, and MS-025B-R1 closes the drilldown residual by operator report.
 
 MS-025A-R1 admin-api proxy template remediation:
 
@@ -104,13 +104,13 @@ MS-025A-R2 operations dashboard production acceptance:
 
 MS-025B operations drilldown package:
 
-- bounded status: `MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`;
+- bounded status: `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`;
 - route: `GET /admin-api/operations/drilldown`;
-- source type: local synthetic validation only;
+- source type: operator_reported live retest evidence; local synthetic validation remains regression proof;
 - accepted locally: protected Operations Drilldown panel, strict runtime validation, exact same-origin admin-api proxy route, generated active Nginx config proof, and no browser credential persistence;
 - safe fields: opaque `displayId`, safe `displayName`, public `sourceHost`, feed health/status, ingestion status, timestamps, counts, safe notes, `capabilities`, `recentHours=24`, and `maxRows=20`;
 - excluded: raw feed URL paths or queries, entry content, entry URLs, tenant identifiers, raw logs, raw upstream bodies, private hostnames, cookies, password hashes, session secrets, Agent key values, Tenant bearer tokens, JWT claims, `localStorage`, `sessionStorage`, `IndexedDB`, `cookieStore`, `document.cookie`, and write controls;
-- production boundary: MS-025A-R2 remains accepted for the existing operations summary dashboard; new drilldown production acceptance is pending operator deploy/retest; No production deployment was performed by Codex for MS-025B.
+- production boundary: MS-025A-R2 remains accepted for the existing operations summary dashboard; drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence; No production deployment was performed by Codex for MS-025B-R1.
 
 MS-025B operator deploy/retest reminder:
 

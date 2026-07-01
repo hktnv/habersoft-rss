@@ -31,6 +31,7 @@ const productionComposeEnv = {
 };
 
 console.log(JSON.stringify({ status: "production-readiness-verify-start", image }, null, 2));
+const drilldownAcceptanceStatus = "MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED";
 
 run("node", ["--version"]);
 run("npm", ["--version"]);
@@ -42,6 +43,7 @@ run("npm", ["run", "build"]);
 run("npm", ["run", "verify:admin-operations-dashboard"]);
 run("npm", ["run", "verify:admin-operations-drilldown"]);
 run("npm", ["run", "verify:production-operations-acceptance"]);
+run("npm", ["run", "verify:production-operations-drilldown-acceptance"]);
 run("docker", ["build", "-t", image, "."], { printOutput: false, timeoutMs: 600000 });
 console.log(JSON.stringify({ status: "docker-build-ok", image }));
 
@@ -109,11 +111,13 @@ console.log(
     {
       status: "production-readiness-verify-ok",
       image,
+      drilldown_acceptance: drilldownAcceptanceStatus,
       checks: [
         "production build exists",
         "admin operations dashboard source/docs/proxy verifier passes",
         "admin operations drilldown source/docs/proxy verifier passes",
         "MS-025A-R2 operator-reported operations acceptance verifier passes",
+        "MS-025B-R1 operator-reported operations drilldown acceptance verifier passes",
         "docker image builds",
         "frontend production compose config passes without env file for inspection defaults",
         "missing upstream origin starts static runtime and fails closed at route level",

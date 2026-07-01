@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const backendRoot = path.join(repoRoot, "rss-habersoft-com");
-const status = "MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED";
+const status = "MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED";
 const acceptedSummaryStatus = "MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED";
 const route = "/admin-api/operations/drilldown";
 const summaryRoute = "/admin-api/operations/summary";
@@ -36,7 +36,7 @@ console.log(
       manual_refresh_only: true,
       generated_config_proof: "npm run test:admin-api-proxy-template",
       production_contact: false,
-      production_acceptance_claimed: false
+      production_acceptance_claimed: "operator_reported"
     },
     null,
     2
@@ -304,9 +304,11 @@ function assertDocsContract() {
     "IndexedDB",
     "cookieStore",
     "document.cookie",
-    "new drilldown production acceptance is pending operator deploy/retest",
-    "No production deployment was performed by Codex for MS-025B",
+    "drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence",
+    "Codex did not independently perform a credentialed production login",
+    "No production deployment was performed by Codex for MS-025B-R1",
     "npm run verify:admin-operations-drilldown",
+    "npm run verify:production-operations-drilldown-acceptance",
     "npm run test:admin-api-proxy-template",
     "npm run ops:compose:recreate"
   ]) {
@@ -314,10 +316,10 @@ function assertDocsContract() {
   }
 
   for (const forbidden of [
-    /\bMS-025B\b[^\n]{0,120}\bproduction\s+acceptance\s+(?:accepted|passed|complete|closed)\b/iu,
     /\bCodex (?:logged in|performed a credentialed production login|used real admin credentials)\b/iu,
     /\bCodex (?:deployed|restarted|recreated|mutated)\s+production\b/iu,
-    /\bregistry(?:\/image)? publication\s+(?:was|is|has been)\s+(?:performed|completed|accepted)\b/iu
+    /\bregistry(?:\/image)? publication\s+(?:was|is|has been)\s+(?:performed|completed|accepted)\b/iu,
+    /\bnew drilldown production acceptance is pending operator deploy\/retest\b/iu
   ]) {
     if (forbidden.test(docs)) failures.push(`docs contain forbidden MS-025B claim: ${forbidden}`);
   }

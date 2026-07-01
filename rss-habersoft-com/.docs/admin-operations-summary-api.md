@@ -6,7 +6,7 @@ MS-025A adds the backend route for the first authenticated read-only admin opera
 
 MS-025B adds a separate protected read-only bounded drilldown route at
 `GET /admin-api/operations/drilldown`. Its status is
-`MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`;
+`MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`;
 MS-025A-R2 remains accepted for this summary route, while new drilldown
 production acceptance is pending operator deploy/retest. See
 [admin-operations-drilldown-api.md](admin-operations-drilldown-api.md).

@@ -2,7 +2,7 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`.
+Status: `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
 
 ## Scope
 
@@ -146,7 +146,7 @@ MS-025A-R1 adds a generated-template regression harness for the operator-reporte
 
 MS-025A-R2 closes the read-only operations dashboard production acceptance from operator-reported live retest evidence. The evidence source is `operator_reported`: `GET /healthz -> 200 OK`, `GET /status-api/health/live -> JSON 200`, `GET /status-api/health/ready -> JSON 200`, unauthenticated `GET /admin-api/operations/summary -> JSON 401`, unknown `GET /admin-api/foo -> JSON 404`, after browser sign-in, the Operations Overview screen displayed successfully, after browser sign-in, JSON aggregate summary data loaded successfully, `auth-smoke:redacted -> AUTH_CONFIGURED_UNAUTHENTICATED`, and logout returned the UI to locked / unauthenticated state. Codex did not independently perform a credentialed production login, did not mutate production, and did not read real secrets.
 
-MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED adds Operations Drilldown locally. New drilldown production acceptance is pending operator deploy/retest. No production deployment was performed by Codex for MS-025B. The drilldown performs one authenticated initial load and then manual refresh only; it uses no polling and no browser persistence in localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie. The response renders only bounded safe fields: `displayId`, `displayName`, public `sourceHost`, feed `health`, `lastCheckedAt`, `lastResult`, safe counts, `receivedAt`, status, safe notes, and `capabilities`. It excludes raw feed URL paths or queries, entry content, raw logs, raw request/response bodies, private hostnames, cookies, password hashes, session secrets, database/Redis URLs, Agent key values, Tenant bearer tokens, JWT claims, and write controls.
+MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED adds Operations Drilldown locally. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence. No production deployment was performed by Codex for MS-025B-R1. The drilldown performs one authenticated initial load and then manual refresh only; it uses no polling and no browser persistence in localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie. The response renders only bounded safe fields: `displayId`, `displayName`, public `sourceHost`, feed `health`, `lastCheckedAt`, `lastResult`, safe counts, `receivedAt`, status, safe notes, and `capabilities`. It excludes raw feed URL paths or queries, entry content, raw logs, raw request/response bodies, private hostnames, cookies, password hashes, session secrets, database/Redis URLs, Agent key values, Tenant bearer tokens, JWT claims, and write controls.
 
 MS-024B changes the operator runtime posture to graduated guardrails. Missing, malformed, public-edge, or Docker bridge loopback upstreams no longer crash-loop the static frontend container. `/healthz` and the static app start, while exact proxy routes return bounded JSON with reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` remains available for strict synthetic checks.
 
@@ -212,7 +212,7 @@ The backend response is a bounded object with `status`, `generatedAt`, `window.r
 
 Safe fields are `displayId`, `displayName`, public `sourceHost`, feed `health`, `lastCheckedAt`, `lastResult`, `recentEntryCount`, `receivedAt`, `entryCount`, row status, and safe notes. Raw feed URL paths or queries, entry content, raw feed content, raw logs, raw request/response bodies, private hostnames, cookies, password hashes, session secrets, database/Redis URLs, Agent key values, Tenant bearer tokens, JWT claims, localStorage, sessionStorage, IndexedDB, cookieStore, document.cookie, and write controls are excluded.
 
-MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED is locally validated only. MS-025A-R2 remains accepted for the existing operations summary dashboard. New drilldown production acceptance is pending operator deploy/retest. No production deployment was performed by Codex for MS-025B.
+MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED closes the read-only Operations Drilldown production acceptance by operator-reported live retest evidence. MS-025A-R2 remains accepted for the existing operations summary dashboard. No production deployment was performed by Codex for MS-025B-R1.
 
 Before production retest after pulling a SHA with MS-025B, rebuild/update backend and frontend images as required by current runbooks, recreate the backend API if its runtime changed, rebuild/update the configured frontend image if Nginx template or entrypoint source changed, and run:
 

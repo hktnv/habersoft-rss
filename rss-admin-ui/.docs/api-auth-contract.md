@@ -1,10 +1,10 @@
 # rss-admin-ui API/Auth Contract
 
-Status: `MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`.
+Status: `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
 
 Historical foundation status: `MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY - NOT_DEPLOYED`.
 
-MS-022A adds a local/tested admin auth/session foundation and keeps production activation separate. MS-025A adds a protected read-only operations summary route, later accepted in production by operator-reported MS-025A-R2 evidence. MS-025B adds a protected read-only operations drilldown route locally. New drilldown production acceptance is pending operator deploy/retest.
+MS-022A adds a local/tested admin auth/session foundation and keeps production activation separate. MS-025A adds a protected read-only operations summary route, later accepted in production by operator-reported MS-025A-R2 evidence. MS-025B adds a protected read-only operations drilldown route locally. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence.
 
 ## Health Transport
 
@@ -62,4 +62,4 @@ Business API writes remain out of scope. Tenant APIs keep their existing bearer-
 
 ## Production Boundary
 
-No production deployment, production edge mutation, backend CORS broadening, registry publication, Git tag, or release is part of MS-025B. Production env/secret provisioning and drilldown production acceptance remain operator-authorized work. No production deployment was performed by Codex for MS-025B.
+No production deployment, production edge mutation, backend CORS broadening, registry publication, Git tag, or release is part of MS-025B. Production env/secret provisioning remains operator-authorized work. MS-025B-R1 drilldown production acceptance is closed by operator report. No production deployment was performed by Codex for MS-025B-R1.

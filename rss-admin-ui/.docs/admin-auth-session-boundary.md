@@ -1,10 +1,10 @@
 # Admin Auth Session Boundary
 
-Status: `MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`.
+Status: `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
 
 Historical foundation status: `MS-022A_ADMIN_AUTH_FOUNDATION_LOCAL_ONLY - NOT_DEPLOYED`.
 
-MS-022A adds a local/tested same-origin admin auth/session foundation. MS-025A keeps that session model and uses it for the protected read-only admin operations summary route, later accepted by operator-reported MS-025A-R2 production evidence. MS-025B uses the same session model for a protected read-only operations drilldown route. New drilldown production acceptance is pending operator deploy/retest.
+MS-022A adds a local/tested same-origin admin auth/session foundation. MS-025A keeps that session model and uses it for the protected read-only admin operations summary route, later accepted by operator-reported MS-025A-R2 production evidence. MS-025B uses the same session model for a protected read-only operations drilldown route. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence.
 
 ## Current Boundary
 
@@ -35,7 +35,7 @@ Requests are relative same-origin requests with `cache: "no-store"` and no custo
 
 The operations summary is GET-only, aggregate-only, and manually refreshable. It must not expose tenant identifiers, feed URLs, entry content, raw feed content, raw logs, raw request/response bodies, upstream origins, password hashes, session secrets, cookies, Agent keys, Tenant tokens, or database/Redis URLs.
 
-The operations drilldown is GET-only, bounded by `maxRows=20`, and manually refreshable with no polling. It renders safe fields only: opaque `displayId`, safe `displayName`, public `sourceHost`, statuses, counts, timestamps, safe notes, and `capabilities`. It must not expose raw feed URL paths or queries, entry content, raw logs, raw request/response bodies, private hostnames, password hashes, session secrets, cookies, Agent key values, Tenant bearer tokens, JWT claims, localStorage, sessionStorage, IndexedDB, cookieStore, document.cookie, or database/Redis URLs. No production deployment was performed by Codex for MS-025B.
+The operations drilldown is GET-only, bounded by `maxRows=20`, and manually refreshable with no polling. It renders safe fields only: opaque `displayId`, safe `displayName`, public `sourceHost`, statuses, counts, timestamps, safe notes, and `capabilities`. It must not expose raw feed URL paths or queries, entry content, raw logs, raw request/response bodies, private hostnames, password hashes, session secrets, cookies, Agent key values, Tenant bearer tokens, JWT claims, localStorage, sessionStorage, IndexedDB, cookieStore, document.cookie, or database/Redis URLs. No production deployment was performed by Codex for MS-025B-R1.
 
 ## Future Production Gates
 

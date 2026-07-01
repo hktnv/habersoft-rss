@@ -1,6 +1,6 @@
 # Admin Operations Drilldown API
 
-Status: `MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`.
+Status: `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
 
 MS-025B adds the next authenticated read-only admin operations slice after the
 operator-reported MS-025A-R2 operations summary acceptance. The new drilldown is
@@ -129,7 +129,7 @@ return JSON rather than HTML.
 ## Production Boundary
 
 MS-025A-R2 remains accepted for the existing read-only operations summary
-dashboard by operator report. MS-025B is ready locally but not deployed.
+dashboard by operator report. MS-025B-R1 closes the read-only drilldown production acceptance by operator report.
 
 For a later operator-managed retest:
 

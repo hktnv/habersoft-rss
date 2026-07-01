@@ -27,6 +27,7 @@
     "verify:production-upstream-contract": "node scripts/production-upstream-contract-verify.mjs",
     "verify:production-auth-acceptance": "node scripts/production-auth-acceptance-verify.mjs",
     "verify:production-operations-acceptance": "node scripts/production-operations-acceptance-verify.mjs",
+    "verify:production-operations-drilldown-acceptance": "node scripts/production-operations-drilldown-acceptance-verify.mjs",
     "verify:live-evidence-intake": "node scripts/live-evidence-intake-verify.mjs",
     "verify:admin-auth-not-configured-remediation": "node scripts/live-evidence-intake-verify.mjs",
     "verify:ms024a-auth-enablement-package": "node scripts/ms024a-auth-enablement-verify.mjs",

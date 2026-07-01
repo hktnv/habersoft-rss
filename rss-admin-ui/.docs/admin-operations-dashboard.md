@@ -1,10 +1,10 @@
 # Admin Operations Dashboard
 
-Status: `MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`.
+Status: `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
 
 MS-025A adds the first authenticated read-only admin operations slice after the MS-024F operator-reported status/auth shell acceptance. It is a local repository package with synthetic acceptance coverage. MS-025A-R2 records later operator-reported production acceptance for the read-only operations summary dashboard.
 
-MS-025B adds the next authenticated read-only Operations Drilldown slice locally. It is `MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`: new drilldown production acceptance is pending operator deploy/retest, and No production deployment was performed by Codex for MS-025B.
+MS-025B adds the next authenticated read-only Operations Drilldown slice locally. It is `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`: drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence, and No production deployment was performed by Codex for MS-025B-R1.
 
 MS-025A-R1 remediates the operator-reported follow-up where production sign-in and `/admin-auth/session` worked, but `/admin-api/operations/summary` returned HTTP 200 `text/html` with the SPA fallback. The reported container showed generated auth/status routes in `/tmp/nginx/conf.d/default.conf`, but no `/admin-api` route because the running frontend image's active template lacked the admin-api insertion marker. Codex did not contact production to re-check that R1 evidence; the remediation is repository-local and synthetic.
 
@@ -252,6 +252,6 @@ docker compose \
 
 Then use `npm run auth-smoke:redacted`, browser login/logout sanity, and `/admin-api/operations/summary` unauthenticated and authenticated checks as practical regression checks. Unauthenticated `/admin-api/operations/summary` should return bounded JSON `401` or the documented unauthenticated JSON class, not HTML. `/admin-api/*` must remain JSON fail-closed before the SPA fallback, and unknown `/admin-api/*` must not fall back to `index.html`. Report only redacted status classes and aggregate route status. Do not paste real admin credentials, cookies, session IDs, password hashes, session secrets, Redis keys, raw logs, raw response bodies, or production secret values into Git, docs, chat, or receipts.
 
-For MS-025B operator deploy/retest, also check unauthenticated `/admin-api/operations/drilldown` returns bounded JSON `401`, authenticated Operations Drilldown displays JSON data, and logout returns the UI to locked state. `auth-smoke:redacted` without credentials may report `AUTH_CONFIGURED_UNAUTHENTICATED`; that is an observation/sanity state, not a blocker by itself. New drilldown production acceptance is pending operator deploy/retest.
+For MS-025B operator deploy/retest, also check unauthenticated `/admin-api/operations/drilldown` returns bounded JSON `401`, authenticated Operations Drilldown displays JSON data, and logout returns the UI to locked state. `auth-smoke:redacted` without credentials may report `AUTH_CONFIGURED_UNAUTHENTICATED`; that is an observation/sanity state, not a blocker by itself. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence.
 
 MS-024F status/auth shell acceptance remains operator-reported. MS-025A-R2 records the read-only operations summary dashboard production acceptance by operator report. Durable operator-state receipt outside Git records the R2 closeout; temporary workplace paths are not durable operator artifacts.
