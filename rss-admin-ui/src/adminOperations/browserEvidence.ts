@@ -14,7 +14,11 @@ export type BrowserEvidenceClassification =
   | "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
   | "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET"
   | "FEED_ONBOARDING_EFFECT_ACCEPTED"
+  | "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED"
+  | "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE"
+  | "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK"
   | "FEED_RECHECK_EFFECT_ACCEPTED"
+  | "RECHECK_EFFECT_ACCEPTED_REGRESSION_OK"
   | "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING"
   | "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET"
   | "PENDING_FEED_RECHECK_COOLDOWN"
@@ -34,6 +38,9 @@ export type FeedRecheckEvidenceStatus =
 
 export type FeedOnboardingEvidenceStatus =
   | "FEED_ONBOARDING_EFFECT_ACCEPTED"
+  | "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED"
+  | "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE"
+  | "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK"
   | "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING"
   | "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION"
   | "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON";
@@ -74,6 +81,7 @@ export type RedactedBrowserEvidence = {
     readonly feed_onboarding_status:
       | "available"
       | "accepted"
+      | "already_present"
       | "pending_async_processing"
       | "pending_operator_action"
       | "rejected_safe_validation";
@@ -306,13 +314,20 @@ function classifyFeedOnboardingEvidence(feedOnboarding: FeedOnboardingResult | u
   readonly lastActionClassification: NonNullable<RedactedBrowserEvidence["feedOnboarding"]["lastActionClassification"]> | null;
 } {
   switch (feedOnboarding?.kind) {
-    case "created":
-    case "already_exists": {
+    case "created": {
       const accepted = feedOnboarding.response.feed?.eligibleForRecheck === true;
       return {
         effectStatus: accepted ? "FEED_ONBOARDING_EFFECT_ACCEPTED" : "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
         feedOnboardingStatus: accepted ? "accepted" : "pending_async_processing",
-        lastActionClassification: feedOnboarding.kind === "created" ? "FEED_ONBOARDING_ACTION_ACCEPTED" : "FEED_ONBOARDING_ACTION_ALREADY_EXISTS"
+        lastActionClassification: "FEED_ONBOARDING_ACTION_ACCEPTED"
+      };
+    }
+    case "already_exists": {
+      const alreadyPresent = feedOnboarding.response.feed?.eligibleForRecheck === true;
+      return {
+        effectStatus: alreadyPresent ? "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE" : "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
+        feedOnboardingStatus: alreadyPresent ? "already_present" : "pending_async_processing",
+        lastActionClassification: "FEED_ONBOARDING_ACTION_ALREADY_EXISTS"
       };
     }
     case "rate_limited":
@@ -385,7 +400,7 @@ function isFeedRecheckEvidence(value: unknown): boolean {
 }
 
 function isClassifications(value: unknown): boolean {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 12) return false;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 16) return false;
   const allowed = new Set<BrowserEvidenceClassification>([
     "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
     "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET",
@@ -393,7 +408,11 @@ function isClassifications(value: unknown): boolean {
     "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED",
     "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET",
     "FEED_ONBOARDING_EFFECT_ACCEPTED",
+    "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED",
+    "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE",
+    "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK",
     "FEED_RECHECK_EFFECT_ACCEPTED",
+    "RECHECK_EFFECT_ACCEPTED_REGRESSION_OK",
     "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
     "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
     "PENDING_FEED_RECHECK_COOLDOWN",
@@ -408,6 +427,7 @@ function isFeedOnboardingStatus(value: unknown): boolean {
   return (
     value === "available" ||
     value === "accepted" ||
+    value === "already_present" ||
     value === "pending_async_processing" ||
     value === "pending_operator_action" ||
     value === "rejected_safe_validation"
@@ -417,6 +437,9 @@ function isFeedOnboardingStatus(value: unknown): boolean {
 function isFeedOnboardingEffectStatus(value: unknown): boolean {
   return (
     value === "FEED_ONBOARDING_EFFECT_ACCEPTED" ||
+    value === "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED" ||
+    value === "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE" ||
+    value === "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK" ||
     value === "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING" ||
     value === "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION" ||
     value === "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON"

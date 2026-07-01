@@ -104,6 +104,54 @@ describe("redacted browser evidence", () => {
     expect(serializeRedactedBrowserEvidence(evidence)).not.toMatch(/feed_recheck_v1\.|csrf|cookie|https?:\/\//iu);
   });
 
+  it("classifies already-existing onboarding as regression-not-applicable instead of fresh effect acceptance", () => {
+    const evidence = createRedactedBrowserEvidence(
+      validDrilldown(),
+      {
+        feed_123456abcd: {
+          result: {
+            kind: "accepted",
+            httpStatus: 202,
+            response: {
+              status: "accepted",
+              requestId: "recheck_abc123def456",
+              target: { displayId: "feed_123456abcd", sourceHost: "news.example.org" },
+              queued: true,
+              cooldownSeconds: 300,
+              message: "Feed recheck was requested through the existing due-feed path.",
+              generatedAt: "2026-07-01T10:01:00.000Z"
+            }
+          }
+        }
+      },
+      {
+        kind: "already_exists",
+        httpStatus: 200,
+        response: {
+          status: "already_exists",
+          requestRef: "onboard_abc123def456",
+          feed: {
+            displayId: "feed_123456abcd",
+            sourceHost: "news.example.org",
+            state: "active",
+            eligibleForRecheck: true
+          },
+          nextSteps: ["Refresh Operations Drilldown."],
+          message: "Feed already exists.",
+          generatedAt: "2026-07-01T10:00:00.000Z"
+        }
+      }
+    );
+
+    expect(evidence.feedOnboarding.effectStatus).toBe("FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE");
+    expect(evidence.feedOnboarding.feed_onboarding_status).toBe("already_present");
+    expect(evidence.classifications).toEqual(expect.arrayContaining([
+      "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE",
+      "FEED_RECHECK_EFFECT_ACCEPTED"
+    ]));
+    expect(evidence.classifications).not.toContain("FEED_ONBOARDING_EFFECT_ACCEPTED");
+  });
+
   it("rejects forbidden token, cookie, csrf, and actionRef surfaces", () => {
     for (const forbidden of [
       { ...minimalEvidence(), cookie: "habersoft_admin_session=abc" },

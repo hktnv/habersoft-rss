@@ -13,6 +13,8 @@ const acceptanceOnly = args.includes("--acceptance-only");
 const feedRecheckOnly = args.includes("--feed-recheck-only");
 const attemptFeedRecheck = args.includes("--attempt-feed-recheck");
 const dryRun = args.includes("--dry-run") || !acceptanceOnly;
+const initialAcceptanceMode = args.includes("--initial-acceptance") || args.includes("--fresh-acceptance");
+const noPriorAcceptanceLedger = args.includes("--no-prior-acceptance-ledger");
 const receiptFile = optionValue("--write-receipt") ?? optionValue("--receipt-file") ?? process.env.OPERATOR_RETEST_RECEIPT_FILE;
 const endpoint = optionValue("--endpoint") ?? optionValue("--base-url") ?? process.env.OPERATOR_RETEST_BASE_URL ?? "http://127.0.0.1:8081";
 const browserEvidenceFile = optionValue("--browser-evidence-file") ?? optionValue("--browser-evidence") ?? process.env.OPERATOR_BROWSER_EVIDENCE_FILE;
@@ -26,12 +28,13 @@ const credentialsProvided = username !== undefined || password !== undefined;
 if (args.includes("--help") || args.includes("-h")) {
   writeJson({
     status: "operator-production-retest-help",
-    usage: "node scripts/operator-production-retest.mjs [--dry-run|--acceptance-only] [--feed-recheck-only] [--attempt-feed-recheck] [--endpoint URL] [--browser-evidence-file FILE|--browser-evidence-stdin] [--nginx-config-file FILE] [--write-receipt PATH]",
+    usage: "node scripts/operator-production-retest.mjs [--dry-run|--acceptance-only] [--initial-acceptance] [--feed-recheck-only] [--attempt-feed-recheck] [--endpoint URL] [--browser-evidence-file FILE|--browser-evidence-stdin] [--nginx-config-file FILE] [--write-receipt PATH]",
     default: "dry-run diagnostics",
     credential_policy: "admin credentials must be supplied only through ADMIN_AUTH_SMOKE_USERNAME and ADMIN_AUTH_SMOKE_PASSWORD",
     browser_evidence_policy: "redacted browser evidence can close authenticated read-only and effect classifications without credentials; file and stdin modes never echo the evidence body",
     route_proof_policy: "route proof reads a supplied generated config or, when Docker is available, inspects the running admin UI container with docker ps/exec only",
     action_policy: "feed recheck action attempt requires --attempt-feed-recheck and an authenticated eligible actionRef; feed onboarding is route-smoked unless redacted evidence reports an effect",
+    acceptance_mode_policy: "--initial-acceptance requires fresh onboarding effect evidence; default acceptance mode uses tracked MS-027B-R1 ledger continuity when present",
     output: "redacted"
   });
   process.exit(0);
@@ -66,6 +69,8 @@ if (dryRun) {
       feed_recheck_action_attempt_requires: "--attempt-feed-recheck",
       feed_onboarding_action_attempt: "manual authenticated operator action only; not automatic",
       browser_evidence: browserEvidenceStdin ? "stdin_supported" : browserEvidenceFile === undefined ? "optional" : "will_verify",
+      acceptance_mode: initialAcceptanceMode ? "fresh_initial_acceptance" : "regression_continuity_when_prior_ledger_present",
+      prior_acceptance_ledger: !initialAcceptanceMode && !noPriorAcceptanceLedger && hasPriorMs027bAcceptanceLedger() ? "MS_027B_R1_ACCEPTED_TRACKED" : "absent_or_disabled",
       route_proof: "auto_collects_from_running_container_or_accepts_--nginx-config-file",
       receipt: receiptFile === undefined ? "optional_with_--write-receipt" : "will_write"
     },
@@ -146,7 +151,10 @@ async function runAcceptance() {
     feedOnboarding = {
       ...feedOnboarding,
       evidence_classification: feedOnboardingFromBrowserEvidence(browserEvidence),
-      effect_status: browserEvidence.feed_onboarding_effect_status
+      effect_status: browserEvidence.feed_onboarding_effect_status,
+      acceptance_disposition: browserEvidence.onboarding_acceptance_disposition,
+      requested_acceptance_mode: browserEvidence.requested_acceptance_mode,
+      prior_acceptance_ledger: browserEvidence.prior_acceptance_ledger
     };
   }
 
@@ -239,7 +247,7 @@ async function runAcceptance() {
 
   await finish({
     status,
-    milestone: "MS-027B-R1",
+      milestone: "MS-027B-R2",
     mode: "acceptance",
     base_url: baseUrl.origin,
     classifications,
@@ -287,6 +295,7 @@ function frontendReadinessSummary() {
     recreate_dry_run: "npm run ops:compose:recreate",
     recreate_apply: "npm run ops:compose:recreate -- --apply",
     route_proof: "running generated Nginx config must contain summary, drilldown, feed-recheck, feed-onboarding, and no __ADMIN_UI_* markers",
+    evidence_regression_mode: initialAcceptanceMode ? "disabled_initial_acceptance" : "enabled_when_ms027b_r1_ledger_is_tracked",
     output: "redacted"
   };
 }
@@ -297,6 +306,29 @@ function gitSummary() {
     branch: git(["branch", "--show-current"]),
     origin_main: git(["ls-remote", "origin", "refs/heads/main"]).split(/\s+/u)[0] || "unavailable"
   };
+}
+
+function hasPriorMs027bAcceptanceLedger() {
+  const docs = [
+    readIfExists(path.join(repoRoot, "README.md")),
+    readIfExists(path.join(repoRoot, "PRODUCTION.md")),
+    readIfExists(path.join(frontendRoot, "README.md")),
+    readIfExists(path.join(frontendRoot, "PRODUCTION.md")),
+    readIfExists(path.join(frontendRoot, ".docs", "production-feed-effect-acceptance.md")),
+    readIfExists(path.join(frontendRoot, ".docs", "operator-risk-model.md")),
+    readIfExists(path.join(backendRoot, "README.md")),
+    readIfExists(path.join(backendRoot, "PRODUCTION.md"))
+  ].join("\n");
+  return (
+    docs.includes("SUCCESS_MS_027B_R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTANCE_CLOSED_OPERATOR_REPORTED_EVIDENCE_AUTOMATION_LANDED") &&
+    docs.includes("MS-027B-R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTED_OPERATOR_REPORTED") &&
+    docs.includes("FEED_ONBOARDING_EFFECT_ACCEPTED") &&
+    docs.includes("FEED_RECHECK_EFFECT_ACCEPTED")
+  );
+}
+
+function readIfExists(file) {
+  return existsSync(file) ? readFileSync(file, "utf8") : "";
 }
 
 function classifyRoutes(results) {
@@ -347,13 +379,16 @@ function feedRecheckFromBrowserEvidence(evidence) {
 
 function feedOnboardingFromBrowserEvidence(evidence) {
   if (evidence.classifications.includes("FEED_ONBOARDING_EFFECT_ACCEPTED")) return "FEED_ONBOARDING_EFFECT_ACCEPTED";
+  if (evidence.classifications.includes("FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK")) return "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK";
+  if (evidence.classifications.includes("FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE")) return "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE";
+  if (evidence.classifications.includes("FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED")) return "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED";
   if (evidence.classifications.includes("PENDING_FEED_ONBOARDING_ASYNC_PROCESSING")) return "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING";
   if (evidence.classifications.includes("FEED_ONBOARDING_REJECTED_SAFE_VALIDATION")) return "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION";
   return "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON";
 }
 
 function runBrowserEvidenceVerifier(file) {
-  const result = spawnSync(process.execPath, ["scripts/browser-evidence-verify.mjs", "--file", file], {
+  const result = spawnSync(process.execPath, browserEvidenceVerifierArgs("--file", file), {
     cwd: frontendRoot,
     env: process.env,
     encoding: "utf8",
@@ -365,6 +400,9 @@ function runBrowserEvidenceVerifier(file) {
     status: parsed?.status ?? "browser-evidence-verify-failed",
     exit_code: result.status ?? 1,
     classifications: Array.isArray(parsed?.classifications) ? parsed.classifications : ["BROWSER_EVIDENCE_INVALID"],
+    requested_acceptance_mode: parsed?.requested_acceptance_mode ?? "unknown",
+    prior_acceptance_ledger: parsed?.prior_acceptance_ledger ?? "unknown",
+    onboarding_acceptance_disposition: parsed?.onboarding_acceptance_disposition ?? "unknown",
     feed_recheck_effect_status: parsed?.feed_recheck_effect_status ?? "unknown",
     feed_onboarding_effect_status: parsed?.feed_onboarding_effect_status ?? "unknown",
     evidence_sha256: parsed?.evidence_sha256 ?? "unavailable",
@@ -374,7 +412,7 @@ function runBrowserEvidenceVerifier(file) {
 
 async function runBrowserEvidenceVerifierFromStdin() {
   const evidenceText = await readStdin(32769);
-  const result = spawnSync(process.execPath, ["scripts/browser-evidence-verify.mjs", "--stdin"], {
+  const result = spawnSync(process.execPath, browserEvidenceVerifierArgs("--stdin"), {
     cwd: frontendRoot,
     env: process.env,
     input: evidenceText,
@@ -387,11 +425,24 @@ async function runBrowserEvidenceVerifierFromStdin() {
     status: parsed?.status ?? "browser-evidence-verify-failed",
     exit_code: result.status ?? 1,
     classifications: Array.isArray(parsed?.classifications) ? parsed.classifications : ["BROWSER_EVIDENCE_INVALID"],
+    requested_acceptance_mode: parsed?.requested_acceptance_mode ?? "unknown",
+    prior_acceptance_ledger: parsed?.prior_acceptance_ledger ?? "unknown",
+    onboarding_acceptance_disposition: parsed?.onboarding_acceptance_disposition ?? "unknown",
     feed_recheck_effect_status: parsed?.feed_recheck_effect_status ?? "unknown",
     feed_onboarding_effect_status: parsed?.feed_onboarding_effect_status ?? "unknown",
     evidence_sha256: parsed?.evidence_sha256 ?? "unavailable",
     output: "redacted"
   };
+}
+
+function browserEvidenceVerifierArgs(inputFlag, inputValue = undefined) {
+  const verifierArgs = ["scripts/browser-evidence-verify.mjs", inputFlag];
+  if (inputValue !== undefined) verifierArgs.push(inputValue);
+  if (!initialAcceptanceMode && !noPriorAcceptanceLedger && hasPriorMs027bAcceptanceLedger()) {
+    verifierArgs.push("--regression-mode");
+  }
+  if (noPriorAcceptanceLedger) verifierArgs.push("--no-prior-acceptance-ledger");
+  return verifierArgs;
 }
 
 function classifySession(result) {
@@ -825,6 +876,10 @@ function acceptanceClassifications({ auth, browserEvidence, feedRecheck, feedOnb
   if (routeProof.classification !== "NGINX_ROUTE_PROOF_ACCEPTED") values.add("ROUTE_PROOF_ATTENTION_REQUIRED");
   for (const classification of browserEvidence.classifications ?? []) values.add(classification);
   if (feedOnboarding.effect_status === "FEED_ONBOARDING_EFFECT_ACCEPTED") values.add("FEED_ONBOARDING_EFFECT_ACCEPTED");
+  if (feedOnboarding.effect_status === "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED") values.add("FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED");
+  if (feedOnboarding.effect_status === "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE") values.add("FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE");
+  if (feedOnboarding.effect_status === "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK") values.add("FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK");
+  if (feedOnboarding.effect_status === "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON") values.add("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON");
   if (feedOnboarding.effect_status === "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING") values.add("FEED_ONBOARDING_EFFECT_PENDING");
   if (feedRecheck.effect_status === "FEED_RECHECK_EFFECT_ACCEPTED") values.add("FEED_RECHECK_EFFECT_ACCEPTED");
   if (feedRecheck.effect_status === "PENDING_FEED_RECHECK_COOLDOWN") values.add("FEED_RECHECK_COOLDOWN_ACTIVE");

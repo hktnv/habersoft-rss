@@ -80,4 +80,25 @@ The verifier checks tracked docs and synthetic local automation only. It does no
 
 MS-027B remains the local source-delivery status `SUCCESS_MS_027B_FEED_ONBOARDING_RECHECK_EFFECT_FLOW_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED` historically. MS-027B-R1 supersedes only the production acceptance residual for the bounded feed onboarding plus recheck effect scope by operator report.
 
+## MS-027B-R2 Regression-Mode Semantics
+
+Result: `SUCCESS_MS_027B_R2_EVIDENCE_AUTOMATION_REGRESSION_MODE_LANDED_OPERATOR_RETEST_OPTIONAL`.
+
+MS-027B-R1 feed onboarding plus recheck effect production acceptance remains accepted. MS-027B-R2 does not claim a new onboarding effect and does not reopen accepted backend evidence. It makes the redacted evidence verifier and one-command retest distinguish fresh first-time acceptance from later regression evidence where the production feed is already present.
+
+Regression-mode classifications are:
+
+- `FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED`;
+- `FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE`;
+- `FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK`;
+- `RECHECK_EFFECT_ACCEPTED_REGRESSION_OK`.
+
+Do not claim a fresh onboarding effect from an already-present feed regression retest. Fresh initial acceptance still requires `FEED_ONBOARDING_EFFECT_ACCEPTED`; if no tracked prior acceptance ledger is available, missing onboarding effect evidence remains `OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON` / pending initial onboarding effect evidence. Current recheck evidence may still be accepted as `FEED_RECHECK_EFFECT_ACCEPTED` when the redacted browser evidence supports it.
+
+The local tracked guard for the R2 semantics is:
+
+```bash
+npm run verify:evidence-regression-mode
+```
+
 Future admin write/business features remain separate bounded milestones.

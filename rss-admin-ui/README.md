@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `SUCCESS_MS_027B_R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTANCE_CLOSED_OPERATOR_REPORTED_EVIDENCE_AUTOMATION_LANDED`.
+Status: `SUCCESS_MS_027B_R2_EVIDENCE_AUTOMATION_REGRESSION_MODE_LANDED_OPERATOR_RETEST_OPTIONAL`.
 
 ## Scope
 
-Included through MS-027B-R1:
+Included through MS-027B-R2:
 
 - application shell,
 - root route,
@@ -78,7 +78,8 @@ Included through MS-027B-R1:
 - MS-027A-R1 production image freshness remediation for backend/frontend promotion, stale-image classifications, and verifier,
 - MS-027A-R2 operator-reported production promotion/image-freshness and feed-onboarding route-smoke acceptance verifier,
 - MS-027B feed onboarding plus recheck effect flow verifier, redacted effect classifications, and browser-evidence-driven operator retest closure path,
-- MS-027B-R1 operator-reported production acceptance closure for bounded feed onboarding plus recheck effect, stdin/file evidence intake, auto route proof, durable receipt writing, and redacted evidence JSON download.
+- MS-027B-R1 operator-reported production acceptance closure for bounded feed onboarding plus recheck effect, stdin/file evidence intake, auto route proof, durable receipt writing, and redacted evidence JSON download,
+- MS-027B-R2 evidence regression-mode semantics for already-present feed retests, prior acceptance ledger continuity, recheck-only regression acceptance, and first-time acceptance fail-closed checks.
 
 Not included:
 
@@ -132,6 +133,7 @@ npm run verify:operator-automation-acceptance
 npm run verify:production-image-freshness
 npm run verify:production-feed-onboarding-acceptance
 npm run verify:production-feed-effect-acceptance
+npm run verify:evidence-regression-mode
 npm run verify:browser-evidence
 npm run ops:production:retest -- --dry-run
 npm run ops:production:retest -- --retest-only --endpoint https://rss-panel.habersoft.com
@@ -186,6 +188,8 @@ MS-027A adds authenticated admin feed onboarding at `POST /admin-api/operations/
 MS-027B adds `SUCCESS_MS_027B_FEED_ONBOARDING_RECHECK_EFFECT_FLOW_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`. The local fullstack and production-mode RC checks now prove feed onboarding creates backend-visible reserved feed state, Operations Drilldown can refresh to an eligible row, and the bounded recheck route reports the existing due-feed path without exposing raw feed URLs or actionRefs. Browser evidence and the one-command retest classify `FEED_ONBOARDING_EFFECT_ACCEPTED`, `FEED_RECHECK_EFFECT_ACCEPTED`, `PENDING_FEED_ONBOARDING_ASYNC_PROCESSING`, `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`, `PENDING_FEED_RECHECK_COOLDOWN`, `FEED_ONBOARDING_REJECTED_SAFE_VALIDATION`, `FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION`, and `OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON`. Use `npm run ops:production:retest -- --browser-evidence <redacted-browser-evidence.json>` after operator deployment/retest; no command-line credentials are required for evidence-driven classification. Codex did not perform production contact. No production feed was created, seeded, or faked. Validate with `npm run verify:feed-onboarding-recheck-effect-flow`.
 
 MS-027B-R1 records `SUCCESS_MS_027B_R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTANCE_CLOSED_OPERATOR_REPORTED_EVIDENCE_AUTOMATION_LANDED` from operator-reported evidence only. Status is `MS-027B-R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`; source type is `operator_reported`; accepted classes include `FEED_ONBOARDING_EFFECT_ACCEPTED`, `FEED_RECHECK_EFFECT_ACCEPTED`, `browser-evidence-verify-ok`, and `NGINX_ROUTE_PROOF_ACCEPTED`. `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET is closed for the bounded MS-027B feed onboarding plus recheck effect scope`. Codex did not independently perform a credentialed production login; no production contact by Codex; no production mutation by Codex. Operators can use **Download redacted evidence JSON**, `ops:production:acceptance:redacted -- --browser-evidence-stdin`, `--browser-evidence-file`, and `npm run verify:production-feed-effect-acceptance`. The durable sanitized receipt lives outside Git under `operator-state/admin-ui-production-activation/ms-027b-r1-feed-onboarding-recheck-effect-accepted-operator-reported-receipt.json`.
+
+MS-027B-R2 adds `SUCCESS_MS_027B_R2_EVIDENCE_AUTOMATION_REGRESSION_MODE_LANDED_OPERATOR_RETEST_OPTIONAL`: MS-027B-R1 feed onboarding plus recheck effect production acceptance remains accepted, and later already-present feed retests are classified as regression/continuity evidence rather than fresh onboarding. Regression mode emits `FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED`, `FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE`, `FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK`, and `RECHECK_EFFECT_ACCEPTED_REGRESSION_OK` only when the prior acceptance ledger is tracked; first-time missing onboarding effect evidence remains `OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON`. Do not claim a fresh onboarding effect from an already-present feed regression retest. Validate with `npm run verify:evidence-regression-mode`.
 
 MS-027A-R1 adds production promotion image freshness remediation. The canonical operator path is still `npm run ops:production:retest`, but `--apply` now requires the checkout to match `origin/main`, builds backend/frontend images from current HEAD, verifies `org.opencontainers.image.revision` and `org.opencontainers.image.source`, updates the operator image pointer, and then recreates containers. `--recreate-only` is restart-only and blocks unless the existing image already matches HEAD. Operator output distinguishes `source_not_promoted`, `backend_image_stale`, `frontend_image_stale`, `backend_route_missing`, `frontend_route_missing`, `nginx_template_marker_unresolved`, `auth_not_configured`, `unauthenticated_expected`, `no_eligible_feed_target`, and `accepted_route_smoke_pending_effect`. Validate with `npm run verify:production-image-freshness`; MS-027A-R2 later closes the image-freshness and feed-onboarding route-smoke production retest residual by operator report only.
 

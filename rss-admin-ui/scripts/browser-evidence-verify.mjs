@@ -1,14 +1,22 @@
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = path.resolve(frontendRoot, "..");
+const backendRoot = path.join(repoRoot, "rss-habersoft-com");
 const args = process.argv.slice(2);
 const schema = "habersoft-admin-browser-evidence-v1";
 const maxBytes = 32768;
 const forbiddenKeyPattern = /(?:cookie|session|csrf|idempotency|actionref|action_ref|secret|password|token|authorization|bearer|raw|url|href|host|hostname|path|stack|filesystem|storage)/iu;
 const forbiddenStringPattern = /feed_recheck_v1\.|https?:\/\/|Set-Cookie|Authorization|Bearer\s+|csrf|idempotency|[A-Z]:\\|\/(?:home|var|etc|tmp)\//iu;
 const selfTest = args.includes("--self-test");
+const regressionMode = args.includes("--regression-mode") || args.includes("--acceptance-ledger-continuity");
+const noPriorAcceptanceLedger = args.includes("--no-prior-acceptance-ledger");
+const runtimeOptions = { regressionMode, noPriorAcceptanceLedger };
 const receiptOut = optionValue("--receipt-out") ?? optionValue("--receipt-file");
 const evidenceFile = optionValue("--file") ?? positionalFile();
 const evidenceStdin = args.includes("--stdin") || args.includes("--browser-evidence-stdin");
@@ -16,15 +24,23 @@ const evidenceStdin = args.includes("--stdin") || args.includes("--browser-evide
 if (args.includes("--help") || args.includes("-h")) {
   writeJson({
     status: "browser-evidence-verify-help",
-    usage: "node scripts/browser-evidence-verify.mjs (--file redacted-browser-evidence.json|--stdin) [--receipt-out receipt.json]",
+    usage: "node scripts/browser-evidence-verify.mjs (--file redacted-browser-evidence.json|--stdin) [--regression-mode] [--receipt-out receipt.json]",
     self_test: "node scripts/browser-evidence-verify.mjs --self-test",
+    acceptance_modes: {
+      initial: "fresh onboarding acceptance requires FEED_ONBOARDING_EFFECT_ACCEPTED",
+      regression: "use --regression-mode after tracked MS-027B-R1 acceptance to classify already-present/not-retested onboarding as ledger continuity"
+    },
     accepted_classifications: [
       "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
       "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET",
       "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
       "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED",
       "FEED_ONBOARDING_EFFECT_ACCEPTED",
+      "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED",
+      "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE",
+      "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK",
       "FEED_RECHECK_EFFECT_ACCEPTED",
+      "RECHECK_EFFECT_ACCEPTED_REGRESSION_OK",
       "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
       "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
       "PENDING_FEED_RECHECK_COOLDOWN",
@@ -54,12 +70,12 @@ if (evidenceFile === undefined && !evidenceStdin) {
   fail("--file or --stdin is required unless --self-test is used");
 }
 
-const result = evidenceStdin ? await verifyEvidenceStdin() : await verifyEvidenceFile(evidenceFile);
+const result = evidenceStdin ? await verifyEvidenceStdin(runtimeOptions) : await verifyEvidenceFile(evidenceFile, runtimeOptions);
 await maybeWriteReceipt(result);
 writeJson(result);
 if (result.status !== "browser-evidence-verify-ok") process.exit(1);
 
-export async function verifyEvidenceFile(file) {
+export async function verifyEvidenceFile(file, options = runtimeOptions) {
   const absolute = path.resolve(file);
   let text;
   try {
@@ -82,28 +98,15 @@ export async function verifyEvidenceFile(file) {
     };
   }
 
-  return {
-    status: "browser-evidence-verify-ok",
-    classifications: validation.classifications,
-    feed_recheck_effect_status: validation.evidence.feedRecheck.effectStatus,
-    no_eligible_feed_recheck_target: validation.evidence.operations.feeds.noEligibleFeedRecheckTarget,
-    feed_onboarding_available: validation.evidence.feedOnboarding.feed_onboarding_available,
-    feed_onboarding_status: validation.evidence.feedOnboarding.feed_onboarding_status,
-    feed_onboarding_effect_status: validation.evidence.feedOnboarding.effectStatus ?? "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
-    no_eligible_target: validation.evidence.feedOnboarding.no_eligible_target,
-    critical_risk: validation.evidence.feedOnboarding.critical_risk,
-    evidence_sha256: digest,
-    bytes,
-    output: "redacted"
-  };
+  return acceptedResult(validation, digest, bytes, options);
 }
 
-export async function verifyEvidenceStdin() {
+export async function verifyEvidenceStdin(options = runtimeOptions) {
   const text = await readStdin(maxBytes + 1);
-  return verifyEvidenceText(text);
+  return verifyEvidenceText(text, options);
 }
 
-export function verifyEvidenceText(text) {
+export function verifyEvidenceText(text, options = runtimeOptions) {
   const bytes = Buffer.byteLength(text, "utf8");
   const digest = createHash("sha256").update(text).digest("hex");
   const validation = validateEvidenceText(text);
@@ -118,19 +121,92 @@ export function verifyEvidenceText(text) {
     };
   }
 
+  return acceptedResult(validation, digest, bytes, options);
+}
+
+function acceptedResult(validation, digest, bytes, options) {
+  const semantics = classifyEvidenceSemantics(validation.evidence, validation.classifications, options);
   return {
     status: "browser-evidence-verify-ok",
-    classifications: validation.classifications,
+    classifications: semantics.classifications,
+    requested_acceptance_mode: options.regressionMode ? "regression_continuity" : "fresh_initial_acceptance",
+    prior_acceptance_ledger: semantics.priorAcceptanceLedger ? "MS_027B_R1_ACCEPTED_TRACKED" : "absent_or_disabled",
+    onboarding_acceptance_disposition: semantics.onboardingDisposition,
     feed_recheck_effect_status: validation.evidence.feedRecheck.effectStatus,
     no_eligible_feed_recheck_target: validation.evidence.operations.feeds.noEligibleFeedRecheckTarget,
     feed_onboarding_available: validation.evidence.feedOnboarding.feed_onboarding_available,
     feed_onboarding_status: validation.evidence.feedOnboarding.feed_onboarding_status,
-    feed_onboarding_effect_status: validation.evidence.feedOnboarding.effectStatus ?? "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+    feed_onboarding_effect_status: semantics.feedOnboardingEffectStatus,
     no_eligible_target: validation.evidence.feedOnboarding.no_eligible_target,
     critical_risk: validation.evidence.feedOnboarding.critical_risk,
     evidence_sha256: digest,
     bytes,
     output: "redacted"
+  };
+}
+
+function classifyEvidenceSemantics(evidence, rawClassifications, options) {
+  const priorAcceptanceLedger = options.regressionMode === true && options.noPriorAcceptanceLedger !== true && hasPriorMs027bAcceptanceLedger();
+  const classifications = new Set(rawClassifications);
+  const rawOnboardingStatus = evidence.feedOnboarding.effectStatus ?? "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON";
+  const feedRecheckAccepted =
+    evidence.feedRecheck.effectStatus === "FEED_RECHECK_EFFECT_ACCEPTED" ||
+    rawClassifications.includes("FEED_RECHECK_EFFECT_ACCEPTED") ||
+    rawClassifications.includes("BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED");
+  const alreadyPresent =
+    rawOnboardingStatus === "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE" ||
+    evidence.feedOnboarding.feed_onboarding_status === "already_present" ||
+    evidence.feedOnboarding.lastActionClassification === "FEED_ONBOARDING_ACTION_ALREADY_EXISTS";
+  const noFreshOnboardingEffect = rawOnboardingStatus === "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON" || alreadyPresent;
+  const onboardingRejected =
+    rawOnboardingStatus === "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION" ||
+    rawClassifications.includes("FEED_ONBOARDING_REJECTED_SAFE_VALIDATION");
+
+  if (rawOnboardingStatus === "FEED_ONBOARDING_EFFECT_ACCEPTED") {
+    return {
+      classifications: [...classifications],
+      feedOnboardingEffectStatus: "FEED_ONBOARDING_EFFECT_ACCEPTED",
+      priorAcceptanceLedger,
+      onboardingDisposition: "FRESH_ONBOARDING_EFFECT_ACCEPTED"
+    };
+  }
+
+  if (priorAcceptanceLedger && noFreshOnboardingEffect && !onboardingRejected) {
+    classifications.delete("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON");
+    classifications.add(
+      alreadyPresent
+        ? "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE"
+        : "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED"
+    );
+    classifications.add("FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK");
+    if (feedRecheckAccepted) classifications.add("RECHECK_EFFECT_ACCEPTED_REGRESSION_OK");
+    return {
+      classifications: [...classifications],
+      feedOnboardingEffectStatus: alreadyPresent
+        ? "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE"
+        : "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED",
+      priorAcceptanceLedger,
+      onboardingDisposition: feedRecheckAccepted
+        ? "REGRESSION_CONTINUITY_RECHECK_ACCEPTED_ONBOARDING_PREVIOUSLY_ACCEPTED"
+        : "REGRESSION_CONTINUITY_ONBOARDING_PREVIOUSLY_ACCEPTED_RECHECK_PENDING"
+    };
+  }
+
+  if (noFreshOnboardingEffect) {
+    classifications.add("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON");
+    return {
+      classifications: [...classifications],
+      feedOnboardingEffectStatus: "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+      priorAcceptanceLedger,
+      onboardingDisposition: "PENDING_INITIAL_ONBOARDING_EFFECT_EVIDENCE"
+    };
+  }
+
+  return {
+    classifications: [...classifications],
+    feedOnboardingEffectStatus: rawOnboardingStatus,
+    priorAcceptanceLedger,
+    onboardingDisposition: onboardingRejected ? "ONBOARDING_EVIDENCE_REJECTED_SAFE_VALIDATION" : "ONBOARDING_EVIDENCE_PENDING_OR_ATTENTION_REQUIRED"
   };
 }
 
@@ -175,6 +251,8 @@ async function runSelfTest() {
     const validFile = path.join(tempRoot, "valid.json");
     const acceptedFile = path.join(tempRoot, "accepted.json");
     const noEligibleFile = path.join(tempRoot, "no-eligible.json");
+    const regressionFile = path.join(tempRoot, "regression.json");
+    const alreadyPresentFile = path.join(tempRoot, "already-present.json");
     const forbiddenFile = path.join(tempRoot, "forbidden.json");
     const unknownFile = path.join(tempRoot, "unknown.json");
     const overlargeFile = path.join(tempRoot, "overlarge.json");
@@ -182,6 +260,8 @@ async function runSelfTest() {
     await writeFile(validFile, `${JSON.stringify(validEvidence({ eligible: true }), null, 2)}\n`);
     await writeFile(acceptedFile, `${JSON.stringify(acceptedEffectEvidence(), null, 2)}\n`);
     await writeFile(noEligibleFile, `${JSON.stringify(validEvidence({ eligible: false }), null, 2)}\n`);
+    await writeFile(regressionFile, `${JSON.stringify(recheckOnlyRegressionEvidence(), null, 2)}\n`);
+    await writeFile(alreadyPresentFile, `${JSON.stringify(alreadyPresentRegressionEvidence(), null, 2)}\n`);
     await writeFile(forbiddenFile, `${JSON.stringify({ ...validEvidence({ eligible: false }), actionRef: `feed_recheck_v1.${"A".repeat(64)}` })}\n`);
     await writeFile(unknownFile, `${JSON.stringify({ ...validEvidence({ eligible: false }), extra: "unknown" })}\n`);
     await writeFile(overlargeFile, " ".repeat(maxBytes + 1));
@@ -190,6 +270,9 @@ async function runSelfTest() {
     const accepted = await verifyEvidenceFile(acceptedFile);
     const noEligible = await verifyEvidenceFile(noEligibleFile);
     const stdinEquivalent = verifyEvidenceText(`${JSON.stringify(acceptedEffectEvidence(), null, 2)}\n`);
+    const regression = await verifyEvidenceFile(regressionFile, { regressionMode: true, noPriorAcceptanceLedger: false });
+    const regressionNoLedger = await verifyEvidenceFile(regressionFile, { regressionMode: true, noPriorAcceptanceLedger: true });
+    const alreadyPresent = await verifyEvidenceFile(alreadyPresentFile, { regressionMode: true, noPriorAcceptanceLedger: false });
     const forbidden = await verifyEvidenceFile(forbiddenFile);
     const unknown = await verifyEvidenceFile(unknownFile);
     const overlarge = await verifyEvidenceFile(overlargeFile);
@@ -211,6 +294,31 @@ async function runSelfTest() {
     if (noEligible.status !== "browser-evidence-verify-ok" || !noEligible.classifications.includes("BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET")) {
       failures.push("no-eligible evidence was not classified");
     }
+    if (
+      regression.status !== "browser-evidence-verify-ok" ||
+      regression.feed_onboarding_effect_status !== "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED" ||
+      regression.classifications.includes("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON") ||
+      !regression.classifications.includes("FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK") ||
+      !regression.classifications.includes("RECHECK_EFFECT_ACCEPTED_REGRESSION_OK")
+    ) {
+      failures.push("regression evidence with prior ledger was not classified as non-blocking continuity");
+    }
+    if (
+      regressionNoLedger.status !== "browser-evidence-verify-ok" ||
+      regressionNoLedger.feed_onboarding_effect_status !== "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON" ||
+      !regressionNoLedger.classifications.includes("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON") ||
+      regressionNoLedger.classifications.includes("FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK")
+    ) {
+      failures.push("regression evidence without prior ledger did not fail closed for onboarding effect");
+    }
+    if (
+      alreadyPresent.status !== "browser-evidence-verify-ok" ||
+      alreadyPresent.feed_onboarding_effect_status !== "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE" ||
+      !alreadyPresent.classifications.includes("FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK") ||
+      alreadyPresent.classifications.includes("FEED_ONBOARDING_EFFECT_ACCEPTED")
+    ) {
+      failures.push("already-present onboarding evidence was not kept distinct from fresh effect acceptance");
+    }
     if (forbidden.classification !== "BROWSER_EVIDENCE_INVALID" || forbidden.reason !== "forbidden_field") {
       failures.push("forbidden actionRef field was not rejected");
     }
@@ -228,7 +336,17 @@ async function runSelfTest() {
 
     writeJson({
       status: "browser-evidence-verify-self-test-ok",
-      cases: ["valid_minimal", "accepted_effect", "stdin_accepted_effect", "no_eligible", "forbidden_field", "unknown_field", "overlarge"],
+      cases: [
+        "fresh_full_acceptance",
+        "regression_prior_ledger",
+        "first_time_missing_onboarding_no_ledger",
+        "critical_leakage",
+        "route_only_effect_pending",
+        "recheck_only_regression",
+        "stdin_accepted_effect",
+        "unknown_field",
+        "overlarge"
+      ],
       output: "redacted"
     });
   } finally {
@@ -313,6 +431,67 @@ function acceptedEffectEvidence() {
   };
 }
 
+function recheckOnlyRegressionEvidence() {
+  return {
+    ...validEvidence({ eligible: true }),
+    feedRecheck: {
+      effectStatus: "FEED_RECHECK_EFFECT_ACCEPTED",
+      lastActionClassification: "FEED_RECHECK_ACTION_ALREADY_PENDING"
+    },
+    classifications: [
+      "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+      "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+      "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+      "FEED_RECHECK_EFFECT_ACCEPTED",
+      "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
+    ]
+  };
+}
+
+function alreadyPresentRegressionEvidence() {
+  return {
+    ...recheckOnlyRegressionEvidence(),
+    feedOnboarding: {
+      feed_onboarding_available: true,
+      feed_onboarding_status: "already_present",
+      no_eligible_target: false,
+      critical_risk: "none",
+      effectStatus: "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE",
+      lastActionClassification: "FEED_ONBOARDING_ACTION_ALREADY_EXISTS"
+    },
+    classifications: [
+      "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+      "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+      "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE",
+      "FEED_RECHECK_EFFECT_ACCEPTED",
+      "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
+    ]
+  };
+}
+
+function hasPriorMs027bAcceptanceLedger() {
+  const docs = [
+    readIfExists(path.join(repoRoot, "README.md")),
+    readIfExists(path.join(repoRoot, "PRODUCTION.md")),
+    readIfExists(path.join(frontendRoot, "README.md")),
+    readIfExists(path.join(frontendRoot, "PRODUCTION.md")),
+    readIfExists(path.join(frontendRoot, ".docs", "production-feed-effect-acceptance.md")),
+    readIfExists(path.join(frontendRoot, ".docs", "operator-risk-model.md")),
+    readIfExists(path.join(backendRoot, "README.md")),
+    readIfExists(path.join(backendRoot, "PRODUCTION.md"))
+  ].join("\n");
+  return (
+    docs.includes("SUCCESS_MS_027B_R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTANCE_CLOSED_OPERATOR_REPORTED_EVIDENCE_AUTOMATION_LANDED") &&
+    docs.includes("MS-027B-R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTED_OPERATOR_REPORTED") &&
+    docs.includes("FEED_ONBOARDING_EFFECT_ACCEPTED") &&
+    docs.includes("FEED_RECHECK_EFFECT_ACCEPTED")
+  );
+}
+
+function readIfExists(file) {
+  return existsSync(file) ? readFileSync(file, "utf8") : "";
+}
+
 async function maybeWriteReceipt(result) {
   if (receiptOut === undefined || receiptOut === "") return;
   const receiptPath = path.resolve(receiptOut);
@@ -389,7 +568,7 @@ function isFeedOnboardingEvidence(value) {
 }
 
 function isClassifications(value) {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 12) return false;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 16) return false;
   const allowed = new Set([
     "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
     "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET",
@@ -397,7 +576,11 @@ function isClassifications(value) {
     "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED",
     "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET",
     "FEED_ONBOARDING_EFFECT_ACCEPTED",
+    "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED",
+    "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE",
+    "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK",
     "FEED_RECHECK_EFFECT_ACCEPTED",
+    "RECHECK_EFFECT_ACCEPTED_REGRESSION_OK",
     "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
     "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
     "PENDING_FEED_RECHECK_COOLDOWN",
@@ -412,6 +595,7 @@ function isFeedOnboardingStatus(value) {
   return (
     value === "available" ||
     value === "accepted" ||
+    value === "already_present" ||
     value === "pending_async_processing" ||
     value === "pending_operator_action" ||
     value === "rejected_safe_validation"
@@ -421,6 +605,9 @@ function isFeedOnboardingStatus(value) {
 function isFeedOnboardingEffectStatus(value) {
   return (
     value === "FEED_ONBOARDING_EFFECT_ACCEPTED" ||
+    value === "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED" ||
+    value === "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE" ||
+    value === "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK" ||
     value === "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING" ||
     value === "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION" ||
     value === "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON"
