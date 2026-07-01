@@ -24,6 +24,7 @@ export type AdminSessionStatus =
       readonly message: string;
       readonly principal: AdminPrincipal;
       readonly expiresAt: string;
+      readonly csrfToken: string;
       readonly httpStatus?: number;
     };
 
@@ -179,7 +180,8 @@ export async function parseAdminSessionResponse(response: Response): Promise<Adm
         httpStatus: response.status,
         message: "Admin session is authenticated.",
         principal: authenticated.principal,
-        expiresAt: authenticated.expiresAt
+        expiresAt: authenticated.expiresAt,
+        csrfToken: authenticated.csrfToken
       };
     }
   }
@@ -253,16 +255,18 @@ function parseAuthenticatedBody(value: unknown):
   | {
       readonly principal: AdminPrincipal;
       readonly expiresAt: string;
+      readonly csrfToken: string;
     }
   | undefined {
   if (!isRecord(value)) return undefined;
   if (value.configured !== true || value.authenticated !== true) return undefined;
   if (typeof value.expiresAt !== "string" || Number.isNaN(Date.parse(value.expiresAt))) return undefined;
+  if (typeof value.csrfToken !== "string" || !/^[A-Za-z0-9_-]{32,128}$/u.test(value.csrfToken)) return undefined;
   if (!isRecord(value.principal)) return undefined;
   if (value.principal.kind !== "single_admin" || value.principal.displayName !== "Admin") return undefined;
 
   for (const key of Object.keys(value)) {
-    if (key !== "configured" && key !== "authenticated" && key !== "principal" && key !== "expiresAt") {
+    if (key !== "configured" && key !== "authenticated" && key !== "principal" && key !== "expiresAt" && key !== "csrfToken") {
       return undefined;
     }
   }
@@ -276,7 +280,8 @@ function parseAuthenticatedBody(value: unknown):
       kind: "single_admin",
       displayName: "Admin"
     },
-    expiresAt: value.expiresAt
+    expiresAt: value.expiresAt,
+    csrfToken: value.csrfToken
   };
 }
 

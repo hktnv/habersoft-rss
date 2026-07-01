@@ -48,7 +48,8 @@ console.log(
   JSON.stringify(
     {
       status: "production-activation-package-verify-ok",
-      admin_ui_state: "MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
+      admin_ui_state: "MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED",
+      prior_operations_drilldown_state: "MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
       prior_operations_summary_state: "MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
       authenticated_admin_shell_state: "MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED",
       prior_status_dashboard_state: "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED",
@@ -77,6 +78,7 @@ function assertPackageScripts() {
     "verify:production-auth-acceptance": "node scripts/production-auth-acceptance-verify.mjs",
     "verify:production-operations-acceptance": "node scripts/production-operations-acceptance-verify.mjs",
     "verify:production-operations-drilldown-acceptance": "node scripts/production-operations-drilldown-acceptance-verify.mjs",
+    "verify:admin-feed-recheck-action": "node scripts/admin-feed-recheck-action-verify.mjs",
     "verify:operator-ergonomics": "node scripts/operator-ergonomics-verify.mjs",
     "verify:production-overlay-canonicalization": "node scripts/production-overlay-canonicalization-harness.mjs",
     "verify:live-evidence-intake": "node scripts/live-evidence-intake-verify.mjs",
@@ -176,6 +178,7 @@ function assertDocsBoundary() {
     "MS-025A_R1_ADMIN_API_PROXY_TEMPLATE_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED",
     "MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
     "MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
+    "MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED",
     "read-only operations dashboard production acceptance is closed",
     "admin-api production proxy/template remediation is accepted",
     "/admin-api/operations/drilldown",
@@ -183,6 +186,7 @@ function assertDocsBoundary() {
     "No production deployment was performed by Codex for MS-025B-R1",
     "verify:production-operations-drilldown-acceptance",
     "verify:admin-operations-drilldown",
+    "verify:admin-feed-recheck-action",
     "/tmp/nginx/conf.d/default.conf",
     "nginx -T",
     "source pull alone",

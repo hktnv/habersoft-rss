@@ -4,14 +4,19 @@ Status: `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
 
 MS-025B adds the next authenticated read-only admin operations slice after the
 operator-reported MS-025A-R2 operations summary acceptance. The new drilldown is
-repository-local and locally validated only. New drilldown production acceptance
-is pending operator deploy/retest; no production deployment was performed by
-Codex for MS-025B.
+accepted by operator-reported MS-025B-R1 live retest evidence. No production
+deployment was performed by Codex for MS-025B-R1.
+
+MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED
+extends eligible feed rows with bounded action metadata and adds the separate
+bounded feed recheck action route. No production deployment was performed by
+Codex for MS-026A; operator deploy/retest required remains for the new action.
 
 ## Route
 
 ```text
 GET /admin-api/operations/drilldown
+POST /admin-api/operations/feed-recheck-requests
 ```
 
 Auth behavior:
@@ -22,6 +27,9 @@ Auth behavior:
 - Valid admin session returns HTTP `200` with bounded JSON.
 - `POST`, `PUT`, `PATCH`, and `DELETE` return HTTP `405`.
 - Unknown `/admin-api/*` routes return HTTP `404`.
+- The feed recheck action route is `POST` only and returns safe JSON for
+  malformed body, unauthenticated, CSRF, duplicate, cooldown, not-found, and
+  unavailable states.
 
 The route uses the same opaque admin session as `/admin-auth/session`,
 `/admin-auth/login`, `/admin-auth/logout`, and the accepted summary route. It
@@ -55,7 +63,10 @@ The success response is bounded:
         "lastCheckedAt": "<ISO-8601|null>",
         "lastResult": "success|failure|unknown",
         "recentEntryCount": "<number|null>",
-        "notes": ["<safe string>"]
+        "notes": ["<safe string>"],
+        "canRequestRecheck": "<boolean>",
+        "recheckUnavailableReason": "admin_auth_not_configured|inactive_feed|no_subscribers|source_host_redacted|null",
+        "actionRef": "feed_recheck_v1.<opaque>|null"
       }
     ]
   },
@@ -87,6 +98,8 @@ The success response is bounded:
 Safe field decision:
 
 - `displayId` values are short opaque hashes, not raw database IDs or check IDs.
+- `actionRef` values are encrypted opaque references for the action route, not
+  raw database IDs.
 - `sourceHost` is only a public hostname derived from a feed URL. Raw feed URL
   paths, query strings, userinfo, localhost, private IPs, and internal hostnames
   are redacted to `null` with a safe note.
@@ -98,6 +111,37 @@ Safe field decision:
 If a section cannot be read safely, its status becomes `unavailable`, metrics
 become `null`, rows become empty, and the top-level status becomes `partial` or
 `unavailable`. No raw diagnostics are returned.
+
+## Bounded Feed Recheck Action
+
+MS-026A adds:
+
+```text
+POST /admin-api/operations/feed-recheck-requests
+```
+
+The route accepts only JSON with an opaque `actionRef` and optional safe
+`reason: "operator_request"`. It requires the existing admin session,
+`X-Admin-CSRF`, and `X-Admin-Idempotency-Key`. The CSRF token is derived from the
+server-side admin session and returned only in authenticated same-origin session
+responses. The frontend keeps it in memory only.
+
+Idempotency is enforced with Redis using a short TTL. A duplicate idempotency key
+for the same action returns `already_pending`; reuse for a different action is
+rejected safely. A per-target cooldown of 300 seconds returns `rate_limited`
+with safe `cooldownSeconds` information.
+
+Accepted requests use the existing due-feed path by moving one eligible feed's
+`nextCheckAt` to the request timestamp. The HTTP route performs no synchronous
+external feed fetch, does not enqueue arbitrary jobs, does not mutate entries,
+does not edit feed URLs, and does not use Agent keys or Tenant bearer tokens
+from the browser.
+
+Safe response fields are limited to `status`, `requestId`, `target.displayId`,
+`target.sourceHost`, `queued`, `cooldownSeconds`, `message`, and `generatedAt`.
+Raw feed URL paths or queries, internal IDs, entry content, raw logs, stack
+traces, cookies, CSRF tokens, idempotency keys, session secrets, Agent key
+values, and Tenant bearer tokens are excluded.
 
 ## Validation
 
@@ -118,6 +162,7 @@ npm run test:admin-api-proxy-template
 npm run test:admin-operations-proxy
 npm run test:fullstack
 npm run test:production-mode-rc
+npm run verify:admin-feed-recheck-action
 ```
 
 The proxy harness proves the generated active Nginx config at
@@ -149,8 +194,11 @@ npm run auth-smoke:redacted
 
 Then test `/healthz`, `/status-api/health/live`, `/status-api/health/ready`,
 unauthenticated `GET /admin-api/operations/drilldown` returning JSON `401`, an
-authenticated browser view showing Operations Drilldown with JSON data, and
-logout returning the UI to the locked state. `auth-smoke:redacted` without
-credentials may report `AUTH_CONFIGURED_UNAUTHENTICATED`; that is an
+authenticated browser view showing Operations Drilldown with JSON data, one
+safe feed recheck request from Operations Drilldown, duplicate/cooldown UI
+state, and logout returning the UI to the locked state. `auth-smoke:redacted`
+without credentials may report `AUTH_CONFIGURED_UNAUTHENTICATED`; that is an
 observation/sanity state, not a blocker by itself. Do not paste credentials,
-cookies, raw response bodies, logs, or secrets into Git, docs, chat, or receipts.
+cookies, sessions, CSRF tokens, idempotency keys, raw response bodies with
+sensitive values, raw feed URLs, logs, or secrets into Git, docs, chat, or
+receipts.

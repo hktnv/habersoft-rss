@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
+Status: `MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
 
 ## Scope
 
-Included through MS-025B:
+Included through MS-026A:
 
 - application shell,
 - root route,
@@ -70,6 +70,7 @@ Included through MS-025B:
 - bounded feed and ingestion drilldown rows with `maxRows=20`,
 - safe `displayId`, `sourceHost`, status, count, timestamp, and note fields,
 - MS-025B admin operations drilldown verifier.
+- MS-026A bounded admin feed recheck action verifier.
 
 Not included:
 
@@ -146,7 +147,9 @@ MS-025A-R1 adds a generated-template regression harness for the operator-reporte
 
 MS-025A-R2 closes the read-only operations dashboard production acceptance from operator-reported live retest evidence. The evidence source is `operator_reported`: `GET /healthz -> 200 OK`, `GET /status-api/health/live -> JSON 200`, `GET /status-api/health/ready -> JSON 200`, unauthenticated `GET /admin-api/operations/summary -> JSON 401`, unknown `GET /admin-api/foo -> JSON 404`, after browser sign-in, the Operations Overview screen displayed successfully, after browser sign-in, JSON aggregate summary data loaded successfully, `auth-smoke:redacted -> AUTH_CONFIGURED_UNAUTHENTICATED`, and logout returned the UI to locked / unauthenticated state. Codex did not independently perform a credentialed production login, did not mutate production, and did not read real secrets.
 
-MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED adds Operations Drilldown locally. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence. No production deployment was performed by Codex for MS-025B-R1. The drilldown performs one authenticated initial load and then manual refresh only; it uses no polling and no browser persistence in localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie. The response renders only bounded safe fields: `displayId`, `displayName`, public `sourceHost`, feed `health`, `lastCheckedAt`, `lastResult`, safe counts, `receivedAt`, status, safe notes, and `capabilities`. It excludes raw feed URL paths or queries, entry content, raw logs, raw request/response bodies, private hostnames, cookies, password hashes, session secrets, database/Redis URLs, Agent key values, Tenant bearer tokens, JWT claims, and write controls.
+MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED adds Operations Drilldown locally. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence. No production deployment was performed by Codex for MS-025B-R1. The drilldown performs one authenticated initial load and then manual refresh only; it uses no polling and no browser persistence in localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie. The response renders only bounded safe fields: `displayId`, `displayName`, public `sourceHost`, feed `health`, `lastCheckedAt`, `lastResult`, safe counts, `receivedAt`, status, safe notes, `capabilities`, and MS-026A action metadata. It excludes raw feed URL paths or queries, entry content, raw logs, raw request/response bodies, private hostnames, cookies, password hashes, session secrets, database/Redis URLs, Agent key values, Tenant bearer tokens, JWT claims, and no write controls beyond the bounded feed recheck request.
+
+MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED adds bounded feed recheck action UI and proxy support. Operators can request a recheck for one eligible feed from Operations Drilldown using `POST /admin-api/operations/feed-recheck-requests`. The UI requires explicit confirmation, keeps the authenticated `csrfToken`, `actionRef`, idempotency key, and response state in memory only, sends `X-Admin-CSRF` and `X-Admin-Idempotency-Key`, and displays accepted, already-pending, rate-limited, unavailable, unauthenticated, forbidden, timeout, and safe error states. The backend uses the existing due-feed path with no synchronous external feed fetch. No production deployment was performed by Codex for MS-026A; operator deploy/retest required remains.
 
 MS-024B changes the operator runtime posture to graduated guardrails. Missing, malformed, public-edge, or Docker bridge loopback upstreams no longer crash-loop the static frontend container. `/healthz` and the static app start, while exact proxy routes return bounded JSON with reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` remains available for strict synthetic checks.
 
@@ -244,6 +247,8 @@ MS-024C responds to the operator-reported plain-compose recreate failure where N
 MS-024D responds to the remaining backend-auth residual by wiring backend admin-auth env names into the production backend API service. MS-024E intakes the operator report that the wiring is live and the frontend edge now reaches configured unauthenticated backend auth after `npm run ops:compose:recreate`. MS-024F records the operator's latest production retest statement that authenticated admin shell acceptance is closed for the current implemented scope. Future business/admin write features remain out of scope.
 
 MS-025A locally accepts the first protected read-only admin product slice after that shell acceptance: aggregate operations visibility only and no write controls. MS-025A-R2 records the operator-reported production acceptance closeout for that read-only slice. Future business/admin write features remain out of scope.
+
+MS-026A is the only bounded write/action exception currently implemented. Broader future business/admin write features are not accepted: feed CRUD, tenant management, role expansion, Agent operations, entry editing, and arbitrary admin writes remain out of scope.
 
 ## Docker
 

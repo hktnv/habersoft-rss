@@ -46,6 +46,9 @@ export type AdminOperationsFeedRow = {
   readonly lastResult: AdminOperationsLastResult;
   readonly recentEntryCount: number | null;
   readonly notes: readonly string[];
+  readonly canRequestRecheck: boolean;
+  readonly recheckUnavailableReason: "admin_auth_not_configured" | "inactive_feed" | "no_subscribers" | "source_host_redacted" | null;
+  readonly actionRef: string | null;
 };
 
 export type AdminOperationsIngestionRow = {

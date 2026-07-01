@@ -6,18 +6,18 @@ import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
-const projectName = `habersoft-rss-ms025b-${Date.now()}`;
+const projectName = `habersoft-rss-ms026a-${Date.now()}`;
 const uiPort = await freePort();
 const apiPort = await freePort();
 const adminUsername = "admin";
-const adminPassword = "test-only-ms025b-admin-password";
-const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms025b-local-salt-00", "utf8"));
-const adminSessionSecret = "test_only_ms025b_admin_session_secret_at_least_32_bytes";
+const adminPassword = "test-only-ms026a-admin-password";
+const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms026a-local-salt-00", "utf8"));
+const adminSessionSecret = "test_only_ms026a_admin_session_secret_at_least_32_bytes";
 
 const composeEnv = {
   ...process.env,
-  RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms025b-fullstack-local",
-  RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms025b-local",
+  RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms026a-fullstack-local",
+  RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms026a-local",
   POSTGRES_USER: "main_service",
   POSTGRES_PASSWORD: "main_service_local_password",
   POSTGRES_DB: "main_service",
@@ -31,7 +31,7 @@ const composeEnv = {
   ADMIN_UI_SESSION_TTL_SECONDS: "900",
   ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
   ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-  ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms025b",
+  ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms026a",
   ADMIN_UI_ENVIRONMENT_NAME: "local-fullstack-auth-rehearsal",
   ADMIN_UI_HOST_PORT: String(uiPort),
   API_HOST_PORT: String(apiPort)
@@ -42,6 +42,7 @@ let primaryFailure;
 try {
   compose(["config", "--quiet"], { timeoutMs: 120000 });
   compose(["up", "-d", "--build", "--wait", "--wait-timeout", "420"], { timeoutMs: 900000 });
+  seedSyntheticFeed();
 
   const base = `http://127.0.0.1:${uiPort}`;
   const healthz = await requestText(`${base}/healthz`);
@@ -67,6 +68,14 @@ try {
   const unauthenticatedDrilldown = await requestJson(`${base}/admin-api/operations/drilldown`);
   assert(unauthenticatedDrilldown.status === 401, "admin operations drilldown did not require an admin session");
   assert(!JSON.stringify(unauthenticatedDrilldown.body).includes("rows"), "unauthenticated drilldown leaked operations rows");
+
+  const unauthenticatedFeedRecheck = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ actionRef: "feed_recheck_v1." + "A".repeat(64), reason: "operator_request" })
+  });
+  assert(unauthenticatedFeedRecheck.status === 401, "admin feed recheck did not require an admin session");
+  assert(!JSON.stringify(unauthenticatedFeedRecheck.body).includes("feed_"), "unauthenticated feed recheck leaked target data");
 
   const invalidLogin = await requestJson(`${base}/admin-auth/login`, {
     method: "POST",
@@ -98,6 +107,7 @@ try {
   assert(authenticated.status === 200, "authenticated session check failed");
   assert(authenticated.body?.authenticated === true, "session did not authenticate with cookie");
   assert(authenticated.body?.principal?.kind === "single_admin", "authenticated principal mismatch");
+  assert(/^[A-Za-z0-9_-]{32,128}$/u.test(authenticated.body?.csrfToken ?? ""), "authenticated session did not include a bounded CSRF token");
 
   const adminSummary = await requestJson(`${base}/admin-api/operations/summary`, {
     headers: {
@@ -125,10 +135,71 @@ try {
   assert(adminDrilldown.body?.status === "ok" || adminDrilldown.body?.status === "partial", "admin operations drilldown status mismatch");
   assert(adminDrilldown.body?.window?.maxRows === 20, "admin operations drilldown did not include bounded row window");
   assert(Array.isArray(adminDrilldown.body?.feeds?.rows), "admin operations drilldown did not include feed rows array");
+  const eligibleFeed = adminDrilldown.body.feeds.rows.find((row) => row.canRequestRecheck === true && typeof row.actionRef === "string");
+  assert(eligibleFeed !== undefined, "admin operations drilldown did not expose an eligible safe feed recheck target");
+  assert(eligibleFeed.sourceHost === "news.example.org", "eligible feed target source host mismatch");
   assert(adminDrilldown.headers.setCookie === null, "admin operations drilldown relayed Set-Cookie");
   assert(!JSON.stringify(adminDrilldown.body).includes(adminPassword), "admin operations drilldown leaked password");
   assert(!JSON.stringify(adminDrilldown.body).includes(adminPasswordHash), "admin operations drilldown leaked password hash");
   assert(!/https?:\/\/[^"]+\/[^"]+/iu.test(JSON.stringify(adminDrilldown.body)), "admin operations drilldown leaked a raw URL path");
+
+  const missingCsrfFeedRecheck = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+    method: "POST",
+    headers: {
+      Cookie: sessionCookie,
+      "Content-Type": "application/json",
+      "X-Admin-Idempotency-Key": "idem_missing_csrf_123456"
+    },
+    body: JSON.stringify({ actionRef: eligibleFeed.actionRef, reason: "operator_request" })
+  });
+  assert(
+    missingCsrfFeedRecheck.status === 403,
+    `admin feed recheck did not enforce CSRF: ${missingCsrfFeedRecheck.status} ${JSON.stringify(missingCsrfFeedRecheck.body)}`
+  );
+
+  const feedRecheckIdempotencyKey = "idem_fullstack_1234567890";
+  const feedRecheck = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+    method: "POST",
+    headers: {
+      Cookie: sessionCookie,
+      "Content-Type": "application/json",
+      "X-Admin-CSRF": authenticated.body.csrfToken,
+      "X-Admin-Idempotency-Key": feedRecheckIdempotencyKey
+    },
+    body: JSON.stringify({ actionRef: eligibleFeed.actionRef, reason: "operator_request" })
+  });
+  assert(feedRecheck.status === 202, `admin feed recheck was not accepted: ${feedRecheck.status}`);
+  assert(feedRecheck.body?.status === "accepted", "admin feed recheck response status mismatch");
+  assert(feedRecheck.body?.queued === true, "admin feed recheck did not report queued=true");
+  assert(feedRecheck.body?.target?.sourceHost === "news.example.org", "admin feed recheck response target mismatch");
+  assert(feedRecheck.headers.setCookie === null, "admin feed recheck relayed Set-Cookie");
+  assert(!JSON.stringify(feedRecheck.body).includes("https://news.example.org/feed.xml"), "admin feed recheck leaked a raw feed URL");
+
+  const duplicateFeedRecheck = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+    method: "POST",
+    headers: {
+      Cookie: sessionCookie,
+      "Content-Type": "application/json",
+      "X-Admin-CSRF": authenticated.body.csrfToken,
+      "X-Admin-Idempotency-Key": feedRecheckIdempotencyKey
+    },
+    body: JSON.stringify({ actionRef: eligibleFeed.actionRef, reason: "operator_request" })
+  });
+  assert(duplicateFeedRecheck.status === 200, "duplicate admin feed recheck did not dedupe");
+  assert(duplicateFeedRecheck.body?.status === "already_pending", "duplicate admin feed recheck status mismatch");
+
+  const cooldownFeedRecheck = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+    method: "POST",
+    headers: {
+      Cookie: sessionCookie,
+      "Content-Type": "application/json",
+      "X-Admin-CSRF": authenticated.body.csrfToken,
+      "X-Admin-Idempotency-Key": "idem_fullstack_cooldown_123456"
+    },
+    body: JSON.stringify({ actionRef: eligibleFeed.actionRef, reason: "operator_request" })
+  });
+  assert(cooldownFeedRecheck.status === 429, "admin feed recheck did not enforce cooldown");
+  assert(cooldownFeedRecheck.body?.status === "rate_limited", "cooldown feed recheck status mismatch");
 
   const live = await requestJson(`${base}/status-api/health/live`, {
     headers: {
@@ -181,6 +252,18 @@ try {
   assert(drilldownAfterLogout.status === 401, "admin operations drilldown remained available after logout");
   assert(!JSON.stringify(drilldownAfterLogout.body).includes("rows"), "post-logout drilldown leaked operations data");
 
+  const feedRecheckAfterLogout = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+    method: "POST",
+    headers: {
+      Cookie: sessionCookie,
+      "Content-Type": "application/json",
+      "X-Admin-CSRF": authenticated.body.csrfToken,
+      "X-Admin-Idempotency-Key": "idem_after_logout_123456"
+    },
+    body: JSON.stringify({ actionRef: eligibleFeed.actionRef, reason: "operator_request" })
+  });
+  assert(feedRecheckAfterLogout.status === 401, "admin feed recheck remained available after logout");
+
   const staticSurface = [index.body, envConfig.body, ...(await staticAssets(base, index.body))].join("\n");
   assert(!staticSurface.includes(adminPassword), "admin password leaked to static surface");
   assert(!staticSurface.includes(adminPasswordHash), "admin password hash leaked to static surface");
@@ -202,10 +285,14 @@ try {
           authenticated_session: authenticated.body.authenticated,
           operations_summary_status: adminSummary.status,
           operations_drilldown_status: adminDrilldown.status,
+          feed_recheck_status: feedRecheck.status,
+          duplicate_feed_recheck_status: duplicateFeedRecheck.status,
+          cooldown_feed_recheck_status: cooldownFeedRecheck.status,
           logout_status: logout.status,
           after_logout_authenticated: afterLogout.body.authenticated,
           operations_summary_after_logout_status: summaryAfterLogout.status,
-          operations_drilldown_after_logout_status: drilldownAfterLogout.status
+          operations_drilldown_after_logout_status: drilldownAfterLogout.status,
+          feed_recheck_after_logout_status: feedRecheckAfterLogout.status
         },
         readiness: ready.body.dependencies
       },
@@ -236,6 +323,17 @@ async function waitForReady(url) {
     await sleep(2000);
   }
   throw new Error(`ready health did not become ready; last status ${last?.status ?? "none"}`);
+}
+
+function seedSyntheticFeed() {
+  const sql = [
+    "INSERT INTO feeds (url, title, active, subscriber_count, error_count, next_check_at, created_at)",
+    "VALUES ('https://news.example.org/feed.xml?private=1', 'Example News', true, 1, 0, '2099-01-01T00:00:00Z', now())",
+    "ON CONFLICT (url) DO UPDATE SET active = true, subscriber_count = 1, next_check_at = EXCLUDED.next_check_at, title = EXCLUDED.title"
+  ].join(" ");
+  compose(["exec", "-T", "postgres", "psql", "-U", "main_service", "-d", "main_service", "-v", "ON_ERROR_STOP=1", "-c", sql], {
+    timeoutMs: 120000
+  });
 }
 
 async function staticAssets(base, indexBody) {

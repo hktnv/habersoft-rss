@@ -105,7 +105,10 @@ function validDrilldown() {
           lastCheckedAt: "2026-06-30T05:00:00.000Z",
           lastResult: "failure",
           recentEntryCount: 3,
-          notes: ["Latest check is degraded."]
+          notes: ["Latest check is degraded."],
+          canRequestRecheck: true,
+          recheckUnavailableReason: null,
+          actionRef
         }
       ]
     },
@@ -133,6 +136,8 @@ function validDrilldown() {
     }
   };
 }
+
+const actionRef = `feed_recheck_v1.${"A".repeat(64)}`;
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

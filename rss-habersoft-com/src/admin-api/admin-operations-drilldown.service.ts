@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "@prisma/client";
+import { RuntimeConfig, type AdminAuthConfig } from "../configuration/runtime-config";
+import { RUNTIME_CONFIG } from "../configuration/runtime-config.module";
 import { PostgresService } from "../persistence/postgres.service";
+import { createFeedRecheckActionRef } from "./admin-feed-recheck-action-ref";
 import type {
   AdminOperationsDrilldown,
   AdminOperationsDrilldownStatus,
@@ -19,13 +22,49 @@ const failedOutcomes = ["fetch_error"] as const;
 const safeCodePattern = /^[A-Za-z0-9_. -]{1,64}$/u;
 const unsafeTextPattern = /(?:secret|password|token|cookie|authorization|bearer|database_url|redis_url)\s*[:=]/iu;
 
+type FeedDrilldownProjection = {
+  readonly id: bigint;
+  readonly url: string;
+  readonly title: string | null;
+  readonly active: boolean | null;
+  readonly lastCheckedAt: Date | null;
+  readonly lastHttpStatus: number | null;
+  readonly errorCount: number | null;
+  readonly nextCheckAt: Date | null;
+  readonly subscriberCount: number;
+};
+
+type RecentFeedCheckProjection = {
+  readonly feedId: bigint | null;
+  readonly checkedAt: Date | null;
+  readonly outcome: string;
+  readonly entriesSavedCount: number;
+  readonly entriesSubmittedCount: number;
+  readonly errorCode: string | null;
+  readonly httpStatus: number | null;
+};
+
+type RecentEntryGroupProjection = {
+  readonly feedId: bigint | null;
+  readonly _count: {
+    readonly _all: number;
+  };
+};
+
+type IngestionCheckProjection = RecentFeedCheckProjection & {
+  readonly checkId: string;
+  readonly createdAt: Date | null;
+};
+
 @Injectable()
 export class AdminOperationsDrilldownService {
   private readonly database: PrismaClient;
 
   public constructor(
     @Inject(PostgresService)
-    postgres: Pick<PostgresService, "database">
+    postgres: Pick<PostgresService, "database">,
+    @Inject(RUNTIME_CONFIG)
+    private readonly runtimeConfig: RuntimeConfig
   ) {
     this.database = postgres.database();
   }
@@ -66,7 +105,7 @@ export class AdminOperationsDrilldownService {
     globalNotes: string[]
   ): Promise<AdminOperationsDrilldown["feeds"]> {
     try {
-      const [total, active, due, recentSuccessFeeds, recentFailureFeeds, feedRows, recentEntryGroups] =
+      const [total, active, due, recentSuccessFeeds, recentFailureFeeds, rawFeedRows, rawRecentEntryGroups] =
         await Promise.all([
           this.database.feed.count(),
           this.database.feed.count({ where: { active: true } }),
@@ -98,7 +137,8 @@ export class AdminOperationsDrilldownService {
               lastCheckedAt: true,
               lastHttpStatus: true,
               errorCount: true,
-              nextCheckAt: true
+              nextCheckAt: true,
+              subscriberCount: true
             }
           }),
           this.database.entry.groupBy({
@@ -112,8 +152,10 @@ export class AdminOperationsDrilldownService {
           })
         ]);
 
+      const feedRows = rawFeedRows as FeedDrilldownProjection[];
+      const recentEntryGroups = rawRecentEntryGroups as RecentEntryGroupProjection[];
       const feedIds = feedRows.map((feed) => feed.id);
-      const recentChecks =
+      const recentChecks = (
         feedIds.length === 0
           ? []
           : await this.database.agentFeedCheckEvent.findMany({
@@ -132,7 +174,8 @@ export class AdminOperationsDrilldownService {
                 errorCode: true,
                 httpStatus: true
               }
-            });
+            })
+      ) as RecentFeedCheckProjection[];
 
       const latestCheckByFeed = new Map<string, (typeof recentChecks)[number]>();
       for (const check of recentChecks) {
@@ -151,7 +194,14 @@ export class AdminOperationsDrilldownService {
         const latestCheck = latestCheckByFeed.get(String(feed.id));
         const sourceHost = safeSourceHost(feed.url);
         if (sourceHost === null) redactedSourceHosts += 1;
-        return feedRow(feed, latestCheck, sourceHost, recentEntryCountByFeed.get(String(feed.id)) ?? 0, now);
+        return feedRow(
+          feed,
+          latestCheck,
+          sourceHost,
+          recentEntryCountByFeed.get(String(feed.id)) ?? 0,
+          now,
+          this.runtimeConfig.adminAuth
+        );
       });
 
       const sectionNotes: string[] = [];
@@ -184,7 +234,7 @@ export class AdminOperationsDrilldownService {
     globalNotes: string[]
   ): Promise<AdminOperationsDrilldown["ingestion"]> {
     try {
-      const [recentEntryCount, recentBatchCount, latestEntry, recentChecks] = await Promise.all([
+      const [recentEntryCount, recentBatchCount, latestEntry, rawRecentChecks] = await Promise.all([
         this.database.entry.count({ where: { createdAt: { gte: since } } }),
         this.database.agentFeedCheckEvent.count({ where: { checkedAt: { gte: since } } }),
         this.database.entry.findFirst({
@@ -211,6 +261,7 @@ export class AdminOperationsDrilldownService {
           }
         })
       ]);
+      const recentChecks = rawRecentChecks as IngestionCheckProjection[];
 
       return {
         status: "ok",
@@ -236,6 +287,7 @@ function feedRow(
     readonly lastHttpStatus: number | null;
     readonly errorCount: number | null;
     readonly nextCheckAt: Date | null;
+    readonly subscriberCount: number;
   },
   latestCheck:
     | {
@@ -249,10 +301,12 @@ function feedRow(
     | undefined,
   sourceHost: string | null,
   recentEntryCount: number,
-  now: Date
+  now: Date,
+  adminAuth: AdminAuthConfig | undefined
 ): AdminOperationsFeedRow {
   const lastResult = classifyLastResult(latestCheck);
   const notes = feedNotes(feed, latestCheck, sourceHost, now);
+  const action = recheckAction(feed, sourceHost, adminAuth);
 
   return {
     displayId: displayId("feed", feed.id),
@@ -262,7 +316,56 @@ function feedRow(
     lastCheckedAt: latestCheck?.checkedAt?.toISOString() ?? feed.lastCheckedAt?.toISOString() ?? null,
     lastResult,
     recentEntryCount,
-    notes
+    notes,
+    ...action
+  };
+}
+
+function recheckAction(
+  feed: {
+    readonly id: bigint;
+    readonly active: boolean | null;
+    readonly subscriberCount: number;
+  },
+  sourceHost: string | null,
+  adminAuth: AdminAuthConfig | undefined
+): Pick<AdminOperationsFeedRow, "canRequestRecheck" | "recheckUnavailableReason" | "actionRef"> {
+  if (adminAuth?.mode !== "single_admin") {
+    return {
+      canRequestRecheck: false,
+      recheckUnavailableReason: "admin_auth_not_configured",
+      actionRef: null
+    };
+  }
+
+  if (feed.active !== true) {
+    return {
+      canRequestRecheck: false,
+      recheckUnavailableReason: "inactive_feed",
+      actionRef: null
+    };
+  }
+
+  if (feed.subscriberCount <= 0) {
+    return {
+      canRequestRecheck: false,
+      recheckUnavailableReason: "no_subscribers",
+      actionRef: null
+    };
+  }
+
+  if (sourceHost === null) {
+    return {
+      canRequestRecheck: false,
+      recheckUnavailableReason: "source_host_redacted",
+      actionRef: null
+    };
+  }
+
+  return {
+    canRequestRecheck: true,
+    recheckUnavailableReason: null,
+    actionRef: createFeedRecheckActionRef(feed.id, adminAuth.sessionSecret)
   };
 }
 

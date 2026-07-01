@@ -486,6 +486,18 @@ admin_api_static_routes() {
     set $args "";
     return 501 '{"configured":false,"authenticated":false,"reason":"not_configured","message":"Admin authentication is not configured."}';
   }
+
+  location = /admin-api/operations/feed-recheck-requests {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+
+    if ($request_method != POST) {
+      return 405 '{"status":"method_not_allowed","reason":"feed_recheck_requires_post"}';
+    }
+
+    set $args "";
+    return 501 '{"status":"unavailable","reason":"not_configured","message":"Admin authentication is not configured."}';
+  }
 EOF
 }
 
@@ -510,6 +522,18 @@ admin_api_degraded_routes() {
 
     if (\$request_method != GET) {
       return 405 '{"status":"method_not_allowed","reason":"read_only_endpoint"}';
+    }
+
+    set \$args "";
+    return 502 '{"status":"unavailable","reason":"${reason}"}';
+  }
+
+  location = /admin-api/operations/feed-recheck-requests {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+
+    if (\$request_method != POST) {
+      return 405 '{"status":"method_not_allowed","reason":"feed_recheck_requires_post"}';
     }
 
     set \$args "";
@@ -591,10 +615,54 @@ admin_api_proxy_routes() {
     proxy_pass \$admin_api_upstream_origin/admin-api/operations/drilldown?;
   }
 
+  location = /admin-api/operations/feed-recheck-requests {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+    client_max_body_size 2k;
+
+    if (\$request_method != POST) {
+      return 405 '{"status":"method_not_allowed","reason":"feed_recheck_requires_post"}';
+    }
+
+    set \$admin_api_upstream_origin "${origin}";
+    set \$args "";
+    proxy_pass_request_headers off;
+    proxy_set_header Host \$proxy_host;
+    proxy_set_header Accept "application/json";
+    proxy_set_header Content-Type "application/json";
+    proxy_set_header Content-Length \$content_length;
+    proxy_set_header Cookie \$http_cookie;
+    proxy_set_header X-Admin-CSRF \$http_x_admin_csrf;
+    proxy_set_header X-Admin-Idempotency-Key \$http_x_admin_idempotency_key;
+    proxy_hide_header Set-Cookie;
+    proxy_hide_header WWW-Authenticate;
+    proxy_hide_header Access-Control-Allow-Origin;
+    proxy_hide_header Access-Control-Allow-Credentials;
+    proxy_hide_header Access-Control-Allow-Headers;
+    proxy_hide_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Expose-Headers;
+    proxy_hide_header Access-Control-Max-Age;
+    proxy_intercept_errors on;
+    error_page 401 = @admin_api_unauthenticated;
+    error_page 403 = @admin_api_forbidden;
+    error_page 500 502 504 = @admin_api_unavailable;
+    proxy_connect_timeout 2s;
+    proxy_send_timeout 2s;
+    proxy_read_timeout 4s;
+    proxy_buffering off;
+    proxy_pass \$admin_api_upstream_origin/admin-api/operations/feed-recheck-requests?;
+  }
+
   location @admin_api_unauthenticated {
     add_header Cache-Control "no-store, no-cache, must-revalidate" always;
     default_type application/json;
     return 401 '{"authenticated":false,"reason":"unauthenticated"}';
+  }
+
+  location @admin_api_forbidden {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+    return 403 '{"authenticated":true,"reason":"csrf_failed"}';
   }
 
   location @admin_api_unavailable {
@@ -672,6 +740,10 @@ fi
 
 if ! grep -Fq 'location = /admin-api/operations/drilldown' /tmp/nginx/conf.d/default.conf; then
   fail "generated Nginx config is missing /admin-api/operations/drilldown"
+fi
+
+if ! grep -Fq 'location = /admin-api/operations/feed-recheck-requests' /tmp/nginx/conf.d/default.conf; then
+  fail "generated Nginx config is missing /admin-api/operations/feed-recheck-requests"
 fi
 
 if ! grep -Fq 'location = /admin-api' /tmp/nginx/conf.d/default.conf || ! grep -Fq 'location ^~ /admin-api/' /tmp/nginx/conf.d/default.conf; then

@@ -18,10 +18,12 @@ const dependencyLabels: Record<keyof OperationsSummary["dependencies"], string> 
 
 export function OperationsOverview({
   loadSummary = fetchOperationsSummary,
-  loadDrilldown
+  loadDrilldown,
+  csrfToken
 }: {
   readonly loadSummary?: (options?: { readonly signal?: AbortSignal }) => Promise<OperationsSummaryResult>;
   readonly loadDrilldown?: (options?: { readonly signal?: AbortSignal }) => Promise<OperationsDrilldownResult>;
+  readonly csrfToken?: string;
 }) {
   const [state, setState] = useState<OverviewState>({ phase: "loading" });
   const requestIdRef = useRef(0);
@@ -100,7 +102,7 @@ export function OperationsOverview({
         <UnavailableView result={state.result} />
       )}
 
-      <OperationsDrilldown loadDrilldown={loadDrilldown} />
+      <OperationsDrilldown loadDrilldown={loadDrilldown} csrfToken={csrfToken} />
     </section>
   );
 }

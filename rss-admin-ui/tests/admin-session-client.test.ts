@@ -177,7 +177,8 @@ function authenticatedResponse(): Response {
       kind: "single_admin",
       displayName: "Admin"
     },
-    expiresAt: "2026-06-20T00:00:00.000Z"
+    expiresAt: "2026-06-20T00:00:00.000Z",
+    csrfToken
   });
 }
 
@@ -187,6 +188,8 @@ function jsonResponse(body: unknown, status = 200): Response {
     headers: { "Content-Type": "application/json" }
   });
 }
+
+const csrfToken = "csrf_token_value_at_least_32_characters";
 
 function rejectWhenAborted(signal: AbortSignal | null | undefined): Promise<Response> {
   return new Promise((_resolve, reject) => {

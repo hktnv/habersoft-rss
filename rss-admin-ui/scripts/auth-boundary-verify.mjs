@@ -81,7 +81,8 @@ function assertBoundarySource() {
     "browserCredentialPersistenceImplemented: false",
     "fakeAdminIdentityAllowed: false",
     "privilegedBusinessDataAllowed: false",
-    "adminApiWritesImplemented: false",
+    'adminApiWritesImplemented: "bounded_feed_recheck_request_only"',
+    "sameOriginAdminFeedRecheckPath",
     "canRenderProtectedAdminContent",
     'sessionStatus?.kind === "authenticated"'
   ];

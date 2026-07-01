@@ -125,7 +125,7 @@ function assertFrontendContract() {
     if (!overview.includes(fragment)) failures.push(`OperationsOverview missing ${fragment}`);
   }
 
-  if (!app.includes("<OperationsOverview />")) failures.push("App does not render OperationsOverview in the protected shell");
+  if (!app.includes("<OperationsOverview")) failures.push("App does not render OperationsOverview in the protected shell");
   if (!boundary.includes(`sameOriginAdminOperationsSummaryPath: "${route}"`)) {
     failures.push("admin session boundary missing operations summary path");
   }

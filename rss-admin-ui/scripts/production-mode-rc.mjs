@@ -7,12 +7,12 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const stamp = Date.now();
-const frontendImage = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? "rss-admin-ui:ms025b-local";
-const backendImage = process.env.RSS_HABERSOFT_COM_TEST_IMAGE ?? "main-service-app:ms025b-rc-local";
+const frontendImage = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? "rss-admin-ui:ms026a-local";
+const backendImage = process.env.RSS_HABERSOFT_COM_TEST_IMAGE ?? "main-service-app:ms026a-rc-local";
 const adminUsername = "admin";
-const adminPassword = "synthetic-ms025b-admin-password";
-const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms025b-rc-salt-00", "utf8"));
-const adminSessionSecret = "synthetic_ms025b_admin_session_secret_48_bytes_minimum";
+const adminPassword = "synthetic-ms026a-admin-password";
+const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms026a-rc-salt-00", "utf8"));
+const adminSessionSecret = "synthetic_ms026a_admin_session_secret_48_bytes_minimum";
 const scenarioResults = [];
 
 await runDisabledScenario();
@@ -35,7 +35,7 @@ console.log(
 );
 
 async function runDisabledScenario() {
-  const projectName = `habersoft-rss-ms025b-disabled-${stamp}`;
+  const projectName = `habersoft-rss-ms026a-disabled-${stamp}`;
   const uiPort = await freePort();
   const apiPort = await freePort();
   const env = composeEnv({
@@ -78,19 +78,28 @@ async function runDisabledScenario() {
     assert(drilldown.status === 501, "disabled admin operations drilldown did not fail closed");
     assert(!JSON.stringify(drilldown.body).includes("rows"), "disabled drilldown leaked operations data");
 
+    const feedRecheck = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actionRef: "feed_recheck_v1." + "A".repeat(64), reason: "operator_request" })
+    });
+    assert(feedRecheck.status === 501, "disabled admin feed recheck did not fail closed");
+    assert(!JSON.stringify(feedRecheck.body).includes("feed_"), "disabled feed recheck leaked target data");
+
     scenarioResults.push({
       name: "disabled-default",
       session_status: session.status,
       login_status: login.status,
       operations_summary_status: summary.status,
       operations_drilldown_status: drilldown.status,
+      feed_recheck_status: feedRecheck.status,
       health_live: live.body?.status
     });
   });
 }
 
 async function runEnabledScenario() {
-  const projectName = `habersoft-rss-ms025b-enabled-${stamp}`;
+  const projectName = `habersoft-rss-ms026a-enabled-${stamp}`;
   const uiPort = await freePort();
   const apiPort = await freePort();
   const env = composeEnv({
@@ -105,6 +114,7 @@ async function runEnabledScenario() {
   });
 
   await withCompose(projectName, env, async () => {
+    seedSyntheticFeed(projectName, env);
     const base = `http://127.0.0.1:${uiPort}`;
     const healthz = await requestText(`${base}/healthz`);
     assert(healthz.status === 200 && healthz.body.trim() === "ok", "enabled scenario frontend /healthz failed");
@@ -162,6 +172,7 @@ async function runEnabledScenario() {
     assert(authenticated.body?.authenticated === true, "session did not authenticate with cookie");
     assert(authenticated.body?.principal?.kind === "single_admin", "authenticated principal mismatch");
     assert(!JSON.stringify(authenticated.body).includes(sessionCookie), "session body leaked cookie value");
+    assert(/^[A-Za-z0-9_-]{32,128}$/u.test(authenticated.body?.csrfToken ?? ""), "authenticated session did not include a bounded CSRF token");
 
     const adminSummary = await requestJson(`${base}/admin-api/operations/summary`, {
       headers: {
@@ -188,9 +199,67 @@ async function runEnabledScenario() {
     assert(adminDrilldown.status === 200, "admin operations drilldown failed after login");
     assert(adminDrilldown.body?.status === "ok" || adminDrilldown.body?.status === "partial", "admin operations drilldown status mismatch");
     assert(adminDrilldown.body?.window?.maxRows === 20, "admin operations drilldown did not include bounded row window");
+    const eligibleFeed = adminDrilldown.body?.feeds?.rows?.find((row) => row.canRequestRecheck === true && typeof row.actionRef === "string");
+    assert(eligibleFeed !== undefined, "admin operations drilldown did not expose an eligible safe feed recheck target");
+    assert(eligibleFeed.sourceHost === "news.example.org", "eligible feed target source host mismatch");
     assert(adminDrilldown.headers.setCookie === null, "admin operations drilldown relayed Set-Cookie");
     assert(!JSON.stringify(adminDrilldown.body).includes(adminPassword), "admin operations drilldown leaked password");
     assert(!JSON.stringify(adminDrilldown.body).includes(adminPasswordHash), "admin operations drilldown leaked password hash");
+
+    const missingCsrfFeedRecheck = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+        "X-Admin-Idempotency-Key": "idem_rc_missing_csrf_123456"
+      },
+      body: JSON.stringify({ actionRef: eligibleFeed.actionRef, reason: "operator_request" })
+    });
+    assert(missingCsrfFeedRecheck.status === 403, "admin feed recheck did not enforce CSRF");
+
+    const feedRecheckIdempotencyKey = "idem_rc_1234567890abcdef";
+    const feedRecheck = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": authenticated.body.csrfToken,
+        "X-Admin-Idempotency-Key": feedRecheckIdempotencyKey
+      },
+      body: JSON.stringify({ actionRef: eligibleFeed.actionRef, reason: "operator_request" })
+    });
+    assert(feedRecheck.status === 202, `admin feed recheck was not accepted: ${feedRecheck.status}`);
+    assert(feedRecheck.body?.status === "accepted", "admin feed recheck response status mismatch");
+    assert(feedRecheck.body?.queued === true, "admin feed recheck did not report queued=true");
+    assert(feedRecheck.body?.target?.sourceHost === "news.example.org", "admin feed recheck response target mismatch");
+    assert(feedRecheck.headers.setCookie === null, "admin feed recheck relayed Set-Cookie");
+    assert(!JSON.stringify(feedRecheck.body).includes("https://news.example.org/feed.xml"), "admin feed recheck leaked a raw feed URL");
+
+    const duplicateFeedRecheck = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": authenticated.body.csrfToken,
+        "X-Admin-Idempotency-Key": feedRecheckIdempotencyKey
+      },
+      body: JSON.stringify({ actionRef: eligibleFeed.actionRef, reason: "operator_request" })
+    });
+    assert(duplicateFeedRecheck.status === 200, "duplicate admin feed recheck did not dedupe");
+    assert(duplicateFeedRecheck.body?.status === "already_pending", "duplicate admin feed recheck status mismatch");
+
+    const cooldownFeedRecheck = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": authenticated.body.csrfToken,
+        "X-Admin-Idempotency-Key": "idem_rc_cooldown_123456"
+      },
+      body: JSON.stringify({ actionRef: eligibleFeed.actionRef, reason: "operator_request" })
+    });
+    assert(cooldownFeedRecheck.status === 429, "admin feed recheck did not enforce cooldown");
+    assert(cooldownFeedRecheck.body?.status === "rate_limited", "cooldown feed recheck status mismatch");
 
     const live = await requestJson(`${base}/status-api/health/live`, {
       headers: {
@@ -246,6 +315,18 @@ async function runEnabledScenario() {
     assert(drilldownAfterLogout.status === 401, "admin operations drilldown remained available after logout");
     assert(!JSON.stringify(drilldownAfterLogout.body).includes("rows"), "post-logout drilldown leaked operations data");
 
+    const feedRecheckAfterLogout = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": authenticated.body.csrfToken,
+        "X-Admin-Idempotency-Key": "idem_rc_after_logout_123456"
+      },
+      body: JSON.stringify({ actionRef: eligibleFeed.actionRef, reason: "operator_request" })
+    });
+    assert(feedRecheckAfterLogout.status === 401, "admin feed recheck remained available after logout");
+
     const staticSurface = [index.body, envConfig.body, ...(await staticAssets(base, index.body))].join("\n");
     assert(!staticSurface.includes(adminPassword), "admin password leaked to static surface");
     assert(!staticSurface.includes(adminPasswordHash), "admin password hash leaked to static surface");
@@ -261,9 +342,13 @@ async function runEnabledScenario() {
       valid_login_status: validLogin.status,
       authenticated_session: authenticated.body?.authenticated,
       operations_drilldown_status: adminDrilldown.status,
+      feed_recheck_status: feedRecheck.status,
+      duplicate_feed_recheck_status: duplicateFeedRecheck.status,
+      cooldown_feed_recheck_status: cooldownFeedRecheck.status,
       logout_status: logout.status,
       after_logout_authenticated: afterLogout.body?.authenticated,
       operations_drilldown_after_logout_status: drilldownAfterLogout.status,
+      feed_recheck_after_logout_status: feedRecheckAfterLogout.status,
       readiness: ready.body?.dependencies
     });
   });
@@ -284,7 +369,7 @@ function composeEnv({ uiPort, apiPort, authMode, authValues }) {
     ADMIN_UI_SESSION_TTL_SECONDS: "900",
     ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
     ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-    ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms025b",
+    ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms026a",
     ADMIN_UI_ENVIRONMENT_NAME: "local-production-mode-rc",
     ADMIN_UI_HOST_PORT: String(uiPort),
     API_HOST_PORT: String(apiPort),
@@ -326,6 +411,17 @@ function compose(projectName, args, env, options = {}) {
   });
 }
 
+function seedSyntheticFeed(projectName, env) {
+  const sql = [
+    "INSERT INTO feeds (url, title, active, subscriber_count, error_count, next_check_at, created_at)",
+    "VALUES ('https://news.example.org/feed.xml?private=1', 'Example News', true, 1, 0, '2099-01-01T00:00:00Z', now())",
+    "ON CONFLICT (url) DO UPDATE SET active = true, subscriber_count = 1, next_check_at = EXCLUDED.next_check_at, title = EXCLUDED.title"
+  ].join(" ");
+  compose(projectName, ["exec", "-T", "postgres", "psql", "-U", "main_service", "-d", "main_service", "-v", "ON_ERROR_STOP=1", "-c", sql], env, {
+    timeoutMs: 120000
+  });
+}
+
 function inspectProjectLeftovers(projectName) {
   const filter = `label=com.docker.compose.project=${projectName}`;
   const containers = run(["ps", "-a", "--filter", filter, "--format", "{{.ID}}"], { allowFailure: true });
@@ -335,7 +431,7 @@ function inspectProjectLeftovers(projectName) {
 }
 
 function assertNoGlobalLeftovers() {
-  const pattern = "ms025b";
+  const pattern = "ms026a";
   const containers = run(["ps", "-a", "--format", "{{.Names}}"], { allowFailure: true });
   const networks = run(["network", "ls", "--format", "{{.Name}}"], { allowFailure: true });
   const volumes = run(["volume", "ls", "--format", "{{.Name}}"], { allowFailure: true });

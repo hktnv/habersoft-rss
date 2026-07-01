@@ -13,7 +13,7 @@ export function App() {
       onLogin={adminSession.login}
       onLogout={adminSession.logout}
     >
-      <OperationsOverview />
+      <OperationsOverview csrfToken={adminSession.status.kind === "authenticated" ? adminSession.status.csrfToken : undefined} />
       <StatusDashboard />
     </ProtectedAdminShell>
   );

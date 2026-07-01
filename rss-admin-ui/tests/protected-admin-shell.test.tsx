@@ -25,7 +25,8 @@ describe("ProtectedAdminShell", () => {
       kind: "authenticated",
       message: "Admin session is authenticated.",
       principal: { kind: "single_admin", displayName: "Admin" },
-      expiresAt: "2026-06-20T00:00:00.000Z"
+      expiresAt: "2026-06-20T00:00:00.000Z",
+      csrfToken
     });
 
     render(
@@ -55,7 +56,8 @@ describe("ProtectedAdminShell", () => {
           kind: "authenticated",
           message: "Admin session is authenticated.",
           principal: { kind: "single_admin", displayName: "Admin" },
-          expiresAt: "2026-06-20T00:00:00.000Z"
+          expiresAt: "2026-06-20T00:00:00.000Z",
+          csrfToken
         }}
         onLogout={onLogout}
       >
@@ -87,7 +89,8 @@ describe("ProtectedAdminShell", () => {
           kind: "authenticated",
           message: "Admin session is authenticated.",
           principal: { kind: "single_admin", displayName: "Admin" },
-          expiresAt: "2026-06-20T00:00:00.000Z"
+          expiresAt: "2026-06-20T00:00:00.000Z",
+          csrfToken
         }}
       >
         <div>future admin surface</div>
@@ -108,3 +111,5 @@ describe("ProtectedAdminShell", () => {
     }
   });
 });
+
+const csrfToken = "csrf_token_value_at_least_32_characters";

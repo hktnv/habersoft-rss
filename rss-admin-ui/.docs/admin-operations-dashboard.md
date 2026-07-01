@@ -1,10 +1,12 @@
 # Admin Operations Dashboard
 
-Status: `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
+Status: `MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
 
 MS-025A adds the first authenticated read-only admin operations slice after the MS-024F operator-reported status/auth shell acceptance. It is a local repository package with synthetic acceptance coverage. MS-025A-R2 records later operator-reported production acceptance for the read-only operations summary dashboard.
 
 MS-025B adds the next authenticated read-only Operations Drilldown slice locally. It is `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`: drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence, and No production deployment was performed by Codex for MS-025B-R1.
+
+MS-026A adds the first bounded admin action: `POST /admin-api/operations/feed-recheck-requests`. It is `MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`: local implementation and release-candidate validation only, with operator deploy/retest required. No production deployment was performed by Codex for MS-026A.
 
 MS-025A-R1 remediates the operator-reported follow-up where production sign-in and `/admin-auth/session` worked, but `/admin-api/operations/summary` returned HTTP 200 `text/html` with the SPA fallback. The reported container showed generated auth/status routes in `/tmp/nginx/conf.d/default.conf`, but no `/admin-api` route because the running frontend image's active template lacked the admin-api insertion marker. Codex did not contact production to re-check that R1 evidence; the remediation is repository-local and synthetic.
 
@@ -56,11 +58,12 @@ The browser route is exact and same-origin:
 ```text
 GET /admin-api/operations/summary
 GET /admin-api/operations/drilldown
+POST /admin-api/operations/feed-recheck-requests
 ```
 
-The clients use `credentials: "same-origin"`, `cache: "no-store"`, `redirect: "manual"`, and `Accept: application/json`. They use no Authorization bearer header, no Tenant bearer token, no Agent key, no custom credential header, and no browser credential persistence. They must not use localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie.
+The read clients use `credentials: "same-origin"`, `cache: "no-store"`, `redirect: "manual"`, and `Accept: application/json`. The feed recheck action client also sends JSON only, `X-Admin-CSRF`, and `X-Admin-Idempotency-Key`. They use no Authorization bearer header, no Tenant bearer token, no Agent key, no custom credential header, and no browser credential persistence. They must not use localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie.
 
-The overview and drilldown each perform one load after the protected shell is authenticated and then only manual refreshes. They do not poll, persist history, call write methods, render raw upstream errors, or display raw response bodies.
+The overview and drilldown each perform one load after the protected shell is authenticated and then only manual refreshes. They do not poll, persist history, render raw upstream errors, or display raw response bodies. The feed recheck action requires explicit confirmation and does not auto-repeat.
 
 ## Runtime Proxy Contract
 
@@ -70,18 +73,20 @@ The generated Nginx route:
 
 - allows only `GET /admin-api/operations/summary`;
 - allows only `GET /admin-api/operations/drilldown`;
+- allows only `POST /admin-api/operations/feed-recheck-requests`;
 - rejects non-GET with safe `405`;
 - rejects unknown `/admin-api/**` with safe `404`;
 - strips query strings with `set $args ""`;
-- does not forward request bodies;
+- does not forward request bodies on read routes and caps the action body at 2k;
 - forwards only minimum session context: `Host`, `Accept: application/json`, and `Cookie`;
+- forwards only `Cookie`, `Content-Type: application/json`, `X-Admin-CSRF`, and `X-Admin-Idempotency-Key` on the action route;
 - does not forward Authorization, Proxy-Authorization, Tenant bearer, Agent key, or credential-like custom headers;
 - hides upstream `Set-Cookie`, `WWW-Authenticate`, and `Access-Control-*` response headers;
 - maps upstream `401/403` to safe unauthenticated JSON;
 - maps upstream `500/502/504` to safe unavailable JSON;
 - keeps `/healthz`, static assets, and the auth/status exact routes available when admin-api upstream configuration is absent or invalid.
 
-The active generated config path is `/tmp/nginx/conf.d/default.conf`, and `nginx -T` should show that file. `/etc/nginx/conf.d/default.conf` may be stock and should not be used as the authority for this image. The template now includes the admin-api marker before the SPA fallback, plus JSON catch routes for both `/admin-api` and `/admin-api/*`. The entrypoint refuses to start if the generated config contains unresolved `__ADMIN_UI_*__` markers or lacks `location = /admin-api/operations/summary` or `location = /admin-api/operations/drilldown`.
+The active generated config path is `/tmp/nginx/conf.d/default.conf`, and `nginx -T` should show that file. `/etc/nginx/conf.d/default.conf` may be stock and should not be used as the authority for this image. The template now includes the admin-api marker before the SPA fallback, plus JSON catch routes for both `/admin-api` and `/admin-api/*`. The entrypoint refuses to start if the generated config contains unresolved `__ADMIN_UI_*__` markers or lacks `location = /admin-api/operations/summary`, `location = /admin-api/operations/drilldown`, or `location = /admin-api/operations/feed-recheck-requests`.
 
 If `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is absent, the route returns `501 not_configured` without operations metrics. If the origin is malformed, public-edge, container-loopback, or unreachable, the route fails closed with bounded unavailable JSON and no upstream hostname or raw diagnostic body.
 
@@ -169,7 +174,10 @@ The MS-025B backend response is bounded:
         "lastCheckedAt": "<ISO-8601|null>",
         "lastResult": "success|failure|unknown",
         "recentEntryCount": "<number|null>",
-        "notes": ["<safe string>"]
+        "notes": ["<safe string>"],
+        "canRequestRecheck": "<boolean>",
+        "recheckUnavailableReason": "admin_auth_not_configured|inactive_feed|no_subscribers|source_host_redacted|null",
+        "actionRef": "feed_recheck_v1.<opaque>|null"
       }
     ]
   },
@@ -207,6 +215,33 @@ Drilldown safe field decision:
 
 The drilldown must not expose raw feed URL paths or queries, entry content, entry URLs, raw logs, raw request/response bodies, private hostnames, tenant identifiers, cookies, password hashes, session secrets, database/Redis URLs, Agent key values, Tenant bearer tokens, JWT claims, stack traces, or write controls.
 
+## Feed Recheck Action
+
+MS-026A adds a bounded feed recheck action for eligible drilldown feed rows:
+
+```text
+POST /admin-api/operations/feed-recheck-requests
+```
+
+Action contract:
+
+- visible only for rows whose backend metadata has `canRequestRecheck: true`;
+- requires explicit confirmation before the POST;
+- sends only an opaque `actionRef`, safe `reason: "operator_request"`,
+  `X-Admin-CSRF`, and `X-Admin-Idempotency-Key`;
+- stores CSRF, idempotency keys, action refs, and responses only in memory;
+- handles accepted, already-pending, rate-limited, unavailable,
+  unauthenticated, forbidden, timeout, and invalid response states;
+- requests the existing due-feed path with no synchronous external feed fetch;
+- uses a 300 second cooldown and idempotency dedupe;
+- returns safe fields only: status, requestId, displayId, sourceHost, queued,
+  cooldownSeconds, message, and generatedAt.
+
+The action must not expose raw feed URL paths or queries, internal database IDs,
+entry content, raw logs, raw upstream bodies, stack traces, cookies, session
+secrets, CSRF tokens, idempotency keys, Agent key values, Tenant bearer tokens,
+or arbitrary admin write controls.
+
 ## Local Acceptance
 
 MS-025A local acceptance uses synthetic credentials and local Docker/full-stack infrastructure only:
@@ -216,6 +251,7 @@ npm run test:admin-operations-proxy
 npm run test:admin-api-proxy-template
 npm run verify:admin-operations-dashboard
 npm run verify:admin-operations-drilldown
+npm run verify:admin-feed-recheck-action
 npm run test:fullstack
 npm run test:production-mode-rc
 ```
@@ -253,5 +289,7 @@ docker compose \
 Then use `npm run auth-smoke:redacted`, browser login/logout sanity, and `/admin-api/operations/summary` unauthenticated and authenticated checks as practical regression checks. Unauthenticated `/admin-api/operations/summary` should return bounded JSON `401` or the documented unauthenticated JSON class, not HTML. `/admin-api/*` must remain JSON fail-closed before the SPA fallback, and unknown `/admin-api/*` must not fall back to `index.html`. Report only redacted status classes and aggregate route status. Do not paste real admin credentials, cookies, session IDs, password hashes, session secrets, Redis keys, raw logs, raw response bodies, or production secret values into Git, docs, chat, or receipts.
 
 For MS-025B operator deploy/retest, also check unauthenticated `/admin-api/operations/drilldown` returns bounded JSON `401`, authenticated Operations Drilldown displays JSON data, and logout returns the UI to locked state. `auth-smoke:redacted` without credentials may report `AUTH_CONFIGURED_UNAUTHENTICATED`; that is an observation/sanity state, not a blocker by itself. Drilldown production acceptance is closed by operator-reported MS-025B-R1 live retest evidence.
+
+For MS-026A operator deploy/retest, pull main, rebuild/update backend and frontend images as required by current runbooks, recreate backend API/worker if runtime changed, run `npm run ops:compose:recreate`, verify health/status/auth, login in browser, request one safe feed recheck from Operations Drilldown, verify safe JSON/UI states for accepted, already-pending, and rate-limited outcomes, then logout to locked state. Do not paste credentials, cookies, sessions, CSRF tokens, idempotency keys, raw response bodies with sensitive values, raw feed URLs, raw logs, or secrets.
 
 MS-024F status/auth shell acceptance remains operator-reported. MS-025A-R2 records the read-only operations summary dashboard production acceptance by operator report. Durable operator-state receipt outside Git records the R2 closeout; temporary workplace paths are not durable operator artifacts.

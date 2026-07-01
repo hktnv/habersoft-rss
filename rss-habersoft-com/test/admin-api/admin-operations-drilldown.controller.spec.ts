@@ -106,6 +106,9 @@ describe("Admin operations drilldown API", () => {
     expect(firstFeed.health).toBe("degraded");
     expect(firstFeed.lastResult).toBe("failure");
     expect(firstFeed.recentEntryCount).toBe(3);
+    expect(firstFeed.canRequestRecheck).toBe(true);
+    expect(firstFeed.recheckUnavailableReason).toBeNull();
+    expect(firstFeed.actionRef).toMatch(/^feed_recheck_v1\.[A-Za-z0-9_-]{48,512}$/u);
 
     const ingestion = asRecord(body.ingestion);
     expect(ingestion.status).toBe("ok");
@@ -234,7 +237,8 @@ function fakeDatabase(options: { readonly feedUnavailable?: boolean } = {}) {
           lastCheckedAt: new Date("2026-06-30T05:00:00.000Z"),
           lastHttpStatus: 503,
           errorCount: 1,
-          nextCheckAt: new Date("2026-06-30T05:30:00.000Z")
+          nextCheckAt: new Date("2026-06-30T05:30:00.000Z"),
+          subscriberCount: 1
         }
       ])
     },

@@ -296,7 +296,7 @@ button:disabled {
 
 .drilldown-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 900px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -328,6 +328,36 @@ button:disabled {
   color: #64717d;
   font-size: 0.76rem;
   font-weight: 600;
+}
+
+.feed-action-stack {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+}
+
+.compact-button {
+  min-width: 88px;
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+}
+
+.secondary-button {
+  border-color: #8c9aa6;
+  background: #ffffff;
+  color: #27313b;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: #eef2f5;
+}
+
+.action-note {
+  color: #64717d;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .panel p,

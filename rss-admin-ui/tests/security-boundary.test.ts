@@ -20,6 +20,7 @@ describe("frontend security boundary", () => {
       const operationsClient =
         relative === "src/adminOperations/operationsSummaryClient.ts" ||
         relative === "src/adminOperations/operationsDrilldownClient.ts";
+      const feedRecheckClient = relative === "src/adminOperations/feedRecheckClient.ts";
       const forbidden = [
         /AGENT_KEY\s*=/u,
         /X-Agent-Key/iu,
@@ -29,8 +30,12 @@ describe("frontend security boundary", () => {
         /document\.cookie/u,
         workstationPathPattern,
         oldWorkspacePattern,
-        authClient ? /method:\s*["'](?:PUT|PATCH|DELETE)["']/iu : /method:\s*["'](?:POST|PUT|PATCH|DELETE)["']/iu,
-        authClient || operationsClient ? /credentials:\s*["']include["']/iu : /credentials:\s*["'](?:include|same-origin)["']/iu
+        authClient || feedRecheckClient
+          ? /method:\s*["'](?:PUT|PATCH|DELETE)["']/iu
+          : /method:\s*["'](?:POST|PUT|PATCH|DELETE)["']/iu,
+        authClient || operationsClient || feedRecheckClient
+          ? /credentials:\s*["']include["']/iu
+          : /credentials:\s*["'](?:include|same-origin)["']/iu
       ];
       if (forbidden.some((pattern) => pattern.test(text))) offenders.push(relative);
     }

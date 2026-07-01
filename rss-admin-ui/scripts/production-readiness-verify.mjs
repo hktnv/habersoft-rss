@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -7,10 +8,10 @@ const repoRoot = path.resolve(frontendRoot, "..");
 const image =
   process.env.RSS_ADMIN_UI_READINESS_IMAGE ??
   process.env.RSS_ADMIN_UI_TEST_IMAGE ??
-  "rss-admin-ui:ms025b-local";
+  "rss-admin-ui:ms026a-local";
 const productionHostPattern = /(?:^|[/:.])rss(?:-panel)?\.habersoft\.com(?:$|[/:])/iu;
 const rootComposeEnv = {
-  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms025b-local",
+  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms026a-local",
   RSS_ADMIN_UI_IMAGE: image,
   ADMIN_UI_HOST_PORT: "8081",
   ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
@@ -32,6 +33,7 @@ const productionComposeEnv = {
 
 console.log(JSON.stringify({ status: "production-readiness-verify-start", image }, null, 2));
 const drilldownAcceptanceStatus = "MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED";
+const feedRecheckStatus = "MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED";
 
 run("node", ["--version"]);
 run("npm", ["--version"]);
@@ -42,6 +44,7 @@ assertNoProductionContactEnv(productionComposeEnv);
 run("npm", ["run", "build"]);
 run("npm", ["run", "verify:admin-operations-dashboard"]);
 run("npm", ["run", "verify:admin-operations-drilldown"]);
+run("npm", ["run", "verify:admin-feed-recheck-action"]);
 run("npm", ["run", "verify:production-operations-acceptance"]);
 run("npm", ["run", "verify:production-operations-drilldown-acceptance"]);
 run("docker", ["build", "-t", image, "."], { printOutput: false, timeoutMs: 600000 });
@@ -112,10 +115,12 @@ console.log(
       status: "production-readiness-verify-ok",
       image,
       drilldown_acceptance: drilldownAcceptanceStatus,
+      feed_recheck_action: feedRecheckStatus,
       checks: [
         "production build exists",
         "admin operations dashboard source/docs/proxy verifier passes",
         "admin operations drilldown source/docs/proxy verifier passes",
+        "bounded admin feed recheck action verifier passes",
         "MS-025A-R2 operator-reported operations acceptance verifier passes",
         "MS-025B-R1 operator-reported operations drilldown acceptance verifier passes",
         "docker image builds",
@@ -182,6 +187,10 @@ function run(command, args, options = {}) {
 function resolveCommand(command, args) {
   if (command === "npm" && process.env.npm_execpath !== undefined) {
     return { executable: process.execPath, args: [process.env.npm_execpath, ...args] };
+  }
+  if (command === "npm" && process.platform === "win32") {
+    const npmCli = path.join(process.env.ProgramFiles ?? "C:\\Program Files", "nodejs", "node_modules", "npm", "bin", "npm-cli.js");
+    if (existsSync(npmCli)) return { executable: process.execPath, args: [npmCli, ...args] };
   }
   return { executable: command, args };
 }

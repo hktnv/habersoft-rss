@@ -4,6 +4,7 @@ export type DrilldownStatus = "ok" | "partial" | "unavailable";
 export type FeedHealth = "healthy" | "degraded" | "unknown";
 export type LastResult = "success" | "failure" | "unknown";
 export type IngestionRowStatus = "accepted" | "skipped" | "unknown";
+export type RecheckUnavailableReason = "admin_auth_not_configured" | "inactive_feed" | "no_subscribers" | "source_host_redacted";
 
 export type OperationsDrilldown = {
   readonly status: DrilldownStatus;
@@ -45,6 +46,9 @@ export type FeedDrilldownRow = {
   readonly lastResult: LastResult;
   readonly recentEntryCount: number | null;
   readonly notes: readonly string[];
+  readonly canRequestRecheck: boolean;
+  readonly recheckUnavailableReason: RecheckUnavailableReason | null;
+  readonly actionRef: string | null;
 };
 
 export type IngestionDrilldownRow = {
@@ -79,6 +83,7 @@ export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promis
 const timeoutMs = 5000;
 const maxRows = 20;
 const displayIdPattern = /^(?:feed|check)_[a-f0-9]{10}$/u;
+const actionRefPattern = /^feed_recheck_v1\.[A-Za-z0-9_-]{48,512}$/u;
 const hostnamePattern = /^(?=.{1,120}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/iu;
 const unsafeTextPattern = new RegExp(
   [
@@ -103,6 +108,7 @@ export const operationsDrilldownClientContract = {
   customCredentialHeaders: false,
   queryForwarding: false,
   writeMethods: false,
+  feedRecheckActionMetadata: true,
   polling: false
 } as const;
 
@@ -233,8 +239,22 @@ function isFeedRow(value: unknown): value is FeedDrilldownRow {
     (value.lastCheckedAt === null || isIso(value.lastCheckedAt)) &&
     isLastResult(value.lastResult) &&
     isNullableCount(value.recentEntryCount) &&
-    isSafeNotes(value.notes)
+    isSafeNotes(value.notes) &&
+    isRecheckMetadata(value)
   );
+}
+
+function isRecheckMetadata(value: Record<string, unknown>): boolean {
+  if (typeof value.canRequestRecheck !== "boolean") return false;
+  if (value.canRequestRecheck) {
+    return value.recheckUnavailableReason === null && typeof value.actionRef === "string" && actionRefPattern.test(value.actionRef);
+  }
+
+  return isRecheckUnavailableReason(value.recheckUnavailableReason) && value.actionRef === null;
+}
+
+function isRecheckUnavailableReason(value: unknown): value is RecheckUnavailableReason {
+  return value === "admin_auth_not_configured" || value === "inactive_feed" || value === "no_subscribers" || value === "source_host_redacted";
 }
 
 function isIngestion(value: unknown): value is OperationsDrilldown["ingestion"] {

@@ -6,22 +6,35 @@ import {
   type OperationsDrilldown as OperationsDrilldownData,
   type OperationsDrilldownResult
 } from "./operationsDrilldownClient";
+import { requestFeedRecheck, type FeedRecheckResult } from "./feedRecheckClient";
 
 type DrilldownPhase = "loading" | "refreshing" | "complete";
+type FeedRecheckPhase = "confirming" | "submitting" | "complete";
 
 type DrilldownState = {
   readonly phase: DrilldownPhase;
   readonly result?: OperationsDrilldownResult;
 };
 
+type FeedRecheckState = {
+  readonly phase: FeedRecheckPhase;
+  readonly result?: FeedRecheckResult;
+};
+
 export function OperationsDrilldown({
-  loadDrilldown = fetchOperationsDrilldown
+  loadDrilldown = fetchOperationsDrilldown,
+  csrfToken,
+  requestRecheck = requestFeedRecheck
 }: {
   readonly loadDrilldown?: (options?: { readonly signal?: AbortSignal }) => Promise<OperationsDrilldownResult>;
+  readonly csrfToken?: string;
+  readonly requestRecheck?: (options: { readonly actionRef: string; readonly csrfToken: string; readonly signal?: AbortSignal }) => Promise<FeedRecheckResult>;
 }) {
   const [state, setState] = useState<DrilldownState>({ phase: "loading" });
+  const [feedRechecks, setFeedRechecks] = useState<Record<string, FeedRecheckState>>({});
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | undefined>(undefined);
+  const actionAbortRef = useRef<AbortController | undefined>(undefined);
   const isBusy = state.phase === "loading" || state.phase === "refreshing";
   const hasCompletedResult = state.result !== undefined;
 
@@ -61,12 +74,69 @@ export function OperationsDrilldown({
     runRequest(requestId, controller);
     return () => {
       abortRef.current?.abort();
+      actionAbortRef.current?.abort();
     };
   }, [runRequest]);
 
   const refresh = () => {
     if (isBusy) return;
     startRequest(hasCompletedResult ? "refreshing" : "loading");
+  };
+
+  const beginRecheckConfirmation = (row: FeedDrilldownRow) => {
+    setFeedRechecks((current) => ({
+      ...current,
+      [row.displayId]: {
+        phase: "confirming"
+      }
+    }));
+  };
+
+  const cancelRecheckConfirmation = (row: FeedDrilldownRow) => {
+    setFeedRechecks((current) => {
+      const next = { ...current };
+      delete next[row.displayId];
+      return next;
+    });
+  };
+
+  const confirmRecheck = (row: FeedDrilldownRow) => {
+    if (!row.canRequestRecheck || row.actionRef === null || csrfToken === undefined) {
+      setFeedRechecks((current) => ({
+        ...current,
+        [row.displayId]: {
+          phase: "complete",
+          result: {
+            kind: csrfToken === undefined ? "unauthenticated" : "invalid_response",
+            message: csrfToken === undefined
+              ? "Admin session expired. Sign in again before requesting a feed recheck."
+              : "Feed recheck target is not eligible."
+          }
+        }
+      }));
+      return;
+    }
+
+    actionAbortRef.current?.abort();
+    const controller = new AbortController();
+    actionAbortRef.current = controller;
+    setFeedRechecks((current) => ({
+      ...current,
+      [row.displayId]: {
+        phase: "submitting"
+      }
+    }));
+
+    void requestRecheck({ actionRef: row.actionRef, csrfToken, signal: controller.signal }).then((result) => {
+      setFeedRechecks((current) => ({
+        ...current,
+        [row.displayId]: {
+          phase: "complete",
+          result
+        }
+      }));
+      actionAbortRef.current = undefined;
+    });
   };
 
   return (
@@ -87,7 +157,14 @@ export function OperationsDrilldown({
           <p className="safe-message">Checking the protected same-origin drilldown route.</p>
         </div>
       ) : state.result.kind === "success" ? (
-        <DrilldownView drilldown={state.result.drilldown} refreshing={state.phase === "refreshing"} />
+        <DrilldownView
+          drilldown={state.result.drilldown}
+          refreshing={state.phase === "refreshing"}
+          feedRechecks={feedRechecks}
+          onBeginRecheckConfirmation={beginRecheckConfirmation}
+          onCancelRecheckConfirmation={cancelRecheckConfirmation}
+          onConfirmRecheck={confirmRecheck}
+        />
       ) : (
         <DrilldownUnavailableView result={state.result} />
       )}
@@ -97,10 +174,18 @@ export function OperationsDrilldown({
 
 function DrilldownView({
   drilldown,
-  refreshing
+  refreshing,
+  feedRechecks,
+  onBeginRecheckConfirmation,
+  onCancelRecheckConfirmation,
+  onConfirmRecheck
 }: {
   readonly drilldown: OperationsDrilldownData;
   readonly refreshing: boolean;
+  readonly feedRechecks: Readonly<Record<string, FeedRecheckState>>;
+  readonly onBeginRecheckConfirmation: (row: FeedDrilldownRow) => void;
+  readonly onCancelRecheckConfirmation: (row: FeedDrilldownRow) => void;
+  readonly onConfirmRecheck: (row: FeedDrilldownRow) => void;
 }) {
   const emptyRows = drilldown.feeds.rows.length === 0 && drilldown.ingestion.rows.length === 0;
   const stateClass = drilldown.status === "ok" ? "state-healthy" : drilldown.status === "partial" ? "state-partial" : "state-unavailable";
@@ -133,7 +218,13 @@ function DrilldownView({
         </section>
       ) : (
         <section className="panel-grid drilldown-grid" aria-label="Operations drilldown rows">
-          <FeedDrilldownPanel drilldown={drilldown} />
+          <FeedDrilldownPanel
+            drilldown={drilldown}
+            feedRechecks={feedRechecks}
+            onBeginRecheckConfirmation={onBeginRecheckConfirmation}
+            onCancelRecheckConfirmation={onCancelRecheckConfirmation}
+            onConfirmRecheck={onConfirmRecheck}
+          />
           <IngestionDrilldownPanel drilldown={drilldown} />
           <article className="panel notes-panel drilldown-notes">
             <h2>Drilldown Notes</h2>
@@ -150,7 +241,19 @@ function DrilldownView({
   );
 }
 
-function FeedDrilldownPanel({ drilldown }: { readonly drilldown: OperationsDrilldownData }) {
+function FeedDrilldownPanel({
+  drilldown,
+  feedRechecks,
+  onBeginRecheckConfirmation,
+  onCancelRecheckConfirmation,
+  onConfirmRecheck
+}: {
+  readonly drilldown: OperationsDrilldownData;
+  readonly feedRechecks: Readonly<Record<string, FeedRecheckState>>;
+  readonly onBeginRecheckConfirmation: (row: FeedDrilldownRow) => void;
+  readonly onCancelRecheckConfirmation: (row: FeedDrilldownRow) => void;
+  readonly onConfirmRecheck: (row: FeedDrilldownRow) => void;
+}) {
   return (
     <article className="panel drilldown-panel">
       <h2>Feed Signals</h2>
@@ -163,7 +266,13 @@ function FeedDrilldownPanel({ drilldown }: { readonly drilldown: OperationsDrill
           ["Recent failure", drilldown.feeds.withRecentFailure]
         ]}
       />
-      <FeedRows rows={drilldown.feeds.rows} />
+      <FeedRows
+        rows={drilldown.feeds.rows}
+        feedRechecks={feedRechecks}
+        onBeginRecheckConfirmation={onBeginRecheckConfirmation}
+        onCancelRecheckConfirmation={onCancelRecheckConfirmation}
+        onConfirmRecheck={onConfirmRecheck}
+      />
     </article>
   );
 }
@@ -197,7 +306,19 @@ function MetricStrip({ metrics }: { readonly metrics: readonly (readonly [string
   );
 }
 
-function FeedRows({ rows }: { readonly rows: readonly FeedDrilldownRow[] }) {
+function FeedRows({
+  rows,
+  feedRechecks,
+  onBeginRecheckConfirmation,
+  onCancelRecheckConfirmation,
+  onConfirmRecheck
+}: {
+  readonly rows: readonly FeedDrilldownRow[];
+  readonly feedRechecks: Readonly<Record<string, FeedRecheckState>>;
+  readonly onBeginRecheckConfirmation: (row: FeedDrilldownRow) => void;
+  readonly onCancelRecheckConfirmation: (row: FeedDrilldownRow) => void;
+  readonly onConfirmRecheck: (row: FeedDrilldownRow) => void;
+}) {
   if (rows.length === 0) return <p className="safe-message">No feed rows in this bounded window.</p>;
 
   return (
@@ -211,6 +332,7 @@ function FeedRows({ rows }: { readonly rows: readonly FeedDrilldownRow[] }) {
             <th scope="col">Last check</th>
             <th scope="col">Entries</th>
             <th scope="col">Notes</th>
+            <th scope="col">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -230,12 +352,129 @@ function FeedRows({ rows }: { readonly rows: readonly FeedDrilldownRow[] }) {
               </td>
               <td>{row.recentEntryCount ?? "Unavailable"}</td>
               <td>{row.notes.length === 0 ? "None" : row.notes.join(" ")}</td>
+              <td>
+                <FeedRecheckControls
+                  row={row}
+                  state={feedRechecks[row.displayId]}
+                  onBegin={() => onBeginRecheckConfirmation(row)}
+                  onCancel={() => onCancelRecheckConfirmation(row)}
+                  onConfirm={() => onConfirmRecheck(row)}
+                />
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
   );
+}
+
+function FeedRecheckControls({
+  row,
+  state,
+  onBegin,
+  onCancel,
+  onConfirm
+}: {
+  readonly row: FeedDrilldownRow;
+  readonly state?: FeedRecheckState;
+  readonly onBegin: () => void;
+  readonly onCancel: () => void;
+  readonly onConfirm: () => void;
+}) {
+  if (!row.canRequestRecheck) {
+    return <span className="action-note">{describeUnavailableReason(row.recheckUnavailableReason)}</span>;
+  }
+
+  if (state?.phase === "confirming") {
+    return (
+      <div className="feed-action-stack">
+        <span className="action-note">Request a safe recheck for this feed?</span>
+        <button type="button" className="compact-button" onClick={onConfirm}>
+          Confirm
+        </button>
+        <button type="button" className="secondary-button compact-button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  if (state?.phase === "submitting") {
+    return (
+      <button type="button" className="compact-button" disabled aria-busy="true">
+        Requesting...
+      </button>
+    );
+  }
+
+  if (state?.phase === "complete" && state.result !== undefined) {
+    return (
+      <div className="feed-action-stack" role="status" aria-live="polite">
+        <span className={`action-note state-${resultTone(state.result)}`}>{describeRecheckResult(state.result)}</span>
+        {state.result.kind === "accepted" || state.result.kind === "already_pending" || state.result.kind === "rate_limited" ? null : (
+          <button type="button" className="compact-button" onClick={onBegin}>
+            Try again
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <button type="button" className="compact-button" onClick={onBegin}>
+      Request recheck
+    </button>
+  );
+}
+
+function describeUnavailableReason(reason: FeedDrilldownRow["recheckUnavailableReason"]): string {
+  switch (reason) {
+    case "inactive_feed":
+      return "Inactive";
+    case "no_subscribers":
+      return "No subscribers";
+    case "source_host_redacted":
+      return "Source redacted";
+    case "admin_auth_not_configured":
+      return "Auth unavailable";
+    case null:
+      return "Unavailable";
+  }
+}
+
+function describeRecheckResult(result: FeedRecheckResult): string {
+  switch (result.kind) {
+    case "accepted":
+    case "already_pending":
+    case "rate_limited":
+    case "unavailable":
+    case "not_found":
+      return result.response.message;
+    case "unauthenticated":
+    case "forbidden":
+    case "invalid_response":
+    case "timeout":
+      return result.message;
+  }
+}
+
+function resultTone(result: FeedRecheckResult): "healthy" | "partial" | "degraded" | "unavailable" {
+  switch (result.kind) {
+    case "accepted":
+    case "already_pending":
+      return "healthy";
+    case "rate_limited":
+      return "partial";
+    case "unauthenticated":
+    case "forbidden":
+      return "degraded";
+    case "unavailable":
+    case "not_found":
+    case "invalid_response":
+    case "timeout":
+      return "unavailable";
+  }
 }
 
 function IngestionRows({ rows }: { readonly rows: readonly IngestionDrilldownRow[] }) {

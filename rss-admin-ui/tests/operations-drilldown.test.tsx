@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { OperationsDrilldown } from "../src/adminOperations/OperationsDrilldown";
 import type { OperationsDrilldown as OperationsDrilldownData, OperationsDrilldownResult } from "../src/adminOperations/operationsDrilldownClient";
+import type { FeedRecheckResult } from "../src/adminOperations/feedRecheckClient";
 
 describe("OperationsDrilldown", () => {
   it("renders validated drilldown rows and supports manual refresh", async () => {
@@ -18,6 +19,39 @@ describe("OperationsDrilldown", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh Drilldown" }));
     expect((await screen.findAllByText("3")).length).toBeGreaterThan(0);
     expect(loadDrilldown).toHaveBeenCalledTimes(2);
+  });
+
+  it("requires explicit confirmation before requesting a feed recheck", async () => {
+    const requestRecheck = vi.fn<(options: { readonly actionRef: string; readonly csrfToken: string; readonly signal?: AbortSignal }) => Promise<FeedRecheckResult>>()
+      .mockResolvedValue({
+        kind: "accepted",
+        httpStatus: 202,
+        response: {
+          status: "accepted",
+          requestId: "recheck_abc123def456",
+          target: {
+            displayId: "feed_123456abcd",
+            sourceHost: "news.example.org"
+          },
+          queued: true,
+          cooldownSeconds: 300,
+          message: "Feed recheck was requested through the existing due-feed path.",
+          generatedAt: "2026-06-30T06:01:00.000Z"
+        }
+      });
+
+    render(<OperationsDrilldown loadDrilldown={vi.fn().mockResolvedValue(successResult())} csrfToken={csrfToken} requestRecheck={requestRecheck} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Request recheck" }));
+    expect(screen.getByText("Request a safe recheck for this feed?")).toBeInTheDocument();
+    expect(requestRecheck).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(await screen.findByText("Feed recheck was requested through the existing due-feed path.")).toBeInTheDocument();
+    expect(requestRecheck).toHaveBeenCalledWith(expect.objectContaining({
+      actionRef,
+      csrfToken
+    }));
   });
 
   it("shows session-expired state without rendering drilldown rows", async () => {
@@ -107,7 +141,10 @@ function validDrilldown(): OperationsDrilldownData {
           lastCheckedAt: "2026-06-30T05:00:00.000Z",
           lastResult: "failure",
           recentEntryCount: 3,
-          notes: ["Latest check is degraded."]
+          notes: ["Latest check is degraded."],
+          canRequestRecheck: true,
+          recheckUnavailableReason: null,
+          actionRef
         }
       ]
     },
@@ -135,3 +172,6 @@ function validDrilldown(): OperationsDrilldownData {
     }
   };
 }
+
+const actionRef = `feed_recheck_v1.${"A".repeat(64)}`;
+const csrfToken = "csrf_token_value_at_least_32_characters";

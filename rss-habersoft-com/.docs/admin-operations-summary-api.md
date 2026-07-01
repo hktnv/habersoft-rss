@@ -7,9 +7,15 @@ MS-025A adds the backend route for the first authenticated read-only admin opera
 MS-025B adds a separate protected read-only bounded drilldown route at
 `GET /admin-api/operations/drilldown`. Its status is
 `MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`;
-MS-025A-R2 remains accepted for this summary route, while new drilldown
-production acceptance is pending operator deploy/retest. See
+MS-025A-R2 remains accepted for this summary route, and drilldown production
+acceptance is closed by operator-reported MS-025B-R1 live retest evidence. See
 [admin-operations-drilldown-api.md](admin-operations-drilldown-api.md).
+
+MS-026A adds the separate bounded feed recheck request action at
+`POST /admin-api/operations/feed-recheck-requests`. Its status is
+`MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`;
+operator deploy/retest required remains for that action. The summary route stays
+aggregate-only and read-only.
 
 ## Route
 
@@ -82,6 +88,11 @@ When aggregate metrics cannot be computed safely, the route returns `null` metri
 The API must not return tenant identifiers, feed URLs, feed content, entry content, raw request/response bodies, raw logs, upstream origins, private hostnames, cookies, password hashes, session secrets, database URLs, Redis URLs, Agent keys, Tenant tokens, JWT claims, stack traces, or per-row data.
 
 The API does not add write behavior, Tenant browser credentials, Agent browser credentials, Prisma schema changes, migrations, CORS broadening, registry publication, Git tags, releases, or production deployment.
+
+The MS-026A action route is intentionally separate from this summary route. It
+uses `X-Admin-CSRF`, `X-Admin-Idempotency-Key`, an opaque `actionRef`, and the
+existing due-feed path with no synchronous external feed fetch. It does not
+change the summary response shape.
 
 ## Validation
 

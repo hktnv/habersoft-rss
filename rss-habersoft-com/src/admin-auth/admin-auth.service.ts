@@ -28,6 +28,32 @@ export type AdminSessionResponse =
         readonly displayName: "Admin";
       };
       readonly expiresAt: string;
+      readonly csrfToken: string;
+    };
+
+export type AdminAuthenticatedSessionContext = {
+  readonly sessionKey: string;
+  readonly csrfToken: string;
+  readonly expiresAt: string;
+  readonly principal: {
+    readonly kind: "single_admin";
+    readonly displayName: "Admin";
+  };
+};
+
+export type AdminAuthenticatedSessionResult =
+  | {
+      readonly configured: false;
+      readonly authenticated: false;
+    }
+  | {
+      readonly configured: true;
+      readonly authenticated: false;
+    }
+  | {
+      readonly configured: true;
+      readonly authenticated: true;
+      readonly session: AdminAuthenticatedSessionContext;
     };
 
 export type AdminCookieMutation =
@@ -64,21 +90,60 @@ export class AdminAuthService {
   }
 
   public async session(request: FastifyRequest): Promise<AdminSessionResponse> {
-    if (this.config.mode === "disabled") {
+    const session = await this.authenticatedSession(request);
+    if (!session.configured) {
       return notConfiguredResponse();
+    }
+
+    if (!session.authenticated) {
+      return unauthenticatedResponse();
+    }
+
+    return authenticatedResponse(session.session.expiresAt, session.session.csrfToken);
+  }
+
+  public async authenticatedSession(request: FastifyRequest): Promise<AdminAuthenticatedSessionResult> {
+    if (this.config.mode === "disabled") {
+      return {
+        configured: false,
+        authenticated: false
+      };
     }
 
     const sessionId = readCookie(request.headers.cookie, this.config.sessionCookieName);
     if (sessionId === undefined || !isSessionToken(sessionId)) {
-      return unauthenticatedResponse();
+      return {
+        configured: true,
+        authenticated: false
+      };
     }
 
     const record = await this.readSession(sessionId);
     if (record === undefined) {
-      return unauthenticatedResponse();
+      return {
+        configured: true,
+        authenticated: false
+      };
     }
 
-    return authenticatedResponse(record.expiresAt);
+    const sessionKey = this.sessionKey(sessionId);
+    return {
+      configured: true,
+      authenticated: true,
+      session: {
+        sessionKey,
+        csrfToken: csrfToken(this.config, sessionId),
+        expiresAt: record.expiresAt,
+        principal: {
+          kind: "single_admin",
+          displayName: "Admin"
+        }
+      }
+    };
+  }
+
+  public isValidCsrfToken(session: AdminAuthenticatedSessionContext, candidate: string | undefined): boolean {
+    return candidate !== undefined && isCsrfToken(candidate) && constantTimeStringEquals(candidate, session.csrfToken);
   }
 
   public async login(
@@ -119,7 +184,7 @@ export class AdminAuthService {
     });
 
     return {
-      response: authenticatedResponse(expiresAt),
+      response: authenticatedResponse(expiresAt, csrfToken(this.config, sessionId)),
       cookie: {
         kind: "set",
         cookies: [
@@ -217,7 +282,7 @@ function unauthenticatedResponse(): AdminSessionResponse {
   };
 }
 
-function authenticatedResponse(expiresAt: string): AdminSessionResponse {
+function authenticatedResponse(expiresAt: string, token: string): AdminSessionResponse {
   return {
     configured: true,
     authenticated: true,
@@ -225,7 +290,8 @@ function authenticatedResponse(expiresAt: string): AdminSessionResponse {
       kind: "single_admin",
       displayName: "Admin"
     },
-    expiresAt
+    expiresAt,
+    csrfToken: token
   };
 }
 
@@ -269,6 +335,14 @@ function readCookie(header: string | undefined, name: string): string | undefine
 
 function isSessionToken(value: string): boolean {
   return /^[A-Za-z0-9_-]{32,128}$/u.test(value);
+}
+
+function isCsrfToken(value: string): boolean {
+  return /^[A-Za-z0-9_-]{32,128}$/u.test(value);
+}
+
+function csrfToken(config: Extract<AdminAuthConfig, { readonly mode: "single_admin" }>, sessionId: string): string {
+  return createHmac("sha256", config.sessionSecret).update("admin-csrf:", "utf8").update(sessionId, "utf8").digest("base64url");
 }
 
 function buildSessionCookie(config: Extract<AdminAuthConfig, { readonly mode: "single_admin" }>, value: string, maxAge: number): string {

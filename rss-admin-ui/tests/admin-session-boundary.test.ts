@@ -27,7 +27,8 @@ describe("admin auth/session boundary", () => {
       kind: "authenticated",
       message: "Admin session is authenticated.",
       principal: { kind: "single_admin", displayName: "Admin" },
-      expiresAt: "2026-06-20T00:00:00.000Z"
+      expiresAt: "2026-06-20T00:00:00.000Z",
+      csrfToken
     };
     const states: AdminAuthBoundaryState[] = [
       { kind: "same_origin_session" },
@@ -64,8 +65,10 @@ describe("admin auth/session boundary", () => {
       browserCredentialPersistenceImplemented: false,
       fakeAdminIdentityAllowed: false,
       privilegedBusinessDataAllowed: false,
-      adminApiWritesImplemented: false,
+      adminApiWritesImplemented: "bounded_feed_recheck_request_only",
       futureAuthorityRequiredBeforeBusinessAdminFeatures: true
     });
   });
 });
+
+const csrfToken = "csrf_token_value_at_least_32_characters";
