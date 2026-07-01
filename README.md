@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status and operations dashboard with same-origin admin auth/session routes plus bounded feed recheck/onboarding actions | `SUCCESS_MS_027B_R2_EVIDENCE_AUTOMATION_REGRESSION_MODE_LANDED_OPERATOR_RETEST_OPTIONAL` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status and operations dashboard with same-origin admin auth/session routes plus bounded feed recheck/onboarding actions | `SUCCESS_MS_027B_R3_LIVE_EVIDENCE_REGRESSION_ACCEPTANCE_CLOSED_RECHECK_NOT_RETESTED_EXPECTED` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -84,6 +84,7 @@ npm run verify:production-image-freshness
 npm run verify:production-feed-onboarding-acceptance
 npm run verify:production-feed-effect-acceptance
 npm run verify:evidence-regression-mode
+npm run verify:evidence-regression-acceptance
 npm run verify:browser-evidence
 npm run ops:production:retest -- --dry-run
 npm run ops:production:retest -- --retest-only --endpoint https://rss-panel.habersoft.com
@@ -126,6 +127,8 @@ MS-027B adds `SUCCESS_MS_027B_FEED_ONBOARDING_RECHECK_EFFECT_FLOW_LANDED_OPERATO
 MS-027B-R1 adds `SUCCESS_MS_027B_R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTANCE_CLOSED_OPERATOR_REPORTED_EVIDENCE_AUTOMATION_LANDED`: operator-reported production evidence accepts `FEED_ONBOARDING_EFFECT_ACCEPTED`, `FEED_RECHECK_EFFECT_ACCEPTED`, `browser-evidence-verify-ok`, and `NGINX_ROUTE_PROOF_ACCEPTED` for the bounded MS-027B feed onboarding plus recheck effect scope. `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET is closed for the bounded MS-027B feed onboarding plus recheck effect scope`. Evidence source is `operator_reported`; Codex did not independently perform a credentialed production login; no production contact by Codex; no production mutation by Codex; no production feed was created, seeded, or faked; no fake actionRef was generated. Operators can use `ops:production:acceptance:redacted -- --browser-evidence-stdin`, `--browser-evidence-file`, `Download redacted evidence JSON`, and the tracked guard `npm run verify:production-feed-effect-acceptance`. The durable sanitized receipt lives outside Git under `operator-state/admin-ui-production-activation/ms-027b-r1-feed-onboarding-recheck-effect-accepted-operator-reported-receipt.json`.
 
 MS-027B-R2 adds `SUCCESS_MS_027B_R2_EVIDENCE_AUTOMATION_REGRESSION_MODE_LANDED_OPERATOR_RETEST_OPTIONAL`: MS-027B-R1 feed onboarding plus recheck effect production acceptance remains accepted, but already-present feed retests are now regression/continuity evidence rather than fresh onboarding effect claims. The verifier can emit `FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED`, `FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE`, `FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK`, and `RECHECK_EFFECT_ACCEPTED_REGRESSION_OK` when the prior ledger is tracked; without that ledger, missing fresh onboarding effect evidence remains `OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON`. Do not claim a fresh onboarding effect from an already-present feed regression retest. Validate with `npm run verify:evidence-regression-mode`.
+
+MS-027B-R3 adds `SUCCESS_MS_027B_R3_LIVE_EVIDENCE_REGRESSION_ACCEPTANCE_CLOSED_RECHECK_NOT_RETESTED_EXPECTED`: operator-reported latest redacted evidence keeps the MS-027B-R1 onboarding/recheck acceptance ledger intact and records `MS-027B-R3_LIVE_EVIDENCE_REGRESSION_MODE_ACCEPTED_OPERATOR_REPORTED`. The run classifies `FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED`, `FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK`, `FEED_RECHECK_NOT_RETESTED_EXPECTED`, `FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK`, `EVIDENCE_REGRESSION_MODE_ACCEPTED`, and `TRUE_EFFECT_CLOSURE_STILL_REQUIRES_FRESH_REDACTED_EVIDENCE`; it does not claim a new onboarding effect or a new recheck effect. Validate with `npm run verify:evidence-regression-acceptance`.
 
 MS-020D adds the local-only production activation readiness package. It includes a public-data classification for the current status-only fields, an operator authority record template, a future post-deploy evidence checklist, and `npm run verify:production-readiness`. It does not authorize production mutation.
 

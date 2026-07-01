@@ -45,6 +45,8 @@ const feedOnboardingRecheckEffectAcceptanceStatus =
   "SUCCESS_MS_027B_R1_FEED_ONBOARDING_RECHECK_EFFECT_PRODUCTION_ACCEPTANCE_CLOSED_OPERATOR_REPORTED_EVIDENCE_AUTOMATION_LANDED";
 const evidenceRegressionModeStatus =
   "SUCCESS_MS_027B_R2_EVIDENCE_AUTOMATION_REGRESSION_MODE_LANDED_OPERATOR_RETEST_OPTIONAL";
+const evidenceRegressionAcceptanceStatus =
+  "SUCCESS_MS_027B_R3_LIVE_EVIDENCE_REGRESSION_ACCEPTANCE_CLOSED_RECHECK_NOT_RETESTED_EXPECTED";
 
 run("node", ["--version"]);
 run("npm", ["--version"]);
@@ -64,6 +66,7 @@ run("npm", ["run", "verify:production-image-freshness"]);
 run("npm", ["run", "verify:production-feed-onboarding-acceptance"]);
 run("npm", ["run", "verify:production-feed-effect-acceptance"]);
 run("npm", ["run", "verify:evidence-regression-mode"]);
+run("npm", ["run", "verify:evidence-regression-acceptance"]);
 run("npm", ["run", "verify:browser-evidence"]);
 run("npm", ["run", "verify:production-operations-acceptance"]);
 run("npm", ["run", "verify:production-operations-drilldown-acceptance"]);
@@ -151,6 +154,7 @@ console.log(
       feed_onboarding_recheck_effect_flow: feedOnboardingRecheckEffectStatus,
       feed_onboarding_recheck_effect_acceptance: feedOnboardingRecheckEffectAcceptanceStatus,
       evidence_regression_mode: evidenceRegressionModeStatus,
+      evidence_regression_acceptance: evidenceRegressionAcceptanceStatus,
       checks: [
         "production build exists",
         "admin operations dashboard source/docs/proxy verifier passes",
@@ -164,6 +168,7 @@ console.log(
         "MS-027A-R2 production promotion/feed-onboarding route-smoke acceptance verifier passes",
         "MS-027B-R1 feed onboarding plus recheck effect production acceptance verifier passes",
         "MS-027B-R2 evidence regression-mode verifier passes",
+        "MS-027B-R3 live evidence regression acceptance verifier passes",
         "MS-026C browser evidence verifier passes",
         "MS-025A-R2 operator-reported operations acceptance verifier passes",
         "MS-025B-R1 operator-reported operations drilldown acceptance verifier passes",

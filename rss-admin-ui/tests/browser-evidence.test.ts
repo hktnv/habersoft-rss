@@ -152,6 +152,36 @@ describe("redacted browser evidence", () => {
     expect(evidence.classifications).not.toContain("FEED_ONBOARDING_EFFECT_ACCEPTED");
   });
 
+  it("accepts regression not-retested vocabulary without claiming a fresh recheck effect", () => {
+    const evidence = {
+      ...minimalEvidence(),
+      milestone: "MS-027B",
+      feedRecheck: {
+        effectStatus: "FEED_RECHECK_NOT_RETESTED_EXPECTED",
+        lastActionClassification: null
+      },
+      feedOnboarding: {
+        ...minimalEvidence().feedOnboarding,
+        effectStatus: "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED"
+      },
+      classifications: [
+        "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+        "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+        "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED",
+        "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK",
+        "FEED_RECHECK_NOT_RETESTED_EXPECTED",
+        "FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK",
+        "EVIDENCE_REGRESSION_MODE_ACCEPTED",
+        "TRUE_EFFECT_CLOSURE_STILL_REQUIRES_FRESH_REDACTED_EVIDENCE"
+      ]
+    } as const;
+
+    const result = validateRedactedBrowserEvidence(evidence);
+
+    expect(result).toMatchObject({ valid: true });
+    expect(evidence.classifications).not.toContain("FEED_RECHECK_EFFECT_ACCEPTED");
+  });
+
   it("rejects forbidden token, cookie, csrf, and actionRef surfaces", () => {
     for (const forbidden of [
       { ...minimalEvidence(), cookie: "habersoft_admin_session=abc" },

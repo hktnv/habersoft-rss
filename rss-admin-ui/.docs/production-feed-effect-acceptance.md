@@ -101,4 +101,29 @@ The local tracked guard for the R2 semantics is:
 npm run verify:evidence-regression-mode
 ```
 
+## MS-027B-R3 Live Evidence Regression Acceptance
+
+Result: `SUCCESS_MS_027B_R3_LIVE_EVIDENCE_REGRESSION_ACCEPTANCE_CLOSED_RECHECK_NOT_RETESTED_EXPECTED`.
+
+Status: `MS-027B-R3_LIVE_EVIDENCE_REGRESSION_MODE_ACCEPTED_OPERATOR_REPORTED`.
+
+MS-027B-R3 records the operator-reported latest regression evidence without reopening or downgrading MS-027B-R1. The latest run did not attempt a recheck action and did not produce a new recheck effect; that is classified as `FEED_RECHECK_NOT_RETESTED_EXPECTED`, not as a global critical risk. It also does not claim a new onboarding effect.
+
+Regression acceptance classifications are:
+
+- `FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED`;
+- `FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK`;
+- `FEED_RECHECK_NOT_RETESTED_EXPECTED`;
+- `FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK`;
+- `EVIDENCE_REGRESSION_MODE_ACCEPTED`;
+- `TRUE_EFFECT_CLOSURE_STILL_REQUIRES_FRESH_REDACTED_EVIDENCE`.
+
+Future fresh onboarding or recheck effect closure still requires fresh verifier-accepted redacted evidence. If no prior onboarding ledger is tracked, missing onboarding effect evidence remains `OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON`; if no prior recheck ledger is tracked, R3 must not claim `FEED_RECHECK_EFFECT_ACCEPTED` or `FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK`.
+
+The local tracked guard for the R3 acceptance semantics is:
+
+```bash
+npm run verify:evidence-regression-acceptance
+```
+
 Future admin write/business features remain separate bounded milestones.

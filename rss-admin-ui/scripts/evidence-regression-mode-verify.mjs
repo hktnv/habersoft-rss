@@ -8,7 +8,8 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const backendRoot = path.join(repoRoot, "rss-habersoft-com");
-const resultCode = "SUCCESS_MS_027B_R2_EVIDENCE_AUTOMATION_REGRESSION_MODE_LANDED_OPERATOR_RETEST_OPTIONAL";
+const resultCode = "SUCCESS_MS_027B_R3_LIVE_EVIDENCE_REGRESSION_ACCEPTANCE_CLOSED_RECHECK_NOT_RETESTED_EXPECTED";
+const priorResultCode = "SUCCESS_MS_027B_R2_EVIDENCE_AUTOMATION_REGRESSION_MODE_LANDED_OPERATOR_RETEST_OPTIONAL";
 const failures = [];
 
 assertStaticContracts();
@@ -24,10 +25,15 @@ console.log(
     {
       status: "evidence-regression-mode-verify-ok",
       result: resultCode,
+      prior_regression_mode_result: priorResultCode,
       fresh_initial_acceptance: "FEED_ONBOARDING_EFFECT_ACCEPTED",
       regression_onboarding_continuity: "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK",
       already_present_classification: "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE",
       recheck_regression: "RECHECK_EFFECT_ACCEPTED_REGRESSION_OK",
+      recheck_not_retested_expected: "FEED_RECHECK_NOT_RETESTED_EXPECTED",
+      recheck_acceptance_ledger_continuity: "FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK",
+      evidence_regression_mode: "EVIDENCE_REGRESSION_MODE_ACCEPTED",
+      true_effect_boundary: "TRUE_EFFECT_CLOSURE_STILL_REQUIRES_FRESH_REDACTED_EVIDENCE",
       first_time_missing_onboarding: "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
       critical_leakage: "BROWSER_EVIDENCE_INVALID",
       production_contact: false,
@@ -43,6 +49,9 @@ function assertStaticContracts() {
   const frontendPackage = JSON.parse(readFrontend("package.json"));
   if (frontendPackage.scripts?.["verify:evidence-regression-mode"] !== "node scripts/evidence-regression-mode-verify.mjs") {
     failures.push("package.json missing verify:evidence-regression-mode");
+  }
+  if (frontendPackage.scripts?.["verify:evidence-regression-acceptance"] !== "node scripts/evidence-regression-mode-verify.mjs") {
+    failures.push("package.json missing verify:evidence-regression-acceptance");
   }
 
   for (const file of [
@@ -63,10 +72,15 @@ function assertStaticContracts() {
   for (const fragment of [
     "--regression-mode",
     "--no-prior-acceptance-ledger",
+    "--no-prior-recheck-acceptance-ledger",
     "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED",
     "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE",
     "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK",
+    "FEED_RECHECK_NOT_RETESTED_EXPECTED",
+    "FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK",
     "RECHECK_EFFECT_ACCEPTED_REGRESSION_OK",
+    "EVIDENCE_REGRESSION_MODE_ACCEPTED",
+    "TRUE_EFFECT_CLOSURE_STILL_REQUIRES_FRESH_REDACTED_EVIDENCE",
     "PENDING_INITIAL_ONBOARDING_EFFECT_EVIDENCE"
   ]) {
     if (!browserVerifier.includes(fragment)) failures.push(`browser evidence verifier missing R2 fragment: ${fragment}`);
@@ -76,9 +90,10 @@ function assertStaticContracts() {
   for (const fragment of [
     "--initial-acceptance",
     "browserEvidenceVerifierArgs",
-    "hasPriorMs027bAcceptanceLedger",
-    "MS-027B-R2",
-    "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK"
+    "hasPriorMs027bOnboardingAcceptanceLedger",
+    "MS-027B-R3",
+    "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK",
+    "FEED_RECHECK_NOT_RETESTED_EXPECTED"
   ]) {
     if (!operatorRetest.includes(fragment)) failures.push(`operator retest missing R2 fragment: ${fragment}`);
   }
@@ -87,7 +102,9 @@ function assertStaticContracts() {
   for (const fragment of [
     "already_present",
     "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE",
-    "FEED_ONBOARDING_ACTION_ALREADY_EXISTS"
+    "FEED_ONBOARDING_ACTION_ALREADY_EXISTS",
+    "FEED_RECHECK_NOT_RETESTED_EXPECTED",
+    "FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK"
   ]) {
     if (!browserEvidence.includes(fragment)) failures.push(`browser evidence schema missing R2 fragment: ${fragment}`);
   }
@@ -105,11 +122,18 @@ function assertStaticContracts() {
   ].join("\n");
   for (const fragment of [
     resultCode,
+    priorResultCode,
+    "MS-027B-R3_LIVE_EVIDENCE_REGRESSION_MODE_ACCEPTED_OPERATOR_REPORTED",
     "FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED",
     "FEED_ONBOARDING_ALREADY_PRESENT_REGRESSION_NOT_APPLICABLE",
     "FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK",
+    "FEED_RECHECK_NOT_RETESTED_EXPECTED",
+    "FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK",
     "RECHECK_EFFECT_ACCEPTED_REGRESSION_OK",
+    "EVIDENCE_REGRESSION_MODE_ACCEPTED",
+    "TRUE_EFFECT_CLOSURE_STILL_REQUIRES_FRESH_REDACTED_EVIDENCE",
     "verify:evidence-regression-mode",
+    "verify:evidence-regression-acceptance",
     "MS-027B-R1 feed onboarding plus recheck effect production acceptance remains accepted",
     "Do not claim a fresh onboarding effect from an already-present feed regression retest"
   ]) {
@@ -146,7 +170,49 @@ async function assertRuntimeSemantics() {
     });
 
     await assertBrowserCase(
-      "regression prior ledger",
+      "regression prior ledger with no recheck attempted",
+      ["scripts/browser-evidence-verify.mjs", "--stdin", "--regression-mode"],
+      notRetestedRegressionEvidence(),
+      (parsed, status) => {
+        if (status !== 0 || parsed?.status !== "browser-evidence-verify-ok") failures.push("not-retested regression evidence was not accepted");
+        if (parsed?.classifications?.includes("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON")) failures.push("not-retested regression evidence surfaced operator action required");
+        if (!parsed?.classifications?.includes("FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED")) failures.push("not-retested regression missing onboarding not-retested classification");
+        if (!parsed?.classifications?.includes("FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK")) failures.push("not-retested regression missing onboarding ledger continuity");
+        if (!parsed?.classifications?.includes("FEED_RECHECK_NOT_RETESTED_EXPECTED")) failures.push("not-retested regression missing expected recheck residual");
+        if (!parsed?.classifications?.includes("FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK")) failures.push("not-retested regression missing recheck ledger continuity");
+        if (!parsed?.classifications?.includes("EVIDENCE_REGRESSION_MODE_ACCEPTED")) failures.push("not-retested regression missing regression accepted classification");
+        if (!parsed?.classifications?.includes("TRUE_EFFECT_CLOSURE_STILL_REQUIRES_FRESH_REDACTED_EVIDENCE")) failures.push("not-retested regression missing future fresh-evidence boundary");
+        if (parsed?.feed_recheck_effect_status !== "FEED_RECHECK_NOT_RETESTED_EXPECTED") failures.push("not-retested regression did not rewrite recheck status to expected/not-retested");
+        if (parsed?.classifications?.includes("FEED_RECHECK_EFFECT_ACCEPTED")) failures.push("not-retested regression overclaimed recheck effect acceptance");
+      }
+    );
+
+    await assertBrowserCase(
+      "regression no prior recheck ledger",
+      ["scripts/browser-evidence-verify.mjs", "--stdin", "--regression-mode", "--no-prior-recheck-acceptance-ledger"],
+      notRetestedRegressionEvidence(),
+      (parsed, status) => {
+        if (status !== 0 || parsed?.status !== "browser-evidence-verify-ok") failures.push("no-prior-recheck-ledger evidence was not accepted");
+        if (!parsed?.classifications?.includes("FEED_RECHECK_NOT_RETESTED_EXPECTED")) failures.push("no-prior-recheck-ledger evidence missing expected not-retested residual");
+        if (parsed?.classifications?.includes("FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK")) failures.push("no-prior-recheck-ledger evidence claimed recheck ledger continuity");
+        if (parsed?.classifications?.includes("FEED_RECHECK_EFFECT_ACCEPTED")) failures.push("no-prior-recheck-ledger evidence claimed recheck accepted");
+      }
+    );
+
+    await assertBrowserCase(
+      "first-time no prior onboarding ledger",
+      ["scripts/browser-evidence-verify.mjs", "--stdin", "--regression-mode", "--no-prior-acceptance-ledger"],
+      notRetestedRegressionEvidence(),
+      (parsed, status) => {
+        if (status !== 0 || parsed?.status !== "browser-evidence-verify-ok") failures.push("no-ledger evidence should remain valid but semantically pending");
+        if (!parsed?.classifications?.includes("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON")) failures.push("no-ledger evidence did not fail closed for onboarding");
+        if (parsed?.classifications?.includes("FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK")) failures.push("no-ledger evidence incorrectly used onboarding ledger continuity");
+        if (parsed?.classifications?.includes("EVIDENCE_REGRESSION_MODE_ACCEPTED")) failures.push("no-ledger evidence incorrectly accepted regression mode");
+      }
+    );
+
+    await assertBrowserCase(
+      "latest recheck effect accepted",
       ["scripts/browser-evidence-verify.mjs", "--stdin", "--regression-mode"],
       recheckOnlyRegressionEvidence(),
       (parsed, status) => {
@@ -154,17 +220,7 @@ async function assertRuntimeSemantics() {
         if (parsed?.classifications?.includes("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON")) failures.push("regression prior-ledger evidence still surfaced onboarding operator action required");
         if (!parsed?.classifications?.includes("FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK")) failures.push("regression prior-ledger evidence missing ledger continuity");
         if (!parsed?.classifications?.includes("RECHECK_EFFECT_ACCEPTED_REGRESSION_OK")) failures.push("regression prior-ledger evidence missing recheck regression classification");
-      }
-    );
-
-    await assertBrowserCase(
-      "first-time no prior ledger",
-      ["scripts/browser-evidence-verify.mjs", "--stdin", "--regression-mode", "--no-prior-acceptance-ledger"],
-      recheckOnlyRegressionEvidence(),
-      (parsed, status) => {
-        if (status !== 0 || parsed?.status !== "browser-evidence-verify-ok") failures.push("no-ledger evidence should remain valid but semantically pending");
-        if (!parsed?.classifications?.includes("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON")) failures.push("no-ledger evidence did not fail closed for onboarding");
-        if (parsed?.classifications?.includes("FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK")) failures.push("no-ledger evidence incorrectly used ledger continuity");
+        if (!parsed?.classifications?.includes("FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK")) failures.push("regression prior-ledger evidence missing recheck ledger continuity");
       }
     );
 
@@ -205,9 +261,30 @@ async function assertRuntimeSemantics() {
     if (operatorRegression.status !== 0 || operatorRegressionParsed?.status !== "OPERATOR_ACCEPTANCE_REDACTED_OK") failures.push("operator regression wrapper did not accept prior-ledger retest");
     if (!operatorRegressionParsed?.classifications?.includes("FEED_ONBOARDING_ACCEPTANCE_LEDGER_CONTINUITY_OK")) failures.push("operator regression wrapper missing onboarding ledger continuity");
     if (!operatorRegressionParsed?.classifications?.includes("RECHECK_EFFECT_ACCEPTED_REGRESSION_OK")) failures.push("operator regression wrapper missing recheck-only regression classification");
+    if (!operatorRegressionParsed?.classifications?.includes("FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK")) failures.push("operator regression wrapper missing recheck ledger continuity");
     if (operatorRegressionParsed?.classifications?.includes("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON")) failures.push("operator regression wrapper surfaced false onboarding action required");
 
-    assertSanitized(`${routeOnly.stdout}\n${operatorRegression.stdout}`);
+    const operatorNotRetested = await runNode(
+      [
+        "scripts/operator-production-retest.mjs",
+        "--acceptance-only",
+        "--endpoint",
+        `http://127.0.0.1:${port}`,
+        "--browser-evidence-stdin",
+        "--nginx-config-file",
+        nginxConfig
+      ],
+      { input: `${JSON.stringify(notRetestedRegressionEvidence(), null, 2)}\n`, timeoutMs: 90000 }
+    );
+    const operatorNotRetestedParsed = parseJson(operatorNotRetested.stdout);
+    if (operatorNotRetested.status !== 0 || operatorNotRetestedParsed?.status !== "OPERATOR_ACCEPTANCE_REDACTED_OK") failures.push("operator not-retested wrapper did not accept regression evidence");
+    if (!operatorNotRetestedParsed?.classifications?.includes("FEED_ONBOARDING_PREVIOUSLY_ACCEPTED_NOT_RETESTED")) failures.push("operator not-retested wrapper missing onboarding not-retested classification");
+    if (!operatorNotRetestedParsed?.classifications?.includes("FEED_RECHECK_NOT_RETESTED_EXPECTED")) failures.push("operator not-retested wrapper missing expected recheck residual");
+    if (!operatorNotRetestedParsed?.classifications?.includes("FEED_RECHECK_ACCEPTANCE_LEDGER_CONTINUITY_OK")) failures.push("operator not-retested wrapper missing recheck ledger continuity");
+    if (operatorNotRetestedParsed?.classifications?.includes("FEED_RECHECK_EFFECT_ACCEPTED")) failures.push("operator not-retested wrapper overclaimed recheck effect");
+    if (operatorNotRetestedParsed?.classifications?.includes("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON")) failures.push("operator not-retested wrapper surfaced false operator action required");
+
+    assertSanitized(`${routeOnly.stdout}\n${operatorRegression.stdout}\n${operatorNotRetested.stdout}`);
   } finally {
     await close(server);
     rmSync(tempRoot, { recursive: true, force: true });
@@ -284,6 +361,30 @@ function recheckOnlyRegressionEvidence() {
       "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
       "FEED_RECHECK_EFFECT_ACCEPTED",
       "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
+    ]
+  };
+}
+
+function notRetestedRegressionEvidence() {
+  return {
+    ...baseEvidence(),
+    feedRecheck: {
+      effectStatus: "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+      lastActionClassification: null
+    },
+    feedOnboarding: {
+      feed_onboarding_available: true,
+      feed_onboarding_status: "available",
+      no_eligible_target: false,
+      critical_risk: "none",
+      effectStatus: "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+      lastActionClassification: null
+    },
+    classifications: [
+      "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+      "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+      "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+      "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET"
     ]
   };
 }
