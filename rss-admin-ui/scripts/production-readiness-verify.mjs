@@ -9,7 +9,7 @@ const gitRevision = git(["rev-parse", "HEAD"], repoRoot);
 const image =
   process.env.RSS_ADMIN_UI_READINESS_IMAGE ??
   process.env.RSS_ADMIN_UI_TEST_IMAGE ??
-  "rss-admin-ui:ms027a-r1-local";
+  "rss-admin-ui:ms027a-r2-local";
 const productionHostPattern = /(?:^|[/:.])rss(?:-panel)?\.habersoft\.com(?:$|[/:])/iu;
 const rootComposeEnv = {
   RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms026c-r1-local",
@@ -37,6 +37,8 @@ const drilldownAcceptanceStatus = "MS-025B-R1_OPERATIONS_DRILLDOWN_PRODUCTION_AC
 const feedRecheckStatus = "MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED";
 const feedOnboardingStatus = "SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED";
 const operatorAutomationStatus = "SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET";
+const feedOnboardingAcceptanceStatus =
+  "SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED";
 
 run("node", ["--version"]);
 run("npm", ["--version"]);
@@ -52,6 +54,7 @@ run("npm", ["run", "verify:admin-feed-onboarding"]);
 run("npm", ["run", "verify:operator-automation"]);
 run("npm", ["run", "verify:operator-automation-acceptance"]);
 run("npm", ["run", "verify:production-image-freshness"]);
+run("npm", ["run", "verify:production-feed-onboarding-acceptance"]);
 run("npm", ["run", "verify:browser-evidence"]);
 run("npm", ["run", "verify:production-operations-acceptance"]);
 run("npm", ["run", "verify:production-operations-drilldown-acceptance"]);
@@ -135,6 +138,7 @@ console.log(
       feed_recheck_action: feedRecheckStatus,
       feed_onboarding: feedOnboardingStatus,
       operator_automation: operatorAutomationStatus,
+      feed_onboarding_acceptance: feedOnboardingAcceptanceStatus,
       checks: [
         "production build exists",
         "admin operations dashboard source/docs/proxy verifier passes",
@@ -144,6 +148,7 @@ console.log(
         "MS-026C operator automation verifier passes",
         "MS-026C-R1 operator automation acceptance verifier passes",
         "MS-027A-R1 production image freshness verifier passes",
+        "MS-027A-R2 production promotion/feed-onboarding route-smoke acceptance verifier passes",
         "MS-026C browser evidence verifier passes",
         "MS-025A-R2 operator-reported operations acceptance verifier passes",
         "MS-025B-R1 operator-reported operations drilldown acceptance verifier passes",

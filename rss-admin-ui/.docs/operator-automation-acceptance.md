@@ -77,3 +77,32 @@ Local validation for that extension is:
 ```bash
 npm run verify:admin-feed-onboarding
 ```
+
+## MS-027A-R2 Extension Note
+
+MS-027A-R2 does not reopen this MS-026C-R1 acceptance closure. It records
+`SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED`
+from operator-reported production evidence only:
+`OPERATOR_PROMOTION_RETEST_REDACTED_OK`, `NGINX_ROUTE_PROOF_ACCEPTED`,
+`browser-evidence-verify-ok`, `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`,
+`BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`,
+`MS-027A-R2_PRODUCTION_PROMOTION_IMAGE_FRESHNESS_ACCEPTED_OPERATOR_REPORTED`,
+and `MS-027A-R2_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED_OPERATOR_REPORTED`.
+The operator-reported evidence says image freshness accepted, backend runtime
+image revision matched current HEAD, frontend runtime image revision matched
+current HEAD, feed onboarding route smoke accepted, and authenticated browser
+evidence accepted.
+
+Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`.
+Feed recheck effect acceptance remains future work requiring a naturally
+existing eligible target and redacted browser evidence. No production feed was
+created, seeded, or faked. No fake actionRef was generated. There was no production contact by Codex.
+
+Local validation for that acceptance boundary is:
+
+```bash
+npm run verify:production-feed-onboarding-acceptance
+```
+
+The durable sanitized receipt lives outside Git under
+`operator-state/admin-ui-production-activation/ms-027a-r2-promotion-feed-onboarding-route-smoke-accepted-operator-reported-receipt.json`.

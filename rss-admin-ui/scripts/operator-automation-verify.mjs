@@ -54,7 +54,8 @@ function assertStaticContracts() {
     "verify:browser-evidence": "node scripts/browser-evidence-verify.mjs --self-test",
     "verify:admin-feed-onboarding": "node scripts/admin-feed-onboarding-verify.mjs",
     "verify:operator-automation": "node scripts/operator-automation-verify.mjs",
-    "verify:production-image-freshness": "node scripts/production-image-freshness-verify.mjs"
+    "verify:production-image-freshness": "node scripts/production-image-freshness-verify.mjs",
+    "verify:production-feed-onboarding-acceptance": "node scripts/production-feed-onboarding-acceptance-verify.mjs"
   };
   for (const [name, command] of Object.entries(requiredFrontend)) {
     if (frontendScripts[name] !== command) failures.push(`frontend package.json missing ${name}`);
@@ -71,7 +72,9 @@ function assertStaticContracts() {
     "scripts/browser-evidence-verify.mjs",
     "scripts/operator-risk-model.mjs",
     "scripts/production-image-freshness-verify.mjs",
+    "scripts/production-feed-onboarding-acceptance-verify.mjs",
     "src/adminOperations/browserEvidence.ts",
+    ".docs/production-feed-onboarding-acceptance.md",
     "../rss-habersoft-com/scripts/production-api-worker-recreate.mjs"
   ]) {
     requireFile(path.resolve(frontendRoot, file), file);
@@ -182,6 +185,7 @@ function assertStaticContracts() {
     "verify:browser-evidence",
     "verify:admin-feed-onboarding",
     "verify:production-image-freshness",
+    "verify:production-feed-onboarding-acceptance",
     "ops:production:recreate:api-worker -- --dry-run",
     "ops:production:recreate:api-worker -- --apply",
     "--recreate-only",
@@ -191,7 +195,8 @@ function assertStaticContracts() {
     "CRITICAL",
     "HIGH",
     "MEDIUM",
-    "LOW"
+    "LOW",
+    "SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED"
   ]) {
     if (!docs.includes(fragment)) failures.push(`docs missing MS-026C automation/risk fragment: ${fragment}`);
   }
@@ -257,13 +262,30 @@ async function assertRuntimeClassifications() {
     const imageFreshness = await runNode(["scripts/production-image-freshness-verify.mjs"]);
     assertJson(imageFreshness, "production-image-freshness-verify-ok", "production image freshness verifier");
 
+    const feedOnboardingAcceptance = await runNode(["scripts/production-feed-onboarding-acceptance-verify.mjs"]);
+    assertJson(
+      feedOnboardingAcceptance,
+      "production-feed-onboarding-acceptance-verify-ok",
+      "production feed onboarding acceptance verifier"
+    );
+
     const promotionDryRun = await runPromotion(["--dry-run", "--endpoint", endpoint, "--nginx-config-file", nginxConfig]);
     assertJson(promotionDryRun, "OPERATOR_PROMOTION_RETEST_DRY_RUN_READY", "promotion dry-run");
 
     const promotionRetest = await runPromotion(["--retest-only", "--endpoint", endpoint, "--nginx-config-file", nginxConfig]);
     assertJson(promotionRetest, "OPERATOR_PROMOTION_RETEST_REDACTED_OK", "promotion retest-only");
 
-    for (const result of [dryRun, noCredentials, noEligible, eligibleAccepted, browserEvidence, imageFreshness, promotionDryRun, promotionRetest]) {
+    for (const result of [
+      dryRun,
+      noCredentials,
+      noEligible,
+      eligibleAccepted,
+      browserEvidence,
+      imageFreshness,
+      feedOnboardingAcceptance,
+      promotionDryRun,
+      promotionRetest
+    ]) {
       assertSanitized(result.stdout);
     }
   } finally {

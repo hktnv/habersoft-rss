@@ -65,6 +65,8 @@ MS-026C-R1 operator automation acceptance boundary: `SUCCESS_MS_026C_R1_OPERATOR
 
 MS-027A-R1 image freshness boundary: `SUCCESS_MS_027A_R1_PRODUCTION_PROMOTION_IMAGE_FRESHNESS_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED` remediates stale backend/frontend image promotion. The canonical operator flow is `git pull --ff-only origin main`, then `cd /opt/habersoft-rss/rss-admin-ui && npm run ops:production:retest -- --apply --endpoint https://rss-panel.habersoft.com --nginx-config-file <operator-generated-nginx-conf>`. The wrapper blocks `source_not_promoted`, calls the backend build/label/runtime-image-env promotion helper, calls the frontend build/label/env promotion helper, and then runs redacted route/auth/admin-api acceptance. Recreate-only Docker Compose with `--no-build --pull never --force-recreate` is not a source promotion; it is allowed only after label proof confirms the image is current.
 
+MS-027A-R2 acceptance boundary: `SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED` records operator-reported production evidence only. Backend route semantics are unchanged from MS-027A. Accepted evidence includes `OPERATOR_PROMOTION_RETEST_REDACTED_OK`, `NGINX_ROUTE_PROOF_ACCEPTED`, `browser-evidence-verify-ok`, `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE`, `MS-027A-R2_PRODUCTION_PROMOTION_IMAGE_FRESHNESS_ACCEPTED_OPERATOR_REPORTED`, and `MS-027A-R2_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED_OPERATOR_REPORTED`; image freshness accepted; backend runtime image revision matched current HEAD; frontend runtime image revision matched current HEAD; feed onboarding route smoke accepted; authenticated browser evidence accepted. Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`; Feed recheck effect acceptance remains future work requiring a naturally existing eligible target and redacted browser evidence. No production feed was created, seeded, or faked. No fake actionRef was generated. There was no production contact by Codex. Guard from `rss-admin-ui`: `npm run verify:production-feed-onboarding-acceptance`. Receipt: `operator-state/admin-ui-production-activation/ms-027a-r2-promotion-feed-onboarding-route-smoke-accepted-operator-reported-receipt.json`.
+
 Production source delivery icin tek gecerli akış:
 
 ```text
@@ -1247,7 +1249,7 @@ Bu kosullar tamamlanmadan `rss-panel.habersoft.com` production-ready sayilmaz.
 ## 21A. MS-027A authenticated admin feed onboarding boundary
 
 Status:
-`SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+`SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED`.
 
 Backend route:
 
@@ -1279,7 +1281,17 @@ and `critical_risk`; operator route smoke classifies
 `FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED`. Codex did not perform production
 contact, did not perform a credentialed production login, and did not mutate
 production. No production feed was created, seeded, or faked. Operator
-deploy/retest required remains.
+reported MS-027A-R2 acceptance now records image freshness accepted, backend
+runtime image revision matched current HEAD, frontend runtime image revision
+matched current HEAD, feed onboarding route smoke accepted, authenticated
+browser evidence accepted, `MS-027A-R2_PRODUCTION_PROMOTION_IMAGE_FRESHNESS_ACCEPTED_OPERATOR_REPORTED`,
+`MS-027A-R2_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED_OPERATOR_REPORTED`, and
+`browser-evidence-verify-ok`. Feed recheck effect remains
+`PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`; Feed recheck effect acceptance
+remains future work requiring a naturally existing eligible target and redacted
+browser evidence. No fake actionRef was generated. The tracked guard is
+`npm run verify:production-feed-onboarding-acceptance`; receipt path:
+`operator-state/admin-ui-production-activation/ms-027a-r2-promotion-feed-onboarding-route-smoke-accepted-operator-reported-receipt.json`.
 
 ## 22. Ilgili ayrintili belgeler
 

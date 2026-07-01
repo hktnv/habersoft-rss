@@ -40,6 +40,7 @@
     "verify:operator-automation": "node scripts/operator-automation-verify.mjs",
     "verify:operator-automation-acceptance": "node scripts/operator-automation-acceptance-verify.mjs",
     "verify:production-image-freshness": "node scripts/production-image-freshness-verify.mjs",
+    "verify:production-feed-onboarding-acceptance": "node scripts/production-feed-onboarding-acceptance-verify.mjs",
     "verify:browser-evidence": "node scripts/browser-evidence-verify.mjs --self-test",
     "auth-smoke:redacted": "node scripts/admin-auth-smoke.mjs",
     "ops:production:retest": "node scripts/operator-production-promotion-retest.mjs",
