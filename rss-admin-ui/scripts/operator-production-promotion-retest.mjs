@@ -32,7 +32,14 @@ const operatorClassificationCatalog = [
   "auth_not_configured",
   "unauthenticated_expected",
   "no_eligible_feed_target",
-  "accepted_route_smoke_pending_effect"
+  "accepted_route_smoke_pending_effect",
+  "FEED_ONBOARDING_EFFECT_ACCEPTED",
+  "FEED_RECHECK_EFFECT_ACCEPTED",
+  "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
+  "PENDING_FEED_RECHECK_COOLDOWN",
+  "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION",
+  "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION",
+  "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON"
 ];
 
 if (args.includes("--help") || args.includes("-h")) {
@@ -148,7 +155,9 @@ steps.push(runStep("frontend-redacted-acceptance", frontendRoot, "ops:production
 
 let browserEvidence = {
   status: browserEvidenceFile === undefined ? "BROWSER_EVIDENCE_NOT_PROVIDED" : "BROWSER_EVIDENCE_NOT_RUN",
-  classifications: browserEvidenceFile === undefined ? ["BROWSER_EVIDENCE_MISSING"] : []
+  classifications: browserEvidenceFile === undefined ? ["BROWSER_EVIDENCE_MISSING"] : [],
+  feed_recheck_effect_status: "unknown",
+  feed_onboarding_effect_status: "unknown"
 };
 if (browserEvidenceFile !== undefined) {
   browserEvidence = runBrowserEvidenceVerifier(browserEvidenceFile);
@@ -161,10 +170,29 @@ const failedSteps = steps.filter((step) => step.exit_code !== 0);
 const acceptanceStep = steps.find((step) => step.name === "frontend-redacted-acceptance");
 const acceptanceClasses = acceptanceStep?.classification === undefined ? [] : [acceptanceStep.classification];
 for (const step of steps) collectStepClassifications(step, operatorClassifications);
-const noEligible = acceptanceStep?.feed_recheck_effect_status === "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET" || browserEvidence.classifications.includes("BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET");
+for (const classification of browserEvidence.classifications) {
+  if (operatorClassificationCatalog.includes(classification)) operatorClassifications.add(classification);
+}
+const noEligible =
+  acceptanceStep?.feed_recheck_effect_status === "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET" ||
+  browserEvidence.feed_recheck_effect_status === "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET" ||
+  browserEvidence.classifications.includes("BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET") ||
+  browserEvidence.classifications.includes("PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET");
 if (noEligible) {
   operatorClassifications.add("no_eligible_feed_target");
   warnings.push(riskClass("PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET", "route/auth/proxy checks can pass while effect remains pending until a real eligible feed exists"));
+}
+if (browserEvidence.classifications.includes("PENDING_FEED_RECHECK_COOLDOWN")) {
+  warnings.push(riskClass("PENDING_FEED_RECHECK_COOLDOWN", "redacted browser evidence reports the eligible feed is in bounded recheck cooldown"));
+}
+if (browserEvidence.classifications.includes("PENDING_FEED_ONBOARDING_ASYNC_PROCESSING")) {
+  warnings.push(riskClass("PENDING_FEED_ONBOARDING_ASYNC_PROCESSING", "redacted browser evidence reports onboarding was accepted but drilldown/recheck effect is still processing"));
+}
+if (browserEvidence.classifications.includes("FEED_ONBOARDING_REJECTED_SAFE_VALIDATION")) {
+  critical.push(riskClass("FEED_ONBOARDING_REJECTED_SAFE_VALIDATION", "redacted browser evidence reports onboarding was rejected by safe validation"));
+}
+if (browserEvidence.classifications.includes("FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION")) {
+  critical.push(riskClass("FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION", "redacted browser evidence reports feed recheck action was rejected by safe validation"));
 }
 if (acceptanceStep?.feed_onboarding_classification === "FEED_ONBOARDING_ROUTE_SMOKE_ATTENTION_REQUIRED") {
   operatorClassifications.add(routeProof.status === "NGINX_ROUTE_PROOF_ACCEPTED" ? "backend_route_missing" : "frontend_route_missing");
@@ -187,8 +215,14 @@ await finish({
   operator_classifications: [...operatorClassifications],
   classification_catalog: operatorClassificationCatalog,
   classifications: [...acceptanceClasses, ...browserEvidence.classifications],
-  feed_recheck_effect_status: noEligible ? "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET" : acceptanceStep?.feed_recheck_effect_status ?? "PENDING_OPERATOR_ACTION_OR_BROWSER_EVIDENCE",
-  feed_onboarding_status: acceptanceStep?.feed_onboarding_status ?? "PENDING_ROUTE_SMOKE_OR_BROWSER_EVIDENCE",
+  feed_recheck_effect_status: noEligible
+    ? "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET"
+    : browserEvidence.feed_recheck_effect_status !== "unknown"
+      ? browserEvidence.feed_recheck_effect_status
+      : acceptanceStep?.feed_recheck_effect_status ?? "PENDING_OPERATOR_ACTION_OR_BROWSER_EVIDENCE",
+  feed_onboarding_status: browserEvidence.feed_onboarding_effect_status !== "unknown"
+    ? browserEvidence.feed_onboarding_effect_status
+    : acceptanceStep?.feed_onboarding_status ?? "PENDING_ROUTE_SMOKE_OR_BROWSER_EVIDENCE",
   risk: {
     warnings,
     critical,
@@ -244,6 +278,7 @@ function runBrowserEvidenceVerifier(file) {
     exit_code: result.status ?? 1,
     classifications: Array.isArray(parsed?.classifications) ? parsed.classifications : ["BROWSER_EVIDENCE_INVALID"],
     feed_recheck_effect_status: parsed?.feed_recheck_effect_status ?? "unknown",
+    feed_onboarding_effect_status: parsed?.feed_onboarding_effect_status ?? "unknown",
     evidence_sha256: parsed?.evidence_sha256 ?? "unavailable",
     output: "redacted"
   };
@@ -332,9 +367,9 @@ async function finish(payload, writeDefaultReceipt) {
 
 function defaultReceiptPath() {
   if (process.platform === "win32") {
-    return "E:\\Codex\\rss-habersoft-com\\operator-state\\admin-ui-production-activation\\ms-026c-one-command-production-retest-receipt.json";
+    return "E:\\Codex\\rss-habersoft-com\\operator-state\\admin-ui-production-activation\\ms-027b-feed-onboarding-recheck-effect-retest-receipt.json";
   }
-  return path.join(os.homedir(), ".habersoft-rss", "operator-state", "admin-ui-production-activation", "ms-026c-one-command-production-retest-receipt.json");
+  return path.join(os.homedir(), ".habersoft-rss", "operator-state", "admin-ui-production-activation", "ms-027b-feed-onboarding-recheck-effect-retest-receipt.json");
 }
 
 function sourcePromotionClassifications(gitInfo) {

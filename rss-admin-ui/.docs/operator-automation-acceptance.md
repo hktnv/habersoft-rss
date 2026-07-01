@@ -106,3 +106,9 @@ npm run verify:production-feed-onboarding-acceptance
 
 The durable sanitized receipt lives outside Git under
 `operator-state/admin-ui-production-activation/ms-027a-r2-promotion-feed-onboarding-route-smoke-accepted-operator-reported-receipt.json`.
+
+## MS-027B Extension Note
+
+MS-027B does not reopen the MS-026C-R1 or MS-027A-R2 operator-reported acceptance records. It adds `SUCCESS_MS_027B_FEED_ONBOARDING_RECHECK_EFFECT_FLOW_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED` for local feed onboarding plus recheck effect flow verification and redacted effect classifications. New verifier-accepted classes are `FEED_ONBOARDING_EFFECT_ACCEPTED`, `FEED_RECHECK_EFFECT_ACCEPTED`, `PENDING_FEED_ONBOARDING_ASYNC_PROCESSING`, `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`, `PENDING_FEED_RECHECK_COOLDOWN`, `FEED_ONBOARDING_REJECTED_SAFE_VALIDATION`, `FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION`, and `OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON`.
+
+The canonical command remains `npm run ops:production:retest`; operators can add `--browser-evidence <redacted-browser-evidence.json>` to classify authenticated/effect proof without credentials on the command line. Local guard: `npm run verify:feed-onboarding-recheck-effect-flow`. Operator deploy/retest remains required. No production feed was created, seeded, or faked. No fake actionRef was generated.

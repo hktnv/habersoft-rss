@@ -321,6 +321,33 @@ async function runEnabledScenario() {
     assert(duplicateFeedOnboarding.status === 200, "duplicate admin feed onboarding did not dedupe");
     assert(duplicateFeedOnboarding.body?.status === "created", "duplicate admin feed onboarding status mismatch");
 
+    const postOnboardingDrilldown = await requestJson(`${base}/admin-api/operations/drilldown`, {
+      headers: {
+        Cookie: sessionCookie
+      }
+    });
+    assert(postOnboardingDrilldown.status === 200, "post-onboarding drilldown refresh failed");
+    const onboardedEligibleFeed = postOnboardingDrilldown.body?.feeds?.rows?.find(
+      (row) => row.sourceHost === "onboarding.example.org" && row.canRequestRecheck === true && typeof row.actionRef === "string"
+    );
+    assert(onboardedEligibleFeed !== undefined, "feed onboarding did not create a drilldown-visible eligible recheck target");
+    assert(!JSON.stringify(postOnboardingDrilldown.body).includes("https://onboarding.example.org/feed.xml"), "post-onboarding drilldown leaked a raw feed URL");
+
+    const feedOnboardingRecheck = await requestJson(`${base}/admin-api/operations/feed-recheck-requests`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+        "X-Admin-CSRF": authenticated.body.csrfToken,
+        "X-Admin-Idempotency-Key": "idem_rc_onboarded_recheck_123456"
+      },
+      body: JSON.stringify({ actionRef: onboardedEligibleFeed.actionRef, reason: "operator_request" })
+    });
+    assert(feedOnboardingRecheck.status === 200, `onboarded feed recheck should already be pending: ${feedOnboardingRecheck.status}`);
+    assert(feedOnboardingRecheck.body?.status === "already_pending", "onboarded feed recheck effect did not use the existing due-feed path");
+    assert(feedOnboardingRecheck.body?.target?.sourceHost === "onboarding.example.org", "onboarded feed recheck target source host mismatch");
+    assert(!JSON.stringify(feedOnboardingRecheck.body).includes("https://onboarding.example.org/feed.xml"), "onboarded feed recheck leaked a raw feed URL");
+
     const live = await requestJson(`${base}/status-api/health/live`, {
       headers: {
         Authorization: "Bearer redacted",
@@ -416,6 +443,8 @@ async function runEnabledScenario() {
       operations_drilldown_status: adminDrilldown.status,
       feed_recheck_status: feedRecheck.status,
       feed_onboarding_status: feedOnboarding.status,
+      feed_onboarding_drilldown_status: postOnboardingDrilldown.status,
+      feed_onboarding_recheck_status: feedOnboardingRecheck.status,
       duplicate_feed_recheck_status: duplicateFeedRecheck.status,
       duplicate_feed_onboarding_status: duplicateFeedOnboarding.status,
       cooldown_feed_recheck_status: cooldownFeedRecheck.status,

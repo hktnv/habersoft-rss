@@ -37,6 +37,7 @@
     "verify:admin-operations-drilldown": "node scripts/admin-operations-drilldown-verify.mjs",
     "verify:admin-feed-recheck-action": "node scripts/admin-feed-recheck-action-verify.mjs",
     "verify:admin-feed-onboarding": "node scripts/admin-feed-onboarding-verify.mjs",
+    "verify:feed-onboarding-recheck-effect-flow": "node scripts/feed-onboarding-recheck-effect-flow-verify.mjs",
     "verify:operator-automation": "node scripts/operator-automation-verify.mjs",
     "verify:operator-automation-acceptance": "node scripts/operator-automation-acceptance-verify.mjs",
     "verify:production-image-freshness": "node scripts/production-image-freshness-verify.mjs",

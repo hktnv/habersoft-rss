@@ -102,3 +102,9 @@ When a real eligible feed appears through normal production operation:
 8. The operator reports only the verifier classification, durable receipt path/hash, and feed-recheck effect status.
 
 Do not create, seed, or fake a production feed/actionRef to close this boundary.
+
+## MS-027B Risk Model Extension
+
+MS-027B uses `MS-027B_RISK_BALANCED_GUARDRAILS` for feed onboarding plus recheck effect closure. Accepted low-risk completion classes are `FEED_ONBOARDING_EFFECT_ACCEPTED` and `FEED_RECHECK_EFFECT_ACCEPTED`. Diagnostic pending classes are `PENDING_FEED_ONBOARDING_ASYNC_PROCESSING`, `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`, `PENDING_FEED_RECHECK_COOLDOWN`, and `OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON`. Safe-validation rejection classes `FEED_ONBOARDING_REJECTED_SAFE_VALIDATION` and `FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION` fail closed.
+
+Operators can provide verifier-accepted redacted browser evidence through `npm run ops:production:retest -- --browser-evidence <redacted-browser-evidence.json>` without command-line credentials. Local guard: `npm run verify:feed-onboarding-recheck-effect-flow`. No production feed was created, seeded, or faked by Codex, and no fake actionRef was generated.

@@ -166,8 +166,18 @@ function assertNoSeedOrFakeAcceptancePath(docs) {
 }
 
 function assertNoSecretRequiredForBrowserEvidence(docs) {
-  const forbidden = /\b(?:browser evidence|no eligible|no-target)[^\n]{0,160}\b(?:requires|required|must include|must supply)[^\n]{0,120}\b(?:secret|credential|cookie|session|csrf|idempotency|actionRef|raw feed URL)\b/iu;
-  if (forbidden.test(docs)) failures.push("docs require secret-bearing material for no-target browser evidence closure");
+  const forbidden =
+    /\b(?:browser evidence|no eligible|no-target)[^\n]{0,160}\b(?:requires|required|must include|must supply)[^\n]{0,120}\b(?:secret|credential|cookie|session|csrf|idempotency|actionRef|raw feed URL)\b/giu;
+  const redactedSecretReference =
+    /\b(?:without|no|not|never|do not|must not|does not|did not|cannot|rejects?|forbids?|forbidden|excludes?|excluded|omits?|omitted|not include|not supply|not paste)\b[^\n]{0,80}\b(?:secret|credential|cookie|session|csrf|idempotency|actionRef|raw feed URL)\b|\b(?:secret|credential|cookie|session|csrf|idempotency|actionRef|raw feed URL)\b[^\n]{0,80}\b(?:forbidden|rejected|excluded|omitted|not included|not required|must remain outside)\b/iu;
+
+  for (const line of docs.split(/\r?\n/u)) {
+    for (const match of line.matchAll(forbidden)) {
+      if (!redactedSecretReference.test(match[0])) {
+        failures.push("docs require secret-bearing material for no-target browser evidence closure");
+      }
+    }
+  }
 }
 
 function readRoot(relative) {

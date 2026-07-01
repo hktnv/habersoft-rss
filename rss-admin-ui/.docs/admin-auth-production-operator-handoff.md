@@ -185,3 +185,17 @@ Do not paste secrets, cookies, sessions, CSRF tokens, idempotency keys, raw acti
 MS-026C-R1 acceptance receipt lives outside Git under `operator-state/admin-ui-production-activation/ms-026c-r1-operator-automation-accepted-feed-recheck-pending-no-target-receipt.json`. No production feed was created, seeded, or faked. No fake actionRef was generated. There was no production contact by Codex. Feed recheck effect acceptance remains future work requiring a real eligible production feed and redacted browser evidence.
 
 MS-027A-R1 status is `SUCCESS_MS_027A_R1_PRODUCTION_PROMOTION_IMAGE_FRESHNESS_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED`. For source-changing milestones, run `git pull --ff-only origin main` before `npm run ops:production:retest -- --apply`; the wrapper now builds and verifies backend/frontend current-HEAD image labels before recreate. `--recreate-only` is restart-only and blocks `backend_image_stale` / `frontend_image_stale`. Local guard: `npm run verify:production-image-freshness`.
+
+## MS-027B Operator Handoff
+
+MS-027B status is `SUCCESS_MS_027B_FEED_ONBOARDING_RECHECK_EFFECT_FLOW_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`. It keeps the existing one-command operator path and adds effect evidence classifications: `FEED_ONBOARDING_EFFECT_ACCEPTED`, `FEED_RECHECK_EFFECT_ACCEPTED`, `PENDING_FEED_ONBOARDING_ASYNC_PROCESSING`, `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`, `PENDING_FEED_RECHECK_COOLDOWN`, `FEED_ONBOARDING_REJECTED_SAFE_VALIDATION`, `FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION`, and `OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON`.
+
+Recommended operator flow after pulling main and rebuilding/recreating under the operator rollback plan:
+
+```bash
+npm run ops:production:retest -- --retest-only --endpoint https://rss-panel.habersoft.com --browser-evidence <redacted-browser-evidence.json>
+npm run ops:browser-evidence:verify -- --file <redacted-browser-evidence.json>
+npm run verify:feed-onboarding-recheck-effect-flow
+```
+
+Do not paste secrets, cookies, sessions, CSRF tokens, idempotency keys, actionRefs, raw feed URLs, raw bodies, raw logs, private hostnames, browser storage values, or filesystem paths into receipts. Operator deploy/retest remains required. Codex did not contact production, did not create/seed/fake production feeds, and did not generate fake actionRefs.

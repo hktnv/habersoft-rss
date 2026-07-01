@@ -41,6 +41,7 @@ export function OperationsDrilldown({
 }) {
   const [state, setState] = useState<DrilldownState>({ phase: "loading" });
   const [feedRechecks, setFeedRechecks] = useState<Record<string, FeedRecheckState>>({});
+  const [feedOnboardingResult, setFeedOnboardingResult] = useState<FeedOnboardingResult | undefined>(undefined);
   const [evidenceCopyState, setEvidenceCopyState] = useState<EvidenceCopyState>("idle");
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | undefined>(undefined);
@@ -104,7 +105,7 @@ export function OperationsDrilldown({
       return;
     }
 
-    const evidence = createRedactedBrowserEvidence(drilldown, feedRechecks);
+    const evidence = createRedactedBrowserEvidence(drilldown, feedRechecks, feedOnboardingResult);
     try {
       await navigator.clipboard.writeText(serializeRedactedBrowserEvidence(evidence));
       setEvidenceCopyState("copied");
@@ -196,6 +197,7 @@ export function OperationsDrilldown({
           csrfToken={csrfToken}
           requestOnboarding={requestOnboarding}
           onFeedOnboardingAccepted={refreshAfterFeedOnboarding}
+          onFeedOnboardingResult={setFeedOnboardingResult}
           onBeginRecheckConfirmation={beginRecheckConfirmation}
           onCancelRecheckConfirmation={cancelRecheckConfirmation}
           onConfirmRecheck={confirmRecheck}
@@ -216,6 +218,7 @@ function DrilldownView({
   csrfToken,
   requestOnboarding,
   onFeedOnboardingAccepted,
+  onFeedOnboardingResult,
   onBeginRecheckConfirmation,
   onCancelRecheckConfirmation,
   onConfirmRecheck
@@ -228,6 +231,7 @@ function DrilldownView({
   readonly csrfToken?: string;
   readonly requestOnboarding?: (options: { readonly feedUrl: string; readonly label?: string; readonly csrfToken: string; readonly signal?: AbortSignal }) => Promise<FeedOnboardingResult>;
   readonly onFeedOnboardingAccepted: () => void;
+  readonly onFeedOnboardingResult: (result: FeedOnboardingResult) => void;
   readonly onBeginRecheckConfirmation: (row: FeedDrilldownRow) => void;
   readonly onCancelRecheckConfirmation: (row: FeedDrilldownRow) => void;
   readonly onConfirmRecheck: (row: FeedDrilldownRow) => void;
@@ -281,6 +285,7 @@ function DrilldownView({
               csrfToken={csrfToken}
               requestOnboarding={requestOnboarding}
               onAccepted={onFeedOnboardingAccepted}
+              onResult={onFeedOnboardingResult}
             />
           </div>
         </>
@@ -290,6 +295,7 @@ function DrilldownView({
             csrfToken={csrfToken}
             requestOnboarding={requestOnboarding}
             onAccepted={onFeedOnboardingAccepted}
+            onResult={onFeedOnboardingResult}
           />
           <FeedDrilldownPanel
             drilldown={drilldown}

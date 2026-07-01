@@ -342,3 +342,11 @@ Operator-reported production evidence closes the MS-027A-R1 image freshness and 
 Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`. Feed recheck effect acceptance remains future work requiring a naturally existing eligible target and redacted browser evidence. Feed onboarding route smoke is not feed onboarding end-to-end effect acceptance. No production feed was created, seeded, or faked. No fake actionRef was generated. There was no production contact by Codex.
 
 The local tracked verifier is `npm run verify:production-feed-onboarding-acceptance`. The durable sanitized receipt lives outside Git under `operator-state/admin-ui-production-activation/ms-027a-r2-promotion-feed-onboarding-route-smoke-accepted-operator-reported-receipt.json`.
+
+## MS-027B Feed Onboarding Recheck Effect Flow
+
+Bounded status: `SUCCESS_MS_027B_FEED_ONBOARDING_RECHECK_EFFECT_FLOW_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`.
+
+MS-027B verifies the repository-local end-to-end path after feed onboarding: the backend creates reserved feed state, Operations Drilldown can refresh to a real eligible target, and feed recheck reports the existing due-feed path without exposing raw feed URLs or actionRefs. Redacted browser evidence classifications now include `FEED_ONBOARDING_EFFECT_ACCEPTED`, `FEED_RECHECK_EFFECT_ACCEPTED`, `PENDING_FEED_ONBOARDING_ASYNC_PROCESSING`, `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`, `PENDING_FEED_RECHECK_COOLDOWN`, `FEED_ONBOARDING_REJECTED_SAFE_VALIDATION`, `FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION`, and `OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON`.
+
+Operator production acceptance remains pending. Use `npm run ops:production:retest -- --browser-evidence <redacted-browser-evidence.json>` after operator deployment/retest to classify accepted/pending/rejected effect states without command-line credentials. Local guard: `npm run verify:feed-onboarding-recheck-effect-flow`. Codex did not contact production, create/seed/fake production feeds, or generate fake actionRefs.

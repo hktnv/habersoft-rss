@@ -39,6 +39,8 @@ const feedOnboardingStatus = "SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE
 const operatorAutomationStatus = "SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET";
 const feedOnboardingAcceptanceStatus =
   "SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED";
+const feedOnboardingRecheckEffectStatus =
+  "SUCCESS_MS_027B_FEED_ONBOARDING_RECHECK_EFFECT_FLOW_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED";
 
 run("node", ["--version"]);
 run("npm", ["--version"]);
@@ -51,6 +53,7 @@ run("npm", ["run", "verify:admin-operations-dashboard"]);
 run("npm", ["run", "verify:admin-operations-drilldown"]);
 run("npm", ["run", "verify:admin-feed-recheck-action"]);
 run("npm", ["run", "verify:admin-feed-onboarding"]);
+run("npm", ["run", "verify:feed-onboarding-recheck-effect-flow"]);
 run("npm", ["run", "verify:operator-automation"]);
 run("npm", ["run", "verify:operator-automation-acceptance"]);
 run("npm", ["run", "verify:production-image-freshness"]);
@@ -139,12 +142,14 @@ console.log(
       feed_onboarding: feedOnboardingStatus,
       operator_automation: operatorAutomationStatus,
       feed_onboarding_acceptance: feedOnboardingAcceptanceStatus,
+      feed_onboarding_recheck_effect_flow: feedOnboardingRecheckEffectStatus,
       checks: [
         "production build exists",
         "admin operations dashboard source/docs/proxy verifier passes",
         "admin operations drilldown source/docs/proxy verifier passes",
         "bounded admin feed recheck action verifier passes",
         "authenticated admin feed onboarding verifier passes",
+        "MS-027B feed onboarding plus recheck effect flow verifier passes",
         "MS-026C operator automation verifier passes",
         "MS-026C-R1 operator automation acceptance verifier passes",
         "MS-027A-R1 production image freshness verifier passes",

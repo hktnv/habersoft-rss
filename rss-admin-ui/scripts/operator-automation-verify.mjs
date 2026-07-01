@@ -28,6 +28,7 @@ console.log(
       acceptance_script: "ops:production:acceptance:redacted",
       feed_recheck_eligibility_script: "ops:feed-recheck:eligibility:redacted",
       browser_evidence_script: "ops:browser-evidence:verify",
+      feed_onboarding_recheck_effect_flow_script: "verify:feed-onboarding-recheck-effect-flow",
       no_eligible_target_classification: "NO_ELIGIBLE_FEED_RECHECK_TARGET",
       feed_recheck_effect_status: "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
       feed_onboarding_route_smoke: "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED",
@@ -53,6 +54,7 @@ function assertStaticContracts() {
     "ops:browser-evidence:verify": "node scripts/browser-evidence-verify.mjs",
     "verify:browser-evidence": "node scripts/browser-evidence-verify.mjs --self-test",
     "verify:admin-feed-onboarding": "node scripts/admin-feed-onboarding-verify.mjs",
+    "verify:feed-onboarding-recheck-effect-flow": "node scripts/feed-onboarding-recheck-effect-flow-verify.mjs",
     "verify:operator-automation": "node scripts/operator-automation-verify.mjs",
     "verify:production-image-freshness": "node scripts/production-image-freshness-verify.mjs",
     "verify:production-feed-onboarding-acceptance": "node scripts/production-feed-onboarding-acceptance-verify.mjs"
@@ -70,6 +72,7 @@ function assertStaticContracts() {
     "scripts/operator-automation-verify.mjs",
     "scripts/admin-feed-onboarding-verify.mjs",
     "scripts/browser-evidence-verify.mjs",
+    "scripts/feed-onboarding-recheck-effect-flow-verify.mjs",
     "scripts/operator-risk-model.mjs",
     "scripts/production-image-freshness-verify.mjs",
     "scripts/production-feed-onboarding-acceptance-verify.mjs",
@@ -103,6 +106,11 @@ function assertStaticContracts() {
     "NO_ELIGIBLE_FEED_RECHECK_TARGET",
     "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
     "FEED_RECHECK_ACTION_ACCEPTED",
+    "FEED_RECHECK_EFFECT_ACCEPTED",
+    "FEED_ONBOARDING_EFFECT_ACCEPTED",
+    "PENDING_FEED_RECHECK_COOLDOWN",
+    "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION",
+    "AUTHENTICATED_BROWSER_EVIDENCE_ACCEPTED",
     "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED",
     "FEED_ONBOARDING_ROUTE_SMOKE_ATTENTION_REQUIRED",
     "FEED_ONBOARDING_UNAUTH_POST_NOT_401_JSON",
@@ -113,7 +121,8 @@ function assertStaticContracts() {
     "ADMIN_API_ROUTE_UNAVAILABLE",
     "FEED_RECHECK_UNAUTH_POST_NOT_401_JSON",
     "feed_onboarding_status",
-    "--attempt-feed-recheck"
+    "--attempt-feed-recheck",
+    "--browser-evidence"
   ]) {
     if (!operatorRetest.includes(fragment)) failures.push(`operator retest script missing classification: ${fragment}`);
   }
@@ -139,7 +148,13 @@ function assertStaticContracts() {
     "auth_not_configured",
     "unauthenticated_expected",
     "no_eligible_feed_target",
-    "accepted_route_smoke_pending_effect"
+    "accepted_route_smoke_pending_effect",
+    "FEED_ONBOARDING_EFFECT_ACCEPTED",
+    "FEED_RECHECK_EFFECT_ACCEPTED",
+    "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
+    "PENDING_FEED_RECHECK_COOLDOWN",
+    "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION",
+    "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION"
   ]) {
     if (!promotion.includes(fragment)) failures.push(`promotion retest script missing fragment: ${fragment}`);
   }
@@ -150,6 +165,14 @@ function assertStaticContracts() {
     "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET",
     "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
     "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED",
+    "FEED_ONBOARDING_EFFECT_ACCEPTED",
+    "FEED_RECHECK_EFFECT_ACCEPTED",
+    "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
+    "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
+    "PENDING_FEED_RECHECK_COOLDOWN",
+    "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION",
+    "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION",
+    "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
     "BROWSER_EVIDENCE_INVALID",
     "--self-test"
   ]) {
@@ -196,9 +219,15 @@ function assertStaticContracts() {
     "HIGH",
     "MEDIUM",
     "LOW",
-    "SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED"
+    "SUCCESS_MS_027A_R2_PRODUCTION_PROMOTION_AND_FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTANCE_CLOSED_OPERATOR_REPORTED",
+    "SUCCESS_MS_027B_FEED_ONBOARDING_RECHECK_EFFECT_FLOW_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED",
+    "FEED_ONBOARDING_EFFECT_ACCEPTED",
+    "FEED_RECHECK_EFFECT_ACCEPTED",
+    "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
+    "PENDING_FEED_RECHECK_COOLDOWN",
+    "verify:feed-onboarding-recheck-effect-flow"
   ]) {
-    if (!docs.includes(fragment)) failures.push(`docs missing MS-026C automation/risk fragment: ${fragment}`);
+    if (!docs.includes(fragment)) failures.push(`docs missing MS-027B automation/risk fragment: ${fragment}`);
   }
 }
 
@@ -206,6 +235,7 @@ async function assertRuntimeClassifications() {
   let scenario = "no-feeds";
   const tempRoot = mkdtempSync(path.join(os.tmpdir(), "operator-automation-verify-"));
   const nginxConfig = path.join(tempRoot, "default.conf");
+  const browserEvidenceFile = path.join(tempRoot, "accepted-browser-evidence.json");
   writeFileSync(
     nginxConfig,
     [
@@ -215,6 +245,7 @@ async function assertRuntimeClassifications() {
       "location = /admin-api/operations/feed-onboarding-requests {}"
     ].join("\n")
   );
+  writeFileSync(browserEvidenceFile, `${JSON.stringify(acceptedBrowserEvidence(), null, 2)}\n`);
   const server = createServer(async (request, response) => {
     await handleRequest(request, response, () => scenario);
   });
@@ -231,6 +262,18 @@ async function assertRuntimeClassifications() {
     }
     if (noCredentials.json.feed_onboarding?.classification !== "FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED") {
       failures.push("no-credentials acceptance did not classify FEED_ONBOARDING_ROUTE_SMOKE_ACCEPTED");
+    }
+
+    const browserEvidenceAcceptance = await runRetest(["--acceptance-only", "--endpoint", endpoint, "--browser-evidence", browserEvidenceFile]);
+    assertJson(browserEvidenceAcceptance, "OPERATOR_ACCEPTANCE_REDACTED_OK", "browser evidence acceptance");
+    if (browserEvidenceAcceptance.json.auth?.classification !== "AUTHENTICATED_BROWSER_EVIDENCE_ACCEPTED") {
+      failures.push("browser evidence acceptance did not classify authenticated browser evidence accepted");
+    }
+    if (browserEvidenceAcceptance.json.feed_recheck?.effect_status !== "FEED_RECHECK_EFFECT_ACCEPTED") {
+      failures.push("browser evidence acceptance did not preserve feed recheck effect status");
+    }
+    if (browserEvidenceAcceptance.json.feed_onboarding?.effect_status !== "FEED_ONBOARDING_EFFECT_ACCEPTED") {
+      failures.push("browser evidence acceptance did not preserve feed onboarding effect status");
     }
 
     scenario = "no-feeds";
@@ -278,6 +321,7 @@ async function assertRuntimeClassifications() {
     for (const result of [
       dryRun,
       noCredentials,
+      browserEvidenceAcceptance,
       noEligible,
       eligibleAccepted,
       browserEvidence,
@@ -292,6 +336,51 @@ async function assertRuntimeClassifications() {
     await close(server);
     rmSync(tempRoot, { recursive: true, force: true });
   }
+}
+
+function acceptedBrowserEvidence() {
+  return {
+    schema: "habersoft-admin-browser-evidence-v1",
+    source: "admin-ui",
+    milestone: "MS-027B",
+    generatedAt: "2026-07-01T10:00:00.000Z",
+    authenticated: true,
+    operations: {
+      drilldownStatus: "ok",
+      drilldownGeneratedAt: "2026-07-01T09:59:00.000Z",
+      feeds: {
+        total: 1,
+        active: 1,
+        rows: 1,
+        eligibleRecheckTargets: 1,
+        noEligibleFeedRecheckTarget: false
+      },
+      ingestion: {
+        rows: 0,
+        recentEntryCount: 0,
+        recentBatchCount: 0
+      }
+    },
+    feedRecheck: {
+      effectStatus: "FEED_RECHECK_EFFECT_ACCEPTED",
+      lastActionClassification: "FEED_RECHECK_ACTION_ACCEPTED"
+    },
+    feedOnboarding: {
+      feed_onboarding_available: true,
+      feed_onboarding_status: "accepted",
+      no_eligible_target: false,
+      critical_risk: "none",
+      effectStatus: "FEED_ONBOARDING_EFFECT_ACCEPTED",
+      lastActionClassification: "FEED_ONBOARDING_ACTION_ACCEPTED"
+    },
+    classifications: [
+      "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+      "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+      "FEED_ONBOARDING_EFFECT_ACCEPTED",
+      "FEED_RECHECK_EFFECT_ACCEPTED",
+      "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
+    ]
+  };
 }
 
 async function handleRequest(request, response, scenarioProvider) {

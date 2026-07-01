@@ -15,6 +15,7 @@ const attemptFeedRecheck = args.includes("--attempt-feed-recheck");
 const dryRun = args.includes("--dry-run") || !acceptanceOnly;
 const receiptFile = optionValue("--receipt-file") ?? process.env.OPERATOR_RETEST_RECEIPT_FILE;
 const endpoint = optionValue("--endpoint") ?? optionValue("--base-url") ?? process.env.OPERATOR_RETEST_BASE_URL ?? "http://127.0.0.1:8081";
+const browserEvidenceFile = optionValue("--browser-evidence") ?? process.env.OPERATOR_BROWSER_EVIDENCE_FILE;
 const timeoutMs = Number(process.env.OPERATOR_RETEST_TIMEOUT_MS ?? "5000");
 const username = process.env.ADMIN_AUTH_SMOKE_USERNAME;
 const password = process.env.ADMIN_AUTH_SMOKE_PASSWORD;
@@ -23,17 +24,18 @@ const credentialsProvided = username !== undefined || password !== undefined;
 if (args.includes("--help") || args.includes("-h")) {
   writeJson({
     status: "operator-production-retest-help",
-    usage: "node scripts/operator-production-retest.mjs [--dry-run|--acceptance-only] [--feed-recheck-only] [--attempt-feed-recheck] [--endpoint URL] [--receipt-file PATH]",
+    usage: "node scripts/operator-production-retest.mjs [--dry-run|--acceptance-only] [--feed-recheck-only] [--attempt-feed-recheck] [--endpoint URL] [--browser-evidence FILE] [--receipt-file PATH]",
     default: "dry-run diagnostics",
     credential_policy: "admin credentials must be supplied only through ADMIN_AUTH_SMOKE_USERNAME and ADMIN_AUTH_SMOKE_PASSWORD",
-    action_policy: "feed recheck action attempt requires --attempt-feed-recheck and an authenticated eligible actionRef; feed onboarding is route-smoked only by this automation",
+    browser_evidence_policy: "redacted browser evidence can close authenticated read-only and effect classifications without credentials",
+    action_policy: "feed recheck action attempt requires --attempt-feed-recheck and an authenticated eligible actionRef; feed onboarding is route-smoked unless redacted evidence reports an effect",
     output: "redacted"
   });
   process.exit(0);
 }
 
-if (args.some((arg) => /^--(?:username|password|cookie|csrf|token|idempotency)(?:=|$)/iu.test(arg))) {
-  fail("credentials, cookies, CSRF tokens, and idempotency keys must not be supplied on command lines");
+if (args.some((arg) => /^--(?:username|password|cookie|csrf|token|idempotency|actionRef|action-ref|secret|authorization|bearer|feedUrl|feed-url)(?:=|$)/iu.test(arg))) {
+  fail("credentials, cookies, CSRF tokens, idempotency keys, actionRefs, feed URLs, and secrets must not be supplied on command lines");
 }
 if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 30000) {
   fail("OPERATOR_RETEST_TIMEOUT_MS must be an integer between 1000 and 30000");
@@ -56,7 +58,8 @@ if (dryRun) {
       performed: false,
       command: "npm run ops:production:acceptance:redacted -- --endpoint <panel-origin>",
       feed_recheck_action_attempt_requires: "--attempt-feed-recheck",
-      feed_onboarding_action_attempt: "manual authenticated operator action only; not automatic"
+      feed_onboarding_action_attempt: "manual authenticated operator action only; not automatic",
+      browser_evidence: browserEvidenceFile === undefined ? "optional" : "will_verify"
     },
     risk_tier: riskTierSummary(),
     output: "redacted"
@@ -99,18 +102,43 @@ async function runAcceptance() {
   checks.push(summarize("GET /admin-api/operations/feed-onboarding-requests", getFeedOnboarding));
   checks.push(summarize("GET /admin-api/foo", unknownAdminApi));
 
+  const browserEvidence = browserEvidenceFile === undefined
+    ? {
+        status: "BROWSER_EVIDENCE_NOT_PROVIDED",
+        classifications: [],
+        feed_recheck_effect_status: "PENDING_BROWSER_EVIDENCE_OR_ENV_CREDENTIALS",
+        feed_onboarding_effect_status: "PENDING_BROWSER_EVIDENCE_OR_ENV_CREDENTIALS",
+        output: "redacted"
+      }
+    : runBrowserEvidenceVerifier(browserEvidenceFile);
+  const browserEvidenceAccepted = browserEvidence.status === "browser-evidence-verify-ok";
   let auth = {
     credentials: credentialsProvided ? "environment" : "not_provided",
     login_attempted: false,
     session_classification: classifySession(firstSession),
-    classification: credentialsProvided ? classifySession(firstSession) : "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED"
+    classification: credentialsProvided
+      ? classifySession(firstSession)
+      : browserEvidenceAccepted
+        ? "AUTHENTICATED_BROWSER_EVIDENCE_ACCEPTED"
+        : "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED"
   };
   let feedRecheck = {
-    classification: credentialsProvided ? "AUTHENTICATED_DRILLDOWN_NOT_RUN" : "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED",
-    effect_status: credentialsProvided ? "PENDING_AUTHENTICATED_ELIGIBILITY_CHECK" : "PENDING_BROWSER_EVIDENCE_OR_ENV_CREDENTIALS",
-    action_attempted: false
+    ...(browserEvidenceAccepted
+      ? feedRecheckFromBrowserEvidence(browserEvidence)
+      : {
+          classification: credentialsProvided ? "AUTHENTICATED_DRILLDOWN_NOT_RUN" : "AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED",
+          effect_status: credentialsProvided ? "PENDING_AUTHENTICATED_ELIGIBILITY_CHECK" : "PENDING_BROWSER_EVIDENCE_OR_ENV_CREDENTIALS",
+          action_attempted: false
+        })
   };
-  const feedOnboarding = classifyFeedOnboardingRouteSmoke({ unauthFeedOnboarding, getFeedOnboarding });
+  let feedOnboarding = classifyFeedOnboardingRouteSmoke({ unauthFeedOnboarding, getFeedOnboarding });
+  if (browserEvidenceAccepted) {
+    feedOnboarding = {
+      ...feedOnboarding,
+      evidence_classification: feedOnboardingFromBrowserEvidence(browserEvidence),
+      effect_status: browserEvidence.feed_onboarding_effect_status
+    };
+  }
 
   if (credentialsProvided) {
     const login = await requestJson("POST", "/admin-auth/login", {
@@ -191,7 +219,7 @@ async function runAcceptance() {
     getFeedOnboarding,
     unknownAdminApi
   });
-  const status = routeClassifications.critical.length === 0 && auth.classification !== "AUTH_LOGIN_ATTEMPT_FAILED"
+  const status = routeClassifications.critical.length === 0 && auth.classification !== "AUTH_LOGIN_ATTEMPT_FAILED" && (browserEvidenceFile === undefined || browserEvidenceAccepted)
     ? "OPERATOR_ACCEPTANCE_REDACTED_OK"
     : "OPERATOR_ACCEPTANCE_REDACTED_ATTENTION_REQUIRED";
 
@@ -201,6 +229,7 @@ async function runAcceptance() {
     base_url: baseUrl.origin,
     checks,
     auth,
+    browser_evidence: browserEvidence,
     feed_recheck: feedRecheck,
     feed_onboarding: feedOnboarding,
     route_classifications: routeClassifications,
@@ -274,6 +303,53 @@ function classifyFeedOnboardingRouteSmoke(results) {
     feed_onboarding_status: accepted ? "available" : "route_smoke_attention_required",
     action_attempted: false,
     manual_operator_action_required: true
+  };
+}
+
+function feedRecheckFromBrowserEvidence(evidence) {
+  const effectStatus = evidence.feed_recheck_effect_status ?? "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON";
+  const classification = evidence.classifications.includes("FEED_RECHECK_EFFECT_ACCEPTED")
+    ? "FEED_RECHECK_EFFECT_ACCEPTED"
+    : evidence.classifications.includes("PENDING_FEED_RECHECK_COOLDOWN")
+      ? "PENDING_FEED_RECHECK_COOLDOWN"
+      : evidence.classifications.includes("FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION")
+        ? "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION"
+        : evidence.classifications.includes("PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET") ||
+            evidence.classifications.includes("BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET")
+          ? "NO_ELIGIBLE_FEED_RECHECK_TARGET"
+          : "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON";
+  return {
+    classification,
+    effect_status: effectStatus,
+    action_attempted: false,
+    source: "redacted_browser_evidence"
+  };
+}
+
+function feedOnboardingFromBrowserEvidence(evidence) {
+  if (evidence.classifications.includes("FEED_ONBOARDING_EFFECT_ACCEPTED")) return "FEED_ONBOARDING_EFFECT_ACCEPTED";
+  if (evidence.classifications.includes("PENDING_FEED_ONBOARDING_ASYNC_PROCESSING")) return "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING";
+  if (evidence.classifications.includes("FEED_ONBOARDING_REJECTED_SAFE_VALIDATION")) return "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION";
+  return "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON";
+}
+
+function runBrowserEvidenceVerifier(file) {
+  const result = spawnSync(process.execPath, ["scripts/browser-evidence-verify.mjs", "--file", file], {
+    cwd: frontendRoot,
+    env: process.env,
+    encoding: "utf8",
+    shell: false,
+    timeout: 30000
+  });
+  const parsed = parseJson(result.stdout);
+  return {
+    status: parsed?.status ?? "browser-evidence-verify-failed",
+    exit_code: result.status ?? 1,
+    classifications: Array.isArray(parsed?.classifications) ? parsed.classifications : ["BROWSER_EVIDENCE_INVALID"],
+    feed_recheck_effect_status: parsed?.feed_recheck_effect_status ?? "unknown",
+    feed_onboarding_effect_status: parsed?.feed_onboarding_effect_status ?? "unknown",
+    evidence_sha256: parsed?.evidence_sha256 ?? "unavailable",
+    output: "redacted"
   };
 }
 
@@ -502,6 +578,24 @@ function git(argsForGit) {
     timeout: 30000
   });
   return result.status === 0 ? result.stdout.trim() : "unavailable";
+}
+
+function parseJson(text) {
+  const trimmed = text.trim();
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    try {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    } catch {
+      return undefined;
+    }
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return undefined;
+  }
 }
 
 function riskTierSummary() {

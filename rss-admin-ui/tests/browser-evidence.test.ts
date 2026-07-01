@@ -19,6 +19,7 @@ describe("redacted browser evidence", () => {
       classifications: [
         "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
         "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+        "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
         "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET"
       ]
     });
@@ -40,14 +41,67 @@ describe("redacted browser evidence", () => {
     });
 
     expect(evidence.feedRecheck.effectStatus).toBe("PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET");
+    expect(evidence.feedOnboarding.effectStatus).toBe("OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON");
     expect(validateRedactedBrowserEvidence(evidence)).toMatchObject({
       valid: true,
       classifications: [
         "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
         "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+        "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+        "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
         "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET"
       ]
     });
+  });
+
+  it("classifies accepted onboarding and accepted recheck effects without exposing action material", () => {
+    const evidence = createRedactedBrowserEvidence(
+      validDrilldown(),
+      {
+        feed_123456abcd: {
+          result: {
+            kind: "accepted",
+            httpStatus: 202,
+            response: {
+              status: "accepted",
+              requestId: "recheck_abc123def456",
+              target: { displayId: "feed_123456abcd", sourceHost: "news.example.org" },
+              queued: true,
+              cooldownSeconds: 300,
+              message: "Feed recheck was requested through the existing due-feed path.",
+              generatedAt: "2026-07-01T10:01:00.000Z"
+            }
+          }
+        }
+      },
+      {
+        kind: "created",
+        httpStatus: 201,
+        response: {
+          status: "created",
+          requestRef: "onboard_abc123def456",
+          feed: {
+            displayId: "feed_123456abcd",
+            sourceHost: "news.example.org",
+            state: "active",
+            eligibleForRecheck: true
+          },
+          nextSteps: ["Refresh Operations Drilldown."],
+          message: "Feed onboarding was accepted through the existing due-feed path.",
+          generatedAt: "2026-07-01T10:00:00.000Z"
+        }
+      }
+    );
+
+    expect(evidence.milestone).toBe("MS-027B");
+    expect(evidence.feedOnboarding.effectStatus).toBe("FEED_ONBOARDING_EFFECT_ACCEPTED");
+    expect(evidence.feedRecheck.effectStatus).toBe("FEED_RECHECK_EFFECT_ACCEPTED");
+    expect(evidence.classifications).toEqual(expect.arrayContaining([
+      "FEED_ONBOARDING_EFFECT_ACCEPTED",
+      "FEED_RECHECK_EFFECT_ACCEPTED",
+      "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
+    ]));
+    expect(serializeRedactedBrowserEvidence(evidence)).not.toMatch(/feed_recheck_v1\.|csrf|cookie|https?:\/\//iu);
   });
 
   it("rejects forbidden token, cookie, csrf, and actionRef surfaces", () => {
@@ -119,11 +173,15 @@ function minimalEvidence() {
       feed_onboarding_available: true,
       feed_onboarding_status: "available",
       no_eligible_target: true,
-      critical_risk: "none"
+      critical_risk: "none",
+      effectStatus: "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+      lastActionClassification: null
     },
     classifications: [
       "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
       "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+      "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+      "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
       "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET"
     ]
   } as const;

@@ -1,8 +1,11 @@
+import type { FeedOnboardingResult } from "./feedOnboardingClient";
 import type { FeedRecheckResult } from "./feedRecheckClient";
 import type { OperationsDrilldown } from "./operationsDrilldownClient";
 
 export const REDACTED_BROWSER_EVIDENCE_SCHEMA = "habersoft-admin-browser-evidence-v1" as const;
 export const redactedBrowserEvidenceMaxBytes = 32768;
+
+export type BrowserEvidenceMilestone = "MS-026C" | "MS-027B";
 
 export type BrowserEvidenceClassification =
   | "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY"
@@ -10,17 +13,35 @@ export type BrowserEvidenceClassification =
   | "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE"
   | "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
   | "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET"
+  | "FEED_ONBOARDING_EFFECT_ACCEPTED"
+  | "FEED_RECHECK_EFFECT_ACCEPTED"
+  | "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING"
+  | "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET"
+  | "PENDING_FEED_RECHECK_COOLDOWN"
+  | "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION"
+  | "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION"
+  | "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON"
   | "BROWSER_EVIDENCE_INVALID";
 
 export type FeedRecheckEvidenceStatus =
   | "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET"
   | "PENDING_OPERATOR_ACTION"
-  | "FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED";
+  | "FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
+  | "FEED_RECHECK_EFFECT_ACCEPTED"
+  | "PENDING_FEED_RECHECK_COOLDOWN"
+  | "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION"
+  | "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON";
+
+export type FeedOnboardingEvidenceStatus =
+  | "FEED_ONBOARDING_EFFECT_ACCEPTED"
+  | "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING"
+  | "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION"
+  | "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON";
 
 export type RedactedBrowserEvidence = {
   readonly schema: typeof REDACTED_BROWSER_EVIDENCE_SCHEMA;
   readonly source: "admin-ui";
-  readonly milestone: "MS-026C";
+  readonly milestone: BrowserEvidenceMilestone;
   readonly generatedAt: string;
   readonly authenticated: true;
   readonly operations: {
@@ -45,13 +66,25 @@ export type RedactedBrowserEvidence = {
       | "FEED_RECHECK_ACTION_ACCEPTED"
       | "FEED_RECHECK_ACTION_ALREADY_PENDING"
       | "FEED_RECHECK_ACTION_RATE_LIMITED"
+      | "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION"
       | null;
   };
   readonly feedOnboarding: {
     readonly feed_onboarding_available: boolean;
-    readonly feed_onboarding_status: "available" | "pending_operator_action";
+    readonly feed_onboarding_status:
+      | "available"
+      | "accepted"
+      | "pending_async_processing"
+      | "pending_operator_action"
+      | "rejected_safe_validation";
     readonly no_eligible_target: boolean;
     readonly critical_risk: "none";
+    readonly effectStatus?: FeedOnboardingEvidenceStatus;
+    readonly lastActionClassification?:
+      | "FEED_ONBOARDING_ACTION_ACCEPTED"
+      | "FEED_ONBOARDING_ACTION_ALREADY_EXISTS"
+      | "FEED_ONBOARDING_ACTION_REJECTED_SAFE_VALIDATION"
+      | null;
   };
   readonly classifications: readonly BrowserEvidenceClassification[];
 };
@@ -77,22 +110,22 @@ export type BrowserEvidenceValidationResult =
 
 export function createRedactedBrowserEvidence(
   drilldown: OperationsDrilldown,
-  feedRechecks: Readonly<Record<string, { readonly result?: FeedRecheckResult }>> = {}
+  feedRechecks: Readonly<Record<string, { readonly result?: FeedRecheckResult }>> = {},
+  feedOnboarding?: FeedOnboardingResult
 ): RedactedBrowserEvidence {
   const eligibleRecheckTargets = drilldown.feeds.rows.filter((row) => row.canRequestRecheck && row.actionRef !== null).length;
-  const lastActionClassification = latestSafeActionClassification(feedRechecks);
-  const acceptedEffect = lastActionClassification === "FEED_RECHECK_ACTION_ACCEPTED" || lastActionClassification === "FEED_RECHECK_ACTION_ALREADY_PENDING";
   const noEligible = eligibleRecheckTargets === 0;
-  const effectStatus: FeedRecheckEvidenceStatus = noEligible
-    ? "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET"
-    : acceptedEffect
-      ? "FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED"
-      : "PENDING_OPERATOR_ACTION";
-  const classifications: BrowserEvidenceClassification[] = ["BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY"];
-  classifications.push("BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE");
+  const feedRecheckEvidence = classifyFeedRecheckEvidence(eligibleRecheckTargets, feedRechecks);
+  const feedOnboardingEvidence = classifyFeedOnboardingEvidence(feedOnboarding);
+  const classifications: BrowserEvidenceClassification[] = [
+    "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
+    "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
+    feedOnboardingEvidence.effectStatus,
+    feedRecheckEffectClassification(feedRecheckEvidence.effectStatus)
+  ];
   if (noEligible) {
     classifications.push("BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET");
-  } else if (acceptedEffect) {
+  } else if (feedRecheckEvidence.effectStatus === "FEED_RECHECK_EFFECT_ACCEPTED") {
     classifications.push("BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED");
   } else {
     classifications.push("BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET");
@@ -101,7 +134,7 @@ export function createRedactedBrowserEvidence(
   return {
     schema: REDACTED_BROWSER_EVIDENCE_SCHEMA,
     source: "admin-ui",
-    milestone: "MS-026C",
+    milestone: "MS-027B",
     generatedAt: new Date().toISOString(),
     authenticated: true,
     operations: {
@@ -121,16 +154,18 @@ export function createRedactedBrowserEvidence(
       }
     },
     feedRecheck: {
-      effectStatus,
-      lastActionClassification
+      effectStatus: feedRecheckEvidence.effectStatus,
+      lastActionClassification: feedRecheckEvidence.lastActionClassification
     },
     feedOnboarding: {
       feed_onboarding_available: true,
-      feed_onboarding_status: "available",
+      feed_onboarding_status: feedOnboardingEvidence.feedOnboardingStatus,
       no_eligible_target: noEligible,
-      critical_risk: "none"
+      critical_risk: "none",
+      effectStatus: feedOnboardingEvidence.effectStatus,
+      lastActionClassification: feedOnboardingEvidence.lastActionClassification
     },
-    classifications
+    classifications: uniqueClassifications(classifications)
   };
 }
 
@@ -164,7 +199,7 @@ export function validateRedactedBrowserEvidence(value: unknown): BrowserEvidence
   if (
     value.schema !== REDACTED_BROWSER_EVIDENCE_SCHEMA ||
     value.source !== "admin-ui" ||
-    value.milestone !== "MS-026C" ||
+    (value.milestone !== "MS-026C" && value.milestone !== "MS-027B") ||
     value.authenticated !== true ||
     !isIso(value.generatedAt) ||
     !isOperationsEvidence(value.operations) ||
@@ -184,14 +219,25 @@ export function validateRedactedBrowserEvidence(value: unknown): BrowserEvidence
 
 function isFeedOnboardingEvidence(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  if (!hasOnlyKeys(value, ["feed_onboarding_available", "feed_onboarding_status", "no_eligible_target", "critical_risk"])) {
+  if (
+    !hasOnlyKeys(value, [
+      "feed_onboarding_available",
+      "feed_onboarding_status",
+      "no_eligible_target",
+      "critical_risk",
+      "effectStatus",
+      "lastActionClassification"
+    ])
+  ) {
     return false;
   }
   return (
     value.feed_onboarding_available === true &&
-    (value.feed_onboarding_status === "available" || value.feed_onboarding_status === "pending_operator_action") &&
+    isFeedOnboardingStatus(value.feed_onboarding_status) &&
     typeof value.no_eligible_target === "boolean" &&
-    value.critical_risk === "none"
+    value.critical_risk === "none" &&
+    (value.effectStatus === undefined || isFeedOnboardingEffectStatus(value.effectStatus)) &&
+    (value.lastActionClassification === undefined || isFeedOnboardingActionClassification(value.lastActionClassification))
   );
 }
 
@@ -207,14 +253,92 @@ function latestSafeActionClassification(feedRechecks: Readonly<Record<string, { 
       case "forbidden":
       case "invalid_response":
       case "not_found":
+      case "unavailable":
+        return "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION";
       case "timeout":
       case "unauthenticated":
-      case "unavailable":
       case undefined:
         break;
     }
   }
   return null;
+}
+
+function classifyFeedRecheckEvidence(
+  eligibleRecheckTargets: number,
+  feedRechecks: Readonly<Record<string, { readonly result?: FeedRecheckResult }>>
+): Pick<RedactedBrowserEvidence["feedRecheck"], "effectStatus" | "lastActionClassification"> {
+  const lastActionClassification = latestSafeActionClassification(feedRechecks);
+  switch (lastActionClassification) {
+    case "FEED_RECHECK_ACTION_ACCEPTED":
+    case "FEED_RECHECK_ACTION_ALREADY_PENDING":
+      return { effectStatus: "FEED_RECHECK_EFFECT_ACCEPTED", lastActionClassification };
+    case "FEED_RECHECK_ACTION_RATE_LIMITED":
+      return { effectStatus: "PENDING_FEED_RECHECK_COOLDOWN", lastActionClassification };
+    case "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION":
+      return { effectStatus: "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION", lastActionClassification };
+    case null:
+      return {
+        effectStatus: eligibleRecheckTargets === 0 ? "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET" : "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+        lastActionClassification
+      };
+  }
+}
+
+function feedRecheckEffectClassification(status: FeedRecheckEvidenceStatus): BrowserEvidenceClassification {
+  switch (status) {
+    case "FEED_RECHECK_EFFECT_ACCEPTED":
+    case "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET":
+    case "PENDING_FEED_RECHECK_COOLDOWN":
+    case "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION":
+    case "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON":
+      return status;
+    case "PENDING_OPERATOR_ACTION":
+      return "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON";
+    case "FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED":
+      return "FEED_RECHECK_EFFECT_ACCEPTED";
+  }
+}
+
+function classifyFeedOnboardingEvidence(feedOnboarding: FeedOnboardingResult | undefined): {
+  readonly effectStatus: FeedOnboardingEvidenceStatus;
+  readonly feedOnboardingStatus: RedactedBrowserEvidence["feedOnboarding"]["feed_onboarding_status"];
+  readonly lastActionClassification: NonNullable<RedactedBrowserEvidence["feedOnboarding"]["lastActionClassification"]> | null;
+} {
+  switch (feedOnboarding?.kind) {
+    case "created":
+    case "already_exists": {
+      const accepted = feedOnboarding.response.feed?.eligibleForRecheck === true;
+      return {
+        effectStatus: accepted ? "FEED_ONBOARDING_EFFECT_ACCEPTED" : "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
+        feedOnboardingStatus: accepted ? "accepted" : "pending_async_processing",
+        lastActionClassification: feedOnboarding.kind === "created" ? "FEED_ONBOARDING_ACTION_ACCEPTED" : "FEED_ONBOARDING_ACTION_ALREADY_EXISTS"
+      };
+    }
+    case "rate_limited":
+      return {
+        effectStatus: "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
+        feedOnboardingStatus: "pending_async_processing",
+        lastActionClassification: null
+      };
+    case "forbidden":
+    case "invalid_request":
+    case "invalid_response":
+    case "unavailable":
+      return {
+        effectStatus: "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION",
+        feedOnboardingStatus: "rejected_safe_validation",
+        lastActionClassification: "FEED_ONBOARDING_ACTION_REJECTED_SAFE_VALIDATION"
+      };
+    case "timeout":
+    case "unauthenticated":
+    case undefined:
+      return {
+        effectStatus: "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON",
+        feedOnboardingStatus: "available",
+        lastActionClassification: null
+      };
+  }
 }
 
 function isOperationsEvidence(value: unknown): boolean {
@@ -247,24 +371,69 @@ function isFeedRecheckEvidence(value: unknown): boolean {
   return (
     (value.effectStatus === "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET" ||
       value.effectStatus === "PENDING_OPERATOR_ACTION" ||
-      value.effectStatus === "FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED") &&
+      value.effectStatus === "FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED" ||
+      value.effectStatus === "FEED_RECHECK_EFFECT_ACCEPTED" ||
+      value.effectStatus === "PENDING_FEED_RECHECK_COOLDOWN" ||
+      value.effectStatus === "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION" ||
+      value.effectStatus === "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON") &&
     (value.lastActionClassification === null ||
       value.lastActionClassification === "FEED_RECHECK_ACTION_ACCEPTED" ||
       value.lastActionClassification === "FEED_RECHECK_ACTION_ALREADY_PENDING" ||
-      value.lastActionClassification === "FEED_RECHECK_ACTION_RATE_LIMITED")
+      value.lastActionClassification === "FEED_RECHECK_ACTION_RATE_LIMITED" ||
+      value.lastActionClassification === "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION")
   );
 }
 
 function isClassifications(value: unknown): boolean {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 5) return false;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 12) return false;
   const allowed = new Set<BrowserEvidenceClassification>([
     "BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY",
     "BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET",
     "BROWSER_EVIDENCE_FEED_ONBOARDING_AVAILABLE",
     "BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED",
-    "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET"
+    "BROWSER_EVIDENCE_PENDING_ELIGIBLE_FEED_RECHECK_TARGET",
+    "FEED_ONBOARDING_EFFECT_ACCEPTED",
+    "FEED_RECHECK_EFFECT_ACCEPTED",
+    "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING",
+    "PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET",
+    "PENDING_FEED_RECHECK_COOLDOWN",
+    "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION",
+    "FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION",
+    "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON"
   ]);
   return value.every((classification) => typeof classification === "string" && allowed.has(classification as BrowserEvidenceClassification));
+}
+
+function isFeedOnboardingStatus(value: unknown): boolean {
+  return (
+    value === "available" ||
+    value === "accepted" ||
+    value === "pending_async_processing" ||
+    value === "pending_operator_action" ||
+    value === "rejected_safe_validation"
+  );
+}
+
+function isFeedOnboardingEffectStatus(value: unknown): boolean {
+  return (
+    value === "FEED_ONBOARDING_EFFECT_ACCEPTED" ||
+    value === "PENDING_FEED_ONBOARDING_ASYNC_PROCESSING" ||
+    value === "FEED_ONBOARDING_REJECTED_SAFE_VALIDATION" ||
+    value === "OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON"
+  );
+}
+
+function isFeedOnboardingActionClassification(value: unknown): boolean {
+  return (
+    value === null ||
+    value === "FEED_ONBOARDING_ACTION_ACCEPTED" ||
+    value === "FEED_ONBOARDING_ACTION_ALREADY_EXISTS" ||
+    value === "FEED_ONBOARDING_ACTION_REJECTED_SAFE_VALIDATION"
+  );
+}
+
+function uniqueClassifications(classifications: readonly BrowserEvidenceClassification[]): readonly BrowserEvidenceClassification[] {
+  return [...new Set(classifications)];
 }
 
 function findForbiddenEvidenceSurface(value: unknown): "field" | "value" | undefined {

@@ -338,8 +338,11 @@ function assertOperatorContract() {
     if (!promotion.includes(fragment)) failures.push(`promotion retest missing onboarding fragment ${fragment}`);
   }
 
+  if (!risk.includes("MS-027A_RISK_BALANCED_GUARDRAILS") && !risk.includes("MS-027B_RISK_BALANCED_GUARDRAILS")) {
+    failures.push("risk model missing MS-027A/MS-027B onboarding guardrail version");
+  }
+
   for (const fragment of [
-    "MS-027A_RISK_BALANCED_GUARDRAILS",
     "ADMIN_FEED_ONBOARDING_ROUTE_UNSAFE",
     "FEED_ONBOARDING_RAW_URL_EVIDENCE",
     "FEED_ONBOARDING_OPERATOR_ACTION_REQUIRED"

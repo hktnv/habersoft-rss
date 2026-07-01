@@ -7,12 +7,14 @@ export type FeedOnboardingPanelProps = {
   readonly csrfToken?: string;
   readonly requestOnboarding?: (options: { readonly feedUrl: string; readonly label?: string; readonly csrfToken: string; readonly signal?: AbortSignal }) => Promise<FeedOnboardingResult>;
   readonly onAccepted?: () => void;
+  readonly onResult?: (result: FeedOnboardingResult) => void;
 };
 
 export function FeedOnboardingPanel({
   csrfToken,
   requestOnboarding = requestFeedOnboarding,
-  onAccepted
+  onAccepted,
+  onResult
 }: FeedOnboardingPanelProps) {
   const [feedUrl, setFeedUrl] = useState("");
   const [label, setLabel] = useState("");
@@ -51,6 +53,7 @@ export function FeedOnboardingPanel({
     }).then((nextResult) => {
       setPhase("complete");
       setResult(nextResult);
+      onResult?.(nextResult);
       if (nextResult.kind === "created" || nextResult.kind === "already_exists") {
         setFeedUrl("");
         setLabel("");

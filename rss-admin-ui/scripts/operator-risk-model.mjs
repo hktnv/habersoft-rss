@@ -1,4 +1,4 @@
-export const riskModelVersion = "MS-027A_RISK_BALANCED_GUARDRAILS";
+export const riskModelVersion = "MS-027B_RISK_BALANCED_GUARDRAILS";
 
 export const riskTiers = {
   CRITICAL: [
@@ -6,6 +6,7 @@ export const riskTiers = {
     "browser persistence of auth material",
     "unsafe admin write route or missing CSRF/idempotency on bounded action",
     "unsafe admin feed onboarding route or raw feed URL evidence exposure",
+    "feed onboarding or feed recheck action rejected by safe validation",
     "unknown /admin-api/* fallback to HTML",
     "unresolved Nginx template markers or generated config missing exact admin routes",
     "production mutation attempted by Codex",
@@ -23,6 +24,8 @@ export const riskTiers = {
     "optional/defaulted env values missing",
     "host Node/npm mismatch when declared runtime or Docker validation passes",
     "no eligible feed recheck target",
+    "feed onboarding accepted but async drilldown/recheck processing is pending",
+    "feed recheck target is in bounded cooldown",
     "feed onboarding available but operator action still required",
     "credential-free auth smoke requires browser evidence",
     "operator browser evidence missing"
@@ -42,6 +45,8 @@ const classToTier = new Map([
   ["ADMIN_WRITE_ROUTE_UNSAFE", "CRITICAL"],
   ["ADMIN_FEED_ONBOARDING_ROUTE_UNSAFE", "CRITICAL"],
   ["FEED_ONBOARDING_RAW_URL_EVIDENCE", "CRITICAL"],
+  ["FEED_ONBOARDING_REJECTED_SAFE_VALIDATION", "CRITICAL"],
+  ["FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION", "CRITICAL"],
   ["MISSING_CSRF_OR_IDEMPOTENCY", "CRITICAL"],
   ["NGINX_TEMPLATE_MARKER_UNRESOLVED", "CRITICAL"],
   ["NGINX_EXACT_ADMIN_ROUTE_MISSING", "CRITICAL"],
@@ -56,6 +61,11 @@ const classToTier = new Map([
   ["OPTIONAL_ENV_DEFAULTED", "MEDIUM"],
   ["HOST_NODE_NPM_VERSION_WARNING", "MEDIUM"],
   ["PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET", "MEDIUM"],
+  ["PENDING_FEED_ONBOARDING_ASYNC_PROCESSING", "MEDIUM"],
+  ["PENDING_FEED_RECHECK_COOLDOWN", "MEDIUM"],
+  ["OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON", "MEDIUM"],
+  ["FEED_ONBOARDING_EFFECT_ACCEPTED", "LOW"],
+  ["FEED_RECHECK_EFFECT_ACCEPTED", "LOW"],
   ["FEED_ONBOARDING_OPERATOR_ACTION_REQUIRED", "MEDIUM"],
   ["AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED", "MEDIUM"],
   ["BROWSER_EVIDENCE_MISSING", "MEDIUM"],

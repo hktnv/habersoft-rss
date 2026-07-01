@@ -56,3 +56,9 @@ npm run verify:production-feed-onboarding-acceptance
 The verifier checks tracked docs and local fixtures only. It does not contact production, perform a credentialed login, read real secret files, mutate containers, create feed data, or validate raw evidence bodies.
 
 MS-027A source remains `SUCCESS_MS_027A_ADMIN_FEED_ONBOARDING_AND_ELIGIBLE_TARGET_READINESS_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED` historically, and MS-027A-R1 remains `SUCCESS_MS_027A_R1_PRODUCTION_PROMOTION_IMAGE_FRESHNESS_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED` historically. MS-027A-R2 supersedes only the production retest residual for image freshness and feed-onboarding route smoke by operator report.
+
+## MS-027B Follow-up Boundary
+
+MS-027B records `SUCCESS_MS_027B_FEED_ONBOARDING_RECHECK_EFFECT_FLOW_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`. It does not change the MS-027A-R2 operator-reported production route-smoke acceptance. It adds local verification that feed onboarding creates backend-visible reserved feed state, Operations Drilldown can refresh to an eligible row, and the bounded feed recheck route reports the existing due-feed path without exposing raw feed URLs or actionRefs.
+
+Redacted browser evidence can now classify `FEED_ONBOARDING_EFFECT_ACCEPTED`, `FEED_RECHECK_EFFECT_ACCEPTED`, `PENDING_FEED_ONBOARDING_ASYNC_PROCESSING`, `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`, `PENDING_FEED_RECHECK_COOLDOWN`, `FEED_ONBOARDING_REJECTED_SAFE_VALIDATION`, `FEED_RECHECK_ACTION_REJECTED_SAFE_VALIDATION`, and `OPERATOR_ACTION_REQUIRED_WITH_REDACTED_REASON`. Operator deploy/retest remains required; local guard: `npm run verify:feed-onboarding-recheck-effect-flow`. No production feed was created, seeded, or faked. No fake actionRef was generated.
