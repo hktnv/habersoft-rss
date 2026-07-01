@@ -1,6 +1,6 @@
 # Admin Operations Dashboard
 
-Status: `MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET`.
+Status: `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET`.
 
 MS-025A adds the first authenticated read-only admin operations slice after the MS-024F operator-reported status/auth shell acceptance. It is a local repository package with synthetic acceptance coverage. MS-025A-R2 records later operator-reported production acceptance for the read-only operations summary dashboard.
 
@@ -9,6 +9,8 @@ MS-025B adds the next authenticated read-only Operations Drilldown slice locally
 MS-026A adds the first bounded admin action: `POST /admin-api/operations/feed-recheck-requests`. It is `MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED`: local implementation and release-candidate validation only, with operator deploy/retest required. No production deployment was performed by Codex for MS-026A.
 
 MS-026B records the operator-reported MS-026A production route smoke without claiming feed recheck effect acceptance. The route/proxy/auth/HTML-fallback checks are deployed by operator report, but production had no feeds and no eligible actionRef. The effect classification is `NO_ELIGIBLE_FEED_RECHECK_TARGET`, with pending state `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` / `PENDING_NO_ELIGIBLE_TARGET`.
+
+MS-026C adds one-command operator automation and the redacted browser evidence bridge. MS-026C-R1 records `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET` from operator-reported production retest evidence: `OPERATOR_PROMOTION_RETEST_REDACTED_OK`, `NGINX_ROUTE_PROOF_ACCEPTED`, `browser-evidence-verify-ok`, `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`, and critical risk `none`. The feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`; Feed recheck effect acceptance remains future work requiring a real eligible production feed. No production feed was created, seeded, or faked. No fake actionRef was generated. There was no production contact by Codex. The local guard is `npm run verify:operator-automation-acceptance`.
 
 MS-025A-R1 remediates the operator-reported follow-up where production sign-in and `/admin-auth/session` worked, but `/admin-api/operations/summary` returned HTTP 200 `text/html` with the SPA fallback. The reported container showed generated auth/status routes in `/tmp/nginx/conf.d/default.conf`, but no `/admin-api` route because the running frontend image's active template lacked the admin-api insertion marker. Codex did not contact production to re-check that R1 evidence; the remediation is repository-local and synthetic.
 
@@ -313,6 +315,8 @@ Risk-based guardrails:
 - LOW: treat npm update notices, CRLF checkout warnings, and Prisma update notices as informational.
 
 MS-024F status/auth shell acceptance remains operator-reported. MS-025A-R2 records the read-only operations summary dashboard production acceptance by operator report. Durable operator-state receipt outside Git records the R2 closeout; temporary workplace paths are not durable operator artifacts.
+
+MS-026C-R1 durable operator-state receipt outside Git records the automation closeout under `operator-state/admin-ui-production-activation/ms-026c-r1-operator-automation-accepted-feed-recheck-pending-no-target-receipt.json`; temporary workplace paths are not durable operator artifacts.
 
 ## MS-026C Operator Automation and Evidence Bridge
 

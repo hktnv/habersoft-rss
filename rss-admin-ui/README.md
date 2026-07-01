@@ -2,7 +2,7 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `SUCCESS_MS_026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_CLOSURE_FLOW_LANDED_OPERATOR_RETEST_REQUIRED`.
+Status: `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET`.
 
 ## Scope
 
@@ -72,7 +72,8 @@ Included through MS-026A:
 - MS-025B admin operations drilldown verifier.
 - MS-026A bounded admin feed recheck action verifier,
 - MS-026B redacted operator automation, no-eligible feed recheck classification, and risk-tiered apply guardrails,
-- MS-026C one-command operator promotion/retest automation, browser evidence bridge, and future feed-recheck closure flow.
+- MS-026C one-command operator promotion/retest automation, browser evidence bridge, and future feed-recheck closure flow,
+- MS-026C-R1 operator-reported production acceptance closure for the automation/retest package while feed recheck effect remains pending.
 
 Not included:
 
@@ -120,6 +121,7 @@ npm run verify:production-overlay-canonicalization
 npm run verify:admin-operations-dashboard
 npm run verify:admin-operations-drilldown
 npm run verify:operator-automation
+npm run verify:operator-automation-acceptance
 npm run verify:browser-evidence
 npm run ops:production:retest -- --dry-run
 npm run ops:production:retest -- --retest-only --endpoint https://rss-panel.habersoft.com
@@ -164,6 +166,8 @@ MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED
 MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET records the operator-reported MS-026A production retest without overclaiming the action effect. The route/proxy/auth/HTML-fallback smoke is deployed by operator report, but production had zero feeds and no actionRef, so the UI and automation classify the effect as `NO_ELIGIBLE_FEED_RECHECK_TARGET` and `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` / `PENDING_NO_ELIGIBLE_TARGET`. The empty state now says "No eligible feed recheck target is currently available." and does not invent an actionRef. The lower-level operator path remains `npm run ops:production:retest:redacted`, `npm run ops:production:acceptance:redacted`, `npm run ops:feed-recheck:eligibility:redacted`, and `npm run verify:operator-automation`. Frontend recreate is dry-run by default and requires `npm run ops:compose:recreate -- --apply` for an operator-owned mutation.
 
 MS-026C adds `npm run ops:production:retest` as the one-command operator wrapper for dry-run planning, optional operator-owned apply/recreate, redacted route acceptance, generated Nginx route proof, durable receipts, and browser evidence verification. Credential-free authenticated checks are classified as `AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED`, not as a failed login. The browser evidence bridge exports and verifies `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`, and future `BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED` without cookies, sessions, CSRF tokens, idempotency keys, raw actionRefs, raw feed URLs, raw logs, raw bodies, private hostnames, or secrets.
+
+MS-026C-R1 records `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET` from operator-reported evidence only. The reported acceptance classes are `OPERATOR_PROMOTION_RETEST_REDACTED_OK`, `NGINX_ROUTE_PROOF_ACCEPTED`, `browser-evidence-verify-ok`, `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, and `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`; critical risk `none`; no production contact by Codex. Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`. No production feed was created, seeded, or faked. No fake actionRef was generated. The tracked guard is `npm run verify:operator-automation-acceptance`, and the durable sanitized receipt is stored outside Git under `operator-state/admin-ui-production-activation/ms-026c-r1-operator-automation-accepted-feed-recheck-pending-no-target-receipt.json`.
 
 MS-024B changes the operator runtime posture to graduated guardrails. Missing, malformed, public-edge, or Docker bridge loopback upstreams no longer crash-loop the static frontend container. `/healthz` and the static app start, while exact proxy routes return bounded JSON with reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` remains available for strict synthetic checks.
 
@@ -333,5 +337,6 @@ npm run verify:auth-boundary
 - [Status-api upstream remediation](.docs/status-api-upstream-remediation.md)
 - [Admin auth production operator handoff](.docs/admin-auth-production-operator-handoff.md)
 - [Operator risk model and evidence bridge](.docs/operator-risk-model.md)
+- [Operator automation acceptance](.docs/operator-automation-acceptance.md)
 - [Read-only status dashboard contract](.docs/read-only-status-dashboard.md)
 - [Same-origin health transport contract](.docs/same-origin-health-transport.md)

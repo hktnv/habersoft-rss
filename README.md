@@ -7,7 +7,7 @@
 | Project | Role | Status |
 |---|---|---|
 | [`rss-habersoft-com`](rss-habersoft-com/README.md) | Backend API, worker, production evidence owner | `MVP - Production Active` |
-| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status and operations dashboard with same-origin admin auth/session routes plus one bounded feed recheck action | `SUCCESS_MS_026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_CLOSURE_FLOW_LANDED_OPERATOR_RETEST_REQUIRED` |
+| [`rss-admin-ui`](rss-admin-ui/README.md) | Read-only admin status and operations dashboard with same-origin admin auth/session routes plus one bounded feed recheck action | `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET` |
 
 The backend keeps its independent `package.json`, lockfile, Dockerfile, docs, production guide, evidence tooling, and release contract. The admin UI has its own manifest, lockfile, Dockerfile, docs, tests, and production delivery contract. The repository root owns cross-project navigation, local full-stack Compose, CI coordination, and topology verification.
 
@@ -78,6 +78,7 @@ npm run verify:production-overlay-canonicalization
 npm run verify:admin-operations-dashboard
 npm run verify:admin-operations-drilldown
 npm run verify:operator-automation
+npm run verify:operator-automation-acceptance
 npm run verify:browser-evidence
 npm run ops:production:retest -- --dry-run
 npm run ops:production:retest -- --retest-only --endpoint https://rss-panel.habersoft.com
@@ -102,7 +103,9 @@ MS-026A_BOUNDED_ADMIN_FEED_RECHECK_ACTION_LANDED_OPERATOR_DEPLOY_RETEST_REQUIRED
 
 MS-026B_OPERATOR_REPORTED_FEED_RECHECK_ROUTE_DEPLOYED_NO_ELIGIBLE_TARGET records the operator-reported production rebuild/recreate/retest after MS-026A: backend/frontend health passed, exact summary/drilldown/feed-recheck Nginx routes were present, unknown `/admin-api/*` returned JSON `404`, feed-recheck `GET` returned JSON `405`, unauthenticated feed-recheck `POST` returned JSON `401`, browser login succeeded, and Operations Overview/Drilldown loaded. Production had `feeds.total=0`, `active=0`, and empty drilldown rows, so the feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` / `PENDING_NO_ELIGIBLE_TARGET` until a real eligible feed/actionRef exists. MS-026B adds risk-tiered operator automation: `npm run ops:production:retest:redacted`, `npm run ops:production:acceptance:redacted`, `npm run ops:feed-recheck:eligibility:redacted`, frontend recreate apply gating through `npm run ops:compose:recreate -- --apply`, backend API/worker recreate dry-run/apply guidance through `npm run ops:production:recreate:api-worker -- --dry-run` and `-- --apply`, and `npm run verify:operator-automation`. Codex did not mutate production, perform a credentialed production login, create feeds, seed data, or read real secrets.
 
-MS-026C adds `SUCCESS_MS_026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_CLOSURE_FLOW_LANDED_OPERATOR_RETEST_REQUIRED`: `npm run ops:production:retest` is the one-command dry-run/retest/apply wrapper, `AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED` replaces credential-free false failures, and `npm run ops:browser-evidence:verify` validates redacted browser evidence from the authenticated Operations Drilldown UI. Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` until a real eligible feed exists and an operator-provided redacted receipt verifies `BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED`.
+MS-026C adds `SUCCESS_MS_026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_CLOSURE_FLOW_LANDED_OPERATOR_RETEST_REQUIRED`: `npm run ops:production:retest` is the one-command dry-run/retest/apply wrapper, `AUTHENTICATED_BROWSER_EVIDENCE_REQUIRED` replaces credential-free false failures, and `npm run ops:browser-evidence:verify` validates redacted browser evidence from the authenticated Operations Drilldown UI. Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET` until a real eligible feed exists and a future operator-provided redacted receipt verifies `BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED`.
+
+MS-026C-R1 records `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET` from operator-reported production retest evidence only. `OPERATOR_PROMOTION_RETEST_REDACTED_OK`, `NGINX_ROUTE_PROOF_ACCEPTED`, `browser-evidence-verify-ok`, `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, and `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET` close the MS-026C automation/browser-evidence residual. Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`; No production feed was created, seeded, or faked; No fake actionRef was generated; no production contact by Codex occurred.
 
 MS-020D adds the local-only production activation readiness package. It includes a public-data classification for the current status-only fields, an operator authority record template, a future post-deploy evidence checklist, and `npm run verify:production-readiness`. It does not authorize production mutation.
 
@@ -168,6 +171,7 @@ Root Compose wires `ADMIN_UI_HEALTH_UPSTREAM_ORIGIN=http://main-service-api:3000
 - [Admin UI live status dashboard acceptance](rss-admin-ui/.docs/live-status-dashboard-acceptance.md) - MS-023D production read-only status transport acceptance, MS-024E `AUTH_CONFIGURED_UNAUTHENTICATED` evidence intake, and MS-024F operator-reported authenticated shell acceptance.
 - [Admin UI operations dashboard contract](rss-admin-ui/.docs/admin-operations-dashboard.md) - MS-025A protected read-only operations overview, MS-025B drilldown, MS-026A bounded feed recheck action, same-origin admin-api proxy contract, and accepted read-only production evidence boundaries.
 - [Admin UI operator risk model and evidence bridge](rss-admin-ui/.docs/operator-risk-model.md) - MS-026C one-command automation, browser evidence schema, risk tiers, and feed-recheck closure flow.
+- [Admin UI operator automation acceptance](rss-admin-ui/.docs/operator-automation-acceptance.md) - MS-026C-R1 operator-reported live acceptance closure with feed recheck effect still pending.
 - [Admin UI status-api upstream remediation](rss-admin-ui/.docs/status-api-upstream-remediation.md) - MS-023C blocker runbook, MS-023D accepted status-api result, production networking contract, and local networking harness.
 - [Admin UI production operator handoff](rss-admin-ui/.docs/admin-auth-production-operator-handoff.md) - Future operator authority, redacted evidence, and rollback checklist.
 - [Backend admin auth production activation](rss-habersoft-com/.docs/admin-auth-production-activation.md) - Admin auth env variables and secretless provisioning helper contract.

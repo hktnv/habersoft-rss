@@ -1,8 +1,10 @@
 # Operator Risk Model and Evidence Bridge
 
-Status: `SUCCESS_MS_026C_ONE_COMMAND_OPERATOR_AUTOMATION_AND_FEED_RECHECK_CLOSURE_FLOW_LANDED_OPERATOR_RETEST_REQUIRED`.
+Status: `SUCCESS_MS_026C_R1_OPERATOR_AUTOMATION_PRODUCTION_ACCEPTANCE_CLOSED_FEED_RECHECK_PENDING_NO_TARGET`.
 
 MS-026C keeps the accepted status dashboard, authenticated admin shell, read-only Operations Overview, read-only Operations Drilldown, and MS-026B route/proxy/auth smoke boundaries intact. It improves operator automation only; Codex still does not deploy, restart, rebuild, mutate production, perform a credentialed production login, read real secrets, seed production, create a tag, create a release, or create a PR.
+
+MS-026C-R1 closes the MS-026C operator automation/retest residual by operator-reported production evidence only. The reported classes are `OPERATOR_PROMOTION_RETEST_REDACTED_OK`, `NGINX_ROUTE_PROOF_ACCEPTED`, `browser-evidence-verify-ok`, `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, and `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`; critical risk `none`; no production contact by Codex. Feed recheck effect remains `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`. No production feed was created, seeded, or faked. No fake actionRef was generated. The local closure guard is `npm run verify:operator-automation-acceptance`.
 
 ## One-command path
 
@@ -66,13 +68,15 @@ LOW / INFO:
 
 ## Browser evidence bridge
 
-Authenticated admins can use **Copy redacted evidence** in Operations Drilldown. The exported JSON contains only schema, source, milestone, generated timestamp, authenticated boolean, drilldown status, aggregate feed/ingestion counts, eligible-target count, effect status, and safe classifications such as `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`, and `BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED`.
+Authenticated admins can use **Copy redacted evidence** in Operations Drilldown. The exported JSON contains only schema, source, milestone, generated timestamp, authenticated boolean, drilldown status, aggregate feed/ingestion counts, eligible-target count, effect status, and safe classifications such as `BROWSER_EVIDENCE_ACCEPTED_AUTHENTICATED_READ_ONLY`, `BROWSER_EVIDENCE_NO_ELIGIBLE_FEED_TARGET`, and future `BROWSER_EVIDENCE_FEED_RECHECK_EFFECT_ACCEPTED_OPERATOR_REPORTED`.
 
 The browser evidence schema and verifier reject cookies, session IDs, CSRF tokens, idempotency keys, raw `actionRef`, raw feed URLs, private hostnames, local filesystem paths, browser storage values, stack traces, raw response bodies, secrets, password material, Authorization/Bearer values, Agent keys, Tenant tokens, and unknown fields.
 
 ## Feed-recheck closure flow
 
 Production currently remains `NO_ELIGIBLE_FEED_RECHECK_TARGET` and `PENDING_NO_ELIGIBLE_FEED_RECHECK_TARGET`. That is not a failure and is not effect acceptance.
+
+Feed recheck effect acceptance remains future work requiring a real eligible production feed and redacted browser evidence from an operator-owned bounded action. The MS-026C-R1 durable sanitized receipt lives outside Git under `operator-state/admin-ui-production-activation/ms-026c-r1-operator-automation-accepted-feed-recheck-pending-no-target-receipt.json`.
 
 When a real eligible feed appears through normal production operation:
 
