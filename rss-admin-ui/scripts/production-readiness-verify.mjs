@@ -7,10 +7,10 @@ const repoRoot = path.resolve(frontendRoot, "..");
 const image =
   process.env.RSS_ADMIN_UI_READINESS_IMAGE ??
   process.env.RSS_ADMIN_UI_TEST_IMAGE ??
-  "rss-admin-ui:ms023d-local";
+  "rss-admin-ui:ms025b-local";
 const productionHostPattern = /(?:^|[/:.])rss(?:-panel)?\.habersoft\.com(?:$|[/:])/iu;
 const rootComposeEnv = {
-  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms023d-local",
+  RSS_HABERSOFT_COM_IMAGE: "habersoft-rss-backend:ms025b-local",
   RSS_ADMIN_UI_IMAGE: image,
   ADMIN_UI_HOST_PORT: "8081",
   ADMIN_UI_HEALTH_UPSTREAM_ORIGIN: "http://main-service-api:3000",
@@ -40,6 +40,7 @@ assertNoProductionContactEnv(productionComposeEnv);
 
 run("npm", ["run", "build"]);
 run("npm", ["run", "verify:admin-operations-dashboard"]);
+run("npm", ["run", "verify:admin-operations-drilldown"]);
 run("npm", ["run", "verify:production-operations-acceptance"]);
 run("docker", ["build", "-t", image, "."], { printOutput: false, timeoutMs: 600000 });
 console.log(JSON.stringify({ status: "docker-build-ok", image }));
@@ -111,6 +112,7 @@ console.log(
       checks: [
         "production build exists",
         "admin operations dashboard source/docs/proxy verifier passes",
+        "admin operations drilldown source/docs/proxy verifier passes",
         "MS-025A-R2 operator-reported operations acceptance verifier passes",
         "docker image builds",
         "frontend production compose config passes without env file for inspection defaults",

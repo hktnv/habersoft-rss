@@ -7,12 +7,12 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
 const stamp = Date.now();
-const frontendImage = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? "rss-admin-ui:ms023d-local";
-const backendImage = process.env.RSS_HABERSOFT_COM_TEST_IMAGE ?? "main-service-app:ms023d-rc-local";
+const frontendImage = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? "rss-admin-ui:ms025b-local";
+const backendImage = process.env.RSS_HABERSOFT_COM_TEST_IMAGE ?? "main-service-app:ms025b-rc-local";
 const adminUsername = "admin";
-const adminPassword = "synthetic-ms023d-admin-password";
-const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms023d-rc-salt-00", "utf8"));
-const adminSessionSecret = "synthetic_ms023d_admin_session_secret_48_bytes_minimum";
+const adminPassword = "synthetic-ms025b-admin-password";
+const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms025b-rc-salt-00", "utf8"));
+const adminSessionSecret = "synthetic_ms025b_admin_session_secret_48_bytes_minimum";
 const scenarioResults = [];
 
 await runDisabledScenario();
@@ -35,7 +35,7 @@ console.log(
 );
 
 async function runDisabledScenario() {
-  const projectName = `habersoft-rss-ms023d-disabled-${stamp}`;
+  const projectName = `habersoft-rss-ms025b-disabled-${stamp}`;
   const uiPort = await freePort();
   const apiPort = await freePort();
   const env = composeEnv({
@@ -74,18 +74,23 @@ async function runDisabledScenario() {
     assert(summary.status === 501, "disabled admin operations summary did not fail closed");
     assert(!JSON.stringify(summary.body).includes("feeds"), "disabled summary leaked operations data");
 
+    const drilldown = await requestJson(`${base}/admin-api/operations/drilldown`);
+    assert(drilldown.status === 501, "disabled admin operations drilldown did not fail closed");
+    assert(!JSON.stringify(drilldown.body).includes("rows"), "disabled drilldown leaked operations data");
+
     scenarioResults.push({
       name: "disabled-default",
       session_status: session.status,
       login_status: login.status,
       operations_summary_status: summary.status,
+      operations_drilldown_status: drilldown.status,
       health_live: live.body?.status
     });
   });
 }
 
 async function runEnabledScenario() {
-  const projectName = `habersoft-rss-ms023d-enabled-${stamp}`;
+  const projectName = `habersoft-rss-ms025b-enabled-${stamp}`;
   const uiPort = await freePort();
   const apiPort = await freePort();
   const env = composeEnv({
@@ -120,6 +125,10 @@ async function runEnabledScenario() {
     const unauthenticatedSummary = await requestJson(`${base}/admin-api/operations/summary`);
     assert(unauthenticatedSummary.status === 401, "admin operations summary did not require an admin session");
     assert(!JSON.stringify(unauthenticatedSummary.body).includes("feeds"), "unauthenticated summary leaked operations data");
+
+    const unauthenticatedDrilldown = await requestJson(`${base}/admin-api/operations/drilldown`);
+    assert(unauthenticatedDrilldown.status === 401, "admin operations drilldown did not require an admin session");
+    assert(!JSON.stringify(unauthenticatedDrilldown.body).includes("rows"), "unauthenticated drilldown leaked operations data");
 
     const invalidLogin = await requestJson(`${base}/admin-auth/login`, {
       method: "POST",
@@ -169,6 +178,20 @@ async function runEnabledScenario() {
     assert(!JSON.stringify(adminSummary.body).includes(adminPassword), "admin operations summary leaked password");
     assert(!JSON.stringify(adminSummary.body).includes(adminPasswordHash), "admin operations summary leaked password hash");
 
+    const adminDrilldown = await requestJson(`${base}/admin-api/operations/drilldown`, {
+      headers: {
+        Authorization: "Bearer redacted",
+        Cookie: sessionCookie,
+        "X-Agent-Key": "redacted"
+      }
+    });
+    assert(adminDrilldown.status === 200, "admin operations drilldown failed after login");
+    assert(adminDrilldown.body?.status === "ok" || adminDrilldown.body?.status === "partial", "admin operations drilldown status mismatch");
+    assert(adminDrilldown.body?.window?.maxRows === 20, "admin operations drilldown did not include bounded row window");
+    assert(adminDrilldown.headers.setCookie === null, "admin operations drilldown relayed Set-Cookie");
+    assert(!JSON.stringify(adminDrilldown.body).includes(adminPassword), "admin operations drilldown leaked password");
+    assert(!JSON.stringify(adminDrilldown.body).includes(adminPasswordHash), "admin operations drilldown leaked password hash");
+
     const live = await requestJson(`${base}/status-api/health/live`, {
       headers: {
         Authorization: "Bearer redacted",
@@ -217,6 +240,12 @@ async function runEnabledScenario() {
     assert(summaryAfterLogout.status === 401, "admin operations summary remained available after logout");
     assert(!JSON.stringify(summaryAfterLogout.body).includes("feeds"), "post-logout summary leaked operations data");
 
+    const drilldownAfterLogout = await requestJson(`${base}/admin-api/operations/drilldown`, {
+      headers: { Cookie: sessionCookie }
+    });
+    assert(drilldownAfterLogout.status === 401, "admin operations drilldown remained available after logout");
+    assert(!JSON.stringify(drilldownAfterLogout.body).includes("rows"), "post-logout drilldown leaked operations data");
+
     const staticSurface = [index.body, envConfig.body, ...(await staticAssets(base, index.body))].join("\n");
     assert(!staticSurface.includes(adminPassword), "admin password leaked to static surface");
     assert(!staticSurface.includes(adminPasswordHash), "admin password hash leaked to static surface");
@@ -231,8 +260,10 @@ async function runEnabledScenario() {
       invalid_login_status: invalidLogin.status,
       valid_login_status: validLogin.status,
       authenticated_session: authenticated.body?.authenticated,
+      operations_drilldown_status: adminDrilldown.status,
       logout_status: logout.status,
       after_logout_authenticated: afterLogout.body?.authenticated,
+      operations_drilldown_after_logout_status: drilldownAfterLogout.status,
       readiness: ready.body?.dependencies
     });
   });
@@ -253,7 +284,7 @@ function composeEnv({ uiPort, apiPort, authMode, authValues }) {
     ADMIN_UI_SESSION_TTL_SECONDS: "900",
     ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
     ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-    ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023d",
+    ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms025b",
     ADMIN_UI_ENVIRONMENT_NAME: "local-production-mode-rc",
     ADMIN_UI_HOST_PORT: String(uiPort),
     API_HOST_PORT: String(apiPort),
@@ -304,7 +335,7 @@ function inspectProjectLeftovers(projectName) {
 }
 
 function assertNoGlobalLeftovers() {
-  const pattern = "ms023d";
+  const pattern = "ms025b";
   const containers = run(["ps", "-a", "--format", "{{.Names}}"], { allowFailure: true });
   const networks = run(["network", "ls", "--format", "{{.Name}}"], { allowFailure: true });
   const volumes = run(["volume", "ls", "--format", "{{.Name}}"], { allowFailure: true });

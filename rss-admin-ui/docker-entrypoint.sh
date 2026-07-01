@@ -474,6 +474,18 @@ admin_api_static_routes() {
     set $args "";
     return 501 '{"configured":false,"authenticated":false,"reason":"not_configured","message":"Admin authentication is not configured."}';
   }
+
+  location = /admin-api/operations/drilldown {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+
+    if ($request_method != GET) {
+      return 405 '{"status":"method_not_allowed","reason":"read_only_endpoint"}';
+    }
+
+    set $args "";
+    return 501 '{"configured":false,"authenticated":false,"reason":"not_configured","message":"Admin authentication is not configured."}';
+  }
 EOF
 }
 
@@ -481,6 +493,18 @@ admin_api_degraded_routes() {
   reason="$1"
   cat <<EOF
   location = /admin-api/operations/summary {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+
+    if (\$request_method != GET) {
+      return 405 '{"status":"method_not_allowed","reason":"read_only_endpoint"}';
+    }
+
+    set \$args "";
+    return 502 '{"status":"unavailable","reason":"${reason}"}';
+  }
+
+  location = /admin-api/operations/drilldown {
     add_header Cache-Control "no-store, no-cache, must-revalidate" always;
     default_type application/json;
 
@@ -530,6 +554,41 @@ admin_api_proxy_routes() {
     proxy_read_timeout 4s;
     proxy_buffering off;
     proxy_pass \$admin_api_upstream_origin/admin-api/operations/summary?;
+  }
+
+  location = /admin-api/operations/drilldown {
+    add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    default_type application/json;
+
+    if (\$request_method != GET) {
+      return 405 '{"status":"method_not_allowed","reason":"read_only_endpoint"}';
+    }
+
+    set \$admin_api_upstream_origin "${origin}";
+    set \$args "";
+    proxy_method GET;
+    proxy_pass_request_headers off;
+    proxy_pass_request_body off;
+    proxy_set_header Host \$proxy_host;
+    proxy_set_header Accept "application/json";
+    proxy_set_header Cookie \$http_cookie;
+    proxy_set_header Content-Length "";
+    proxy_hide_header Set-Cookie;
+    proxy_hide_header WWW-Authenticate;
+    proxy_hide_header Access-Control-Allow-Origin;
+    proxy_hide_header Access-Control-Allow-Credentials;
+    proxy_hide_header Access-Control-Allow-Headers;
+    proxy_hide_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Expose-Headers;
+    proxy_hide_header Access-Control-Max-Age;
+    proxy_intercept_errors on;
+    error_page 401 403 = @admin_api_unauthenticated;
+    error_page 500 502 504 = @admin_api_unavailable;
+    proxy_connect_timeout 2s;
+    proxy_send_timeout 2s;
+    proxy_read_timeout 4s;
+    proxy_buffering off;
+    proxy_pass \$admin_api_upstream_origin/admin-api/operations/drilldown?;
   }
 
   location @admin_api_unauthenticated {
@@ -609,6 +668,10 @@ fi
 
 if ! grep -Fq 'location = /admin-api/operations/summary' /tmp/nginx/conf.d/default.conf; then
   fail "generated Nginx config is missing /admin-api/operations/summary"
+fi
+
+if ! grep -Fq 'location = /admin-api/operations/drilldown' /tmp/nginx/conf.d/default.conf; then
+  fail "generated Nginx config is missing /admin-api/operations/drilldown"
 fi
 
 if ! grep -Fq 'location = /admin-api' /tmp/nginx/conf.d/default.conf || ! grep -Fq 'location ^~ /admin-api/' /tmp/nginx/conf.d/default.conf; then

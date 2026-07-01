@@ -124,6 +124,28 @@ dd {
   margin-bottom: 32px;
 }
 
+.operations-drilldown {
+  padding-bottom: 32px;
+}
+
+.drilldown-toolbar {
+  border-top: 1px solid #d9e0e7;
+}
+
+.drilldown-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.drilldown-panel {
+  grid-column: auto;
+  min-height: 260px;
+}
+
+.drilldown-notes {
+  grid-column: 1 / -1;
+  min-height: 120px;
+}
+
 .notes-panel {
   grid-column: span 2;
 }
@@ -252,6 +274,62 @@ button:disabled {
   border-bottom: 0;
 }
 
+.drilldown-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.drilldown-metrics div {
+  min-height: 58px;
+  border: 1px solid #eef2f5;
+  border-radius: 8px;
+  background: #f8fafb;
+  padding: 10px;
+}
+
+.drilldown-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.drilldown-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.drilldown-table th,
+.drilldown-table td {
+  border-bottom: 1px solid #eef2f5;
+  padding: 10px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.drilldown-table th {
+  color: #64717d;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+}
+
+.drilldown-table td {
+  color: #27313b;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.drilldown-table td span {
+  display: block;
+  margin-top: 4px;
+  color: #64717d;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
 .panel p,
 .panel li {
   color: #4d5b66;
@@ -368,13 +446,19 @@ button:disabled {
   .workspace-band,
   .panel-grid,
   .operations-grid,
+  .drilldown-grid,
   .summary-row,
   .protected-admin-status {
     grid-template-columns: 1fr;
   }
 
-  .notes-panel {
+  .notes-panel,
+  .drilldown-notes {
     grid-column: auto;
+  }
+
+  .drilldown-metrics {
+    grid-template-columns: 1fr;
   }
 
   .admin-login-form {

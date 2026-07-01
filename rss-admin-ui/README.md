@@ -2,11 +2,11 @@
 
 `rss-admin-ui` is the React/Vite admin UI project for the Habersoft RSS repository.
 
-Status: `MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED`.
+Status: `MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`.
 
 ## Scope
 
-Included through MS-025A-R2:
+Included through MS-025B:
 
 - application shell,
 - root route,
@@ -64,7 +64,12 @@ Included through MS-025A-R2:
 - generated Nginx admin-api proxy template harness,
 - local full-stack synthetic admin operations acceptance,
 - MS-025A admin operations dashboard verifier,
-- MS-025A-R2 production operations acceptance verifier and operator-reported evidence intake.
+- MS-025A-R2 production operations acceptance verifier and operator-reported evidence intake,
+- authenticated read-only Operations Drilldown,
+- same-origin `GET /admin-api/operations/drilldown` client,
+- bounded feed and ingestion drilldown rows with `maxRows=20`,
+- safe `displayId`, `sourceHost`, status, count, timestamp, and note fields,
+- MS-025B admin operations drilldown verifier.
 
 Not included:
 
@@ -75,7 +80,7 @@ Not included:
 - Agent authentication,
 - backend writes,
 - automatic polling or monitoring history,
-- raw feed URLs, tenant identifiers, entry content, raw logs, or raw upstream bodies,
+- raw feed URL paths or queries, tenant identifiers, entry content, raw logs, or raw upstream bodies,
 - production evidence projection,
 - production deployment by Codex,
 - admin write/business features.
@@ -110,6 +115,7 @@ npm run verify:ms024a-auth-enablement-package
 npm run verify:operator-ergonomics
 npm run verify:production-overlay-canonicalization
 npm run verify:admin-operations-dashboard
+npm run verify:admin-operations-drilldown
 npm run ops:compose:config
 npm run ops:compose:up -- --force-recreate rss-admin-ui
 npm run ops:compose:recreate
@@ -134,11 +140,13 @@ ADMIN_UI_ENVIRONMENT_NAME
 
 `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` is also server-only and optional. When absent, `/admin-auth/**` stays in static fail-closed mode. When present, only `GET /admin-auth/session`, `POST /admin-auth/login`, and `POST /admin-auth/logout` are proxied upstream. When enabled in production it must use the same internal backend origin class as health, not the public backend edge.
 
-MS-025A reuses `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` for the exact read-only admin-api route `GET /admin-api/operations/summary`. The frontend runtime does not add a third upstream variable. The route is GET-only, strips query forwarding, forwards only the browser's same-origin admin session cookie, hides upstream `Set-Cookie`, `WWW-Authenticate`, and CORS response headers, and returns bounded JSON for unauthenticated, unavailable, wrong-method, or unknown-path cases.
+MS-025A reuses `ADMIN_UI_AUTH_UPSTREAM_ORIGIN` for the exact read-only admin-api route `GET /admin-api/operations/summary`. MS-025B reuses the same server-only upstream for `GET /admin-api/operations/drilldown`. The frontend runtime does not add a third upstream variable. Both routes are GET-only, strip query forwarding, forward only the browser's same-origin admin session cookie, hide upstream `Set-Cookie`, `WWW-Authenticate`, and CORS response headers, and return bounded JSON for unauthenticated, unavailable, wrong-method, or unknown-path cases.
 
-MS-025A-R1 adds a generated-template regression harness for the operator-reported production blocker where the running frontend image lacked the admin-api marker in the active Nginx template and `/admin-api/operations/summary` fell through to `index.html`. The active generated config is `/tmp/nginx/conf.d/default.conf`; `/etc/nginx/conf.d/default.conf` may be stock or irrelevant. `npm run test:admin-api-proxy-template` proves the effective config contains `location = /admin-api/operations/summary`, contains JSON fallback routes for `/admin-api` and `/admin-api/*`, contains no unresolved `__ADMIN_UI_*__` markers, and returns JSON rather than SPA HTML for tested `/admin-api/*` requests.
+MS-025A-R1 adds a generated-template regression harness for the operator-reported production blocker where the running frontend image lacked the admin-api marker in the active Nginx template and `/admin-api/operations/summary` fell through to `index.html`. The active generated config is `/tmp/nginx/conf.d/default.conf`; `/etc/nginx/conf.d/default.conf` may be stock or irrelevant. `npm run test:admin-api-proxy-template` proves the effective config contains `location = /admin-api/operations/summary` and `location = /admin-api/operations/drilldown`, contains JSON fallback routes for `/admin-api` and `/admin-api/*`, contains no unresolved `__ADMIN_UI_*__` markers, orders both admin-api routes before the SPA fallback, and returns JSON rather than SPA HTML for tested `/admin-api/*` requests.
 
 MS-025A-R2 closes the read-only operations dashboard production acceptance from operator-reported live retest evidence. The evidence source is `operator_reported`: `GET /healthz -> 200 OK`, `GET /status-api/health/live -> JSON 200`, `GET /status-api/health/ready -> JSON 200`, unauthenticated `GET /admin-api/operations/summary -> JSON 401`, unknown `GET /admin-api/foo -> JSON 404`, after browser sign-in, the Operations Overview screen displayed successfully, after browser sign-in, JSON aggregate summary data loaded successfully, `auth-smoke:redacted -> AUTH_CONFIGURED_UNAUTHENTICATED`, and logout returned the UI to locked / unauthenticated state. Codex did not independently perform a credentialed production login, did not mutate production, and did not read real secrets.
+
+MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED adds Operations Drilldown locally. New drilldown production acceptance is pending operator deploy/retest. No production deployment was performed by Codex for MS-025B. The drilldown performs one authenticated initial load and then manual refresh only; it uses no polling and no browser persistence in localStorage, sessionStorage, IndexedDB, cookieStore, or document.cookie. The response renders only bounded safe fields: `displayId`, `displayName`, public `sourceHost`, feed `health`, `lastCheckedAt`, `lastResult`, safe counts, `receivedAt`, status, safe notes, and `capabilities`. It excludes raw feed URL paths or queries, entry content, raw logs, raw request/response bodies, private hostnames, cookies, password hashes, session secrets, database/Redis URLs, Agent key values, Tenant bearer tokens, JWT claims, and write controls.
 
 MS-024B changes the operator runtime posture to graduated guardrails. Missing, malformed, public-edge, or Docker bridge loopback upstreams no longer crash-loop the static frontend container. `/healthz` and the static app start, while exact proxy routes return bounded JSON with reasons such as `invalid_upstream_origin`, `public_edge_upstream_rejected`, `upstream_unavailable`, or `upstream_forbidden`. Unsafe upstream traffic still does not proxy successfully. `ADMIN_UI_STRICT_UPSTREAM_ORIGIN_VALIDATION=true` remains available for strict synthetic checks.
 
@@ -148,7 +156,7 @@ Backend admin-auth variables such as `ADMIN_UI_AUTH_MODE`, `ADMIN_UI_ADMIN_USERN
 
 MS-024D lands the backend production Compose mapping for those variables into `main-service-api` and verifies that `main-service-worker` does not receive them. MS-024E records operator-reported retest evidence that backend admin-auth is configured and `/admin-auth/session` returns `configured=true`, `authenticated=false`, `reason=unauthenticated` after the frontend is recreated with the canonical overlay helper. After any backend API/image/network/admin-auth env recreate, run `cd /opt/habersoft-rss/rss-admin-ui && npm run ops:compose:recreate` before collecting edge auth evidence. MS-024F records operator-reported authenticated admin shell production acceptance after the MS-024E retest residual. `auth-smoke:redacted` remains a redacted regression/sanity tool, not a pending acceptance blocker for the current implemented auth shell scope.
 
-MS-025A adds a locally accepted Operations Overview that is visible only after `/admin-auth/session` returns `authenticated=true`; MS-025A-R2 records its read-only production acceptance by operator report. It performs one initial load plus manual refresh only. It never polls, persists history, stores browser credentials, uses Tenant bearer tokens, uses Agent keys, renders raw logs or rows, or exposes write controls. If the admin-api route is unavailable after backend or network changes, the UI directs the operator to recreate the frontend with the canonical helper before retesting.
+MS-025A adds a locally accepted Operations Overview that is visible only after `/admin-auth/session` returns `authenticated=true`; MS-025A-R2 records its read-only production acceptance by operator report. MS-025B adds the Operations Drilldown inside that authenticated operations area. Both perform one initial load plus manual refresh only. They never poll, persist history, store browser credentials, use Tenant bearer tokens, use Agent keys, render raw logs, raw feed URL paths, entry content, or expose write controls. If an admin-api route is unavailable after backend or network changes, the UI directs the operator to recreate the frontend with the canonical helper before retesting.
 
 ## Health Dashboard
 
@@ -191,6 +199,29 @@ docker compose \
 ```
 
 Then use `npm run auth-smoke:redacted`, browser login/logout sanity, and `/admin-api/operations/summary` unauthenticated and authenticated checks as regression/sanity evidence without pasting credentials, cookies, raw response bodies, or logs into Git/chat/docs. `AUTH_CONFIGURED_UNAUTHENTICATED` without credentials is an observation/sanity result, not a pending blocker; `AUTH_LOGIN_ATTEMPT_FAILED` remains a blocker when credentials are supplied and login fails. Full authenticated acceptance for MS-025A-R2 is operator-reported from browser login plus operations dashboard load. Credentials must be environment variables only and must not be logged.
+
+## Admin Operations Drilldown
+
+The protected operations drilldown performs one initial observation and then requires manual refresh. It reads only:
+
+```text
+GET /admin-api/operations/drilldown
+```
+
+The backend response is a bounded object with `status`, `generatedAt`, `window.recentHours`, `window.maxRows`, `feeds.status`, feed aggregate counts, feed rows, `ingestion.status`, ingestion aggregate counts, ingestion rows, `notes`, and `capabilities`. Rows are capped at `maxRows=20`.
+
+Safe fields are `displayId`, `displayName`, public `sourceHost`, feed `health`, `lastCheckedAt`, `lastResult`, `recentEntryCount`, `receivedAt`, `entryCount`, row status, and safe notes. Raw feed URL paths or queries, entry content, raw feed content, raw logs, raw request/response bodies, private hostnames, cookies, password hashes, session secrets, database/Redis URLs, Agent key values, Tenant bearer tokens, JWT claims, localStorage, sessionStorage, IndexedDB, cookieStore, document.cookie, and write controls are excluded.
+
+MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED is locally validated only. MS-025A-R2 remains accepted for the existing operations summary dashboard. New drilldown production acceptance is pending operator deploy/retest. No production deployment was performed by Codex for MS-025B.
+
+Before production retest after pulling a SHA with MS-025B, rebuild/update backend and frontend images as required by current runbooks, recreate the backend API if its runtime changed, rebuild/update the configured frontend image if Nginx template or entrypoint source changed, and run:
+
+```bash
+cd /opt/habersoft-rss/rss-admin-ui
+npm run ops:compose:recreate
+```
+
+Then verify `/healthz`, `/status-api/health/live`, `/status-api/health/ready`, unauthenticated `/admin-api/operations/drilldown` returning JSON `401`, authenticated Operations Drilldown JSON/UI data, and logout returning to locked state. `auth-smoke:redacted` without credentials may report `AUTH_CONFIGURED_UNAUTHENTICATED`; that is an observation/sanity state, not a blocker by itself.
 
 ## Admin Auth Boundary
 

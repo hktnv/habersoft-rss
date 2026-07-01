@@ -1,0 +1,306 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  fetchOperationsDrilldown,
+  type FeedDrilldownRow,
+  type IngestionDrilldownRow,
+  type OperationsDrilldown as OperationsDrilldownData,
+  type OperationsDrilldownResult
+} from "./operationsDrilldownClient";
+
+type DrilldownPhase = "loading" | "refreshing" | "complete";
+
+type DrilldownState = {
+  readonly phase: DrilldownPhase;
+  readonly result?: OperationsDrilldownResult;
+};
+
+export function OperationsDrilldown({
+  loadDrilldown = fetchOperationsDrilldown
+}: {
+  readonly loadDrilldown?: (options?: { readonly signal?: AbortSignal }) => Promise<OperationsDrilldownResult>;
+}) {
+  const [state, setState] = useState<DrilldownState>({ phase: "loading" });
+  const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | undefined>(undefined);
+  const isBusy = state.phase === "loading" || state.phase === "refreshing";
+  const hasCompletedResult = state.result !== undefined;
+
+  const runRequest = useCallback(
+    (requestId: number, controller: AbortController) => {
+      void loadDrilldown({ signal: controller.signal }).then((result) => {
+        if (requestIdRef.current !== requestId) return;
+        setState({ phase: "complete", result });
+        abortRef.current = undefined;
+      });
+    },
+    [loadDrilldown]
+  );
+
+  const startRequest = useCallback(
+    (phase: DrilldownPhase) => {
+      const requestId = requestIdRef.current + 1;
+      requestIdRef.current = requestId;
+      abortRef.current?.abort();
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setState((current) => ({
+        phase,
+        result: phase === "refreshing" ? current.result : undefined
+      }));
+      runRequest(requestId, controller);
+    },
+    [runRequest]
+  );
+
+  useEffect(() => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    runRequest(requestId, controller);
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, [runRequest]);
+
+  const refresh = () => {
+    if (isBusy) return;
+    startRequest(hasCompletedResult ? "refreshing" : "loading");
+  };
+
+  return (
+    <section className="operations-drilldown" aria-labelledby="operations-drilldown-title">
+      <div className="dashboard-toolbar drilldown-toolbar">
+        <div>
+          <h2 id="operations-drilldown-title">Operations Drilldown</h2>
+          <p>Bounded recent feed and ingestion signals for the authenticated admin session.</p>
+        </div>
+        <button type="button" onClick={refresh} disabled={isBusy} aria-busy={isBusy}>
+          {isBusy ? "Refreshing..." : "Refresh Drilldown"}
+        </button>
+      </div>
+
+      {state.result === undefined ? (
+        <div className="status-summary" role="status" aria-live="polite">
+          <p className="summary-value">Loading drilldown</p>
+          <p className="safe-message">Checking the protected same-origin drilldown route.</p>
+        </div>
+      ) : state.result.kind === "success" ? (
+        <DrilldownView drilldown={state.result.drilldown} refreshing={state.phase === "refreshing"} />
+      ) : (
+        <DrilldownUnavailableView result={state.result} />
+      )}
+    </section>
+  );
+}
+
+function DrilldownView({
+  drilldown,
+  refreshing
+}: {
+  readonly drilldown: OperationsDrilldownData;
+  readonly refreshing: boolean;
+}) {
+  const emptyRows = drilldown.feeds.rows.length === 0 && drilldown.ingestion.rows.length === 0;
+  const stateClass = drilldown.status === "ok" ? "state-healthy" : drilldown.status === "partial" ? "state-partial" : "state-unavailable";
+
+  return (
+    <>
+      <section className="status-summary" aria-live="polite" role="status">
+        <div className="summary-row">
+          <div>
+            <p className="summary-label">Drilldown</p>
+            <p className={`summary-value ${stateClass}`}>{drilldown.status}</p>
+          </div>
+          <div>
+            <p className="summary-label">Generated</p>
+            <time className="summary-value" dateTime={drilldown.generatedAt}>
+              {drilldown.generatedAt}
+            </time>
+          </div>
+          <p className="safe-message">
+            {refreshing ? "Refreshing; the last validated drilldown remains visible until the next result arrives. " : ""}
+            Same-origin protected route: /admin-api/operations/drilldown.
+          </p>
+        </div>
+      </section>
+
+      {emptyRows ? (
+        <section className="status-summary" role="status" aria-live="polite">
+          <p className="summary-value">No recent drilldown rows</p>
+          <p className="safe-message">The bounded window returned counts but no feed or ingestion rows to display.</p>
+        </section>
+      ) : (
+        <section className="panel-grid drilldown-grid" aria-label="Operations drilldown rows">
+          <FeedDrilldownPanel drilldown={drilldown} />
+          <IngestionDrilldownPanel drilldown={drilldown} />
+          <article className="panel notes-panel drilldown-notes">
+            <h2>Drilldown Notes</h2>
+            <ul>
+              {drilldown.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+              {drilldown.capabilities.reason !== null ? <li>{drilldown.capabilities.reason}</li> : null}
+            </ul>
+          </article>
+        </section>
+      )}
+    </>
+  );
+}
+
+function FeedDrilldownPanel({ drilldown }: { readonly drilldown: OperationsDrilldownData }) {
+  return (
+    <article className="panel drilldown-panel">
+      <h2>Feed Signals</h2>
+      <MetricStrip
+        metrics={[
+          ["Total", drilldown.feeds.total],
+          ["Active", drilldown.feeds.active],
+          ["Due", drilldown.feeds.due],
+          ["Recent success", drilldown.feeds.withRecentSuccess],
+          ["Recent failure", drilldown.feeds.withRecentFailure]
+        ]}
+      />
+      <FeedRows rows={drilldown.feeds.rows} />
+    </article>
+  );
+}
+
+function IngestionDrilldownPanel({ drilldown }: { readonly drilldown: OperationsDrilldownData }) {
+  return (
+    <article className="panel drilldown-panel">
+      <h2>Ingestion Signals</h2>
+      <MetricStrip
+        metrics={[
+          ["Recent entries", drilldown.ingestion.recentEntryCount],
+          ["Recent checks", drilldown.ingestion.recentBatchCount],
+          ["Latest entry", drilldown.ingestion.latestEntryAt]
+        ]}
+      />
+      <IngestionRows rows={drilldown.ingestion.rows} />
+    </article>
+  );
+}
+
+function MetricStrip({ metrics }: { readonly metrics: readonly (readonly [string, number | string | null])[] }) {
+  return (
+    <dl className="drilldown-metrics">
+      {metrics.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value ?? "Unavailable"}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function FeedRows({ rows }: { readonly rows: readonly FeedDrilldownRow[] }) {
+  if (rows.length === 0) return <p className="safe-message">No feed rows in this bounded window.</p>;
+
+  return (
+    <div className="drilldown-table-wrap">
+      <table className="drilldown-table">
+        <thead>
+          <tr>
+            <th scope="col">Feed</th>
+            <th scope="col">Source</th>
+            <th scope="col">Health</th>
+            <th scope="col">Last check</th>
+            <th scope="col">Entries</th>
+            <th scope="col">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.displayId}>
+              <td>
+                <strong>{row.displayName ?? row.displayId}</strong>
+                {row.displayName === null ? null : <span>{row.displayId}</span>}
+              </td>
+              <td>{row.sourceHost ?? "Redacted"}</td>
+              <td className={`state-${row.health === "healthy" ? "healthy" : row.health === "degraded" ? "degraded" : "partial"}`}>
+                {row.health}
+              </td>
+              <td>
+                <span>{row.lastResult}</span>
+                <span>{row.lastCheckedAt ?? "Unavailable"}</span>
+              </td>
+              <td>{row.recentEntryCount ?? "Unavailable"}</td>
+              <td>{row.notes.length === 0 ? "None" : row.notes.join(" ")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function IngestionRows({ rows }: { readonly rows: readonly IngestionDrilldownRow[] }) {
+  if (rows.length === 0) return <p className="safe-message">No ingestion rows in this bounded window.</p>;
+
+  return (
+    <div className="drilldown-table-wrap">
+      <table className="drilldown-table">
+        <thead>
+          <tr>
+            <th scope="col">Check</th>
+            <th scope="col">Feed</th>
+            <th scope="col">Received</th>
+            <th scope="col">Entries</th>
+            <th scope="col">Status</th>
+            <th scope="col">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.displayId}>
+              <td>{row.displayId}</td>
+              <td>{row.feedDisplayId ?? "Unavailable"}</td>
+              <td>{row.receivedAt ?? "Unavailable"}</td>
+              <td>{row.entryCount ?? "Unavailable"}</td>
+              <td className={`state-${row.status === "accepted" ? "healthy" : row.status === "skipped" ? "partial" : "unavailable"}`}>
+                {row.status}
+              </td>
+              <td>{row.notes.length === 0 ? "None" : row.notes.join(" ")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DrilldownUnavailableView({
+  result
+}: {
+  readonly result: Exclude<OperationsDrilldownResult, { readonly kind: "success" }>;
+}) {
+  const message =
+    result.kind === "unauthenticated"
+      ? "The admin session expired or is missing. Sign in again before refreshing the operations drilldown."
+      : result.message;
+
+  return (
+    <section className="status-summary" role="status" aria-live="polite">
+      <div className="summary-row">
+        <div>
+          <p className="summary-label">Drilldown API</p>
+          <p className={`summary-value state-${result.kind === "unauthenticated" ? "degraded" : "unavailable"}`}>
+            {result.kind}
+          </p>
+        </div>
+        <div>
+          <p className="summary-label">HTTP</p>
+          <p className="summary-value">{result.httpStatus ?? "none"}</p>
+        </div>
+        <p className="safe-message">
+          {message} If this follows a backend recreate or network change, run the frontend canonical helper recreate
+          before retesting.
+        </p>
+      </div>
+    </section>
+  );
+}

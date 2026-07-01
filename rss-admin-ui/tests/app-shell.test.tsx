@@ -41,6 +41,10 @@ describe("admin UI authenticated status shell", () => {
       "/admin-api/operations/summary",
       expect.objectContaining({ method: "GET", credentials: "same-origin" })
     );
+    expect(fetch).toHaveBeenCalledWith(
+      "/admin-api/operations/drilldown",
+      expect.objectContaining({ method: "GET", credentials: "same-origin" })
+    );
     expect(fetch).toHaveBeenCalledWith("/status-api/health/live", expect.any(Object));
     expect(screen.queryByText("http://localhost:3200")).not.toBeInTheDocument();
   });
@@ -66,6 +70,10 @@ describe("admin UI authenticated status shell", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch).not.toHaveBeenCalledWith(
       "/admin-api/operations/summary",
+      expect.objectContaining({ method: "GET" })
+    );
+    expect(fetch).not.toHaveBeenCalledWith(
+      "/admin-api/operations/drilldown",
       expect.objectContaining({ method: "GET" })
     );
   });
@@ -103,6 +111,57 @@ function authenticatedFetch() {
             latestCheckAt: "2026-06-30T05:00:00.000Z"
           },
           notes: [{ code: "summary_is_aggregate_only", message: "Aggregate counts only." }]
+        })
+      );
+    }
+    if (path === "/admin-api/operations/drilldown") {
+      return Promise.resolve(
+        jsonResponse({
+          status: "ok",
+          generatedAt: "2026-06-30T06:00:00.000Z",
+          window: { recentHours: 24, maxRows: 20 },
+          feeds: {
+            status: "ok",
+            total: 1,
+            active: 1,
+            due: 0,
+            withRecentSuccess: 1,
+            withRecentFailure: 0,
+            rows: [
+              {
+                displayId: "feed_123456abcd",
+                displayName: "Example News",
+                sourceHost: "news.example.org",
+                health: "healthy",
+                lastCheckedAt: "2026-06-30T05:00:00.000Z",
+                lastResult: "success",
+                recentEntryCount: 1,
+                notes: []
+              }
+            ]
+          },
+          ingestion: {
+            status: "ok",
+            recentEntryCount: 1,
+            recentBatchCount: 1,
+            latestEntryAt: "2026-06-30T05:55:00.000Z",
+            rows: [
+              {
+                displayId: "check_abcdef1234",
+                feedDisplayId: "feed_123456abcd",
+                receivedAt: "2026-06-30T05:45:00.000Z",
+                entryCount: 1,
+                status: "accepted",
+                notes: []
+              }
+            ]
+          },
+          notes: ["Drilldown rows are bounded and safe."],
+          capabilities: {
+            feedRows: true,
+            ingestionRows: true,
+            reason: null
+          }
         })
       );
     }

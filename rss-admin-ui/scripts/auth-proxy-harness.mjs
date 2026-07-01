@@ -4,12 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultImage = "rss-admin-ui:ms023d-local";
+const defaultImage = "rss-admin-ui:ms025b-local";
 const image = process.env.RSS_ADMIN_UI_TEST_IMAGE ?? defaultImage;
 const suffix = randomUUID().slice(0, 8);
-const network = `rss-admin-ui-ms023d-auth-${suffix}`;
-const sentinelName = `rss-admin-ui-ms023d-auth-sentinel-${suffix}`;
-const frontendName = `rss-admin-ui-ms023d-auth-runtime-${suffix}`;
+const network = `rss-admin-ui-ms025b-auth-${suffix}`;
+const sentinelName = `rss-admin-ui-ms025b-auth-sentinel-${suffix}`;
+const frontendName = `rss-admin-ui-ms025b-auth-runtime-${suffix}`;
 
 try {
   ensureImage();
@@ -69,15 +69,21 @@ try {
   assert(results.adminSummary.json?.status === "ok", "admin operations summary body mismatch");
   assert(results.adminSummary.headers.setCookie === null, "admin operations summary relayed Set-Cookie");
   assertNoCorsHeaders(results.adminSummary.headers, "admin operations summary route");
+  assert(results.adminDrilldown.status === 200, "admin operations drilldown proxy failed");
+  assert(results.adminDrilldown.json?.status === "ok", "admin operations drilldown body mismatch");
+  assert(results.adminDrilldown.headers.setCookie === null, "admin operations drilldown relayed Set-Cookie");
+  assertNoCorsHeaders(results.adminDrilldown.headers, "admin operations drilldown route");
 
   assert(results.postSession.status === 405, "POST session was not rejected at frontend");
   assert(results.getLogin.status === 405, "GET login was not rejected at frontend");
   assert(results.getLogout.status === 405, "GET logout was not rejected at frontend");
   assert(results.postAdminSummary.status === 405, "POST admin operations summary was not rejected at frontend");
+  assert(results.postAdminDrilldown.status === 405, "POST admin operations drilldown was not rejected at frontend");
   assert(results.unknown.status === 404, "unknown auth path was not rejected");
   assert(results.unknownAdminApi.status === 404, "unknown admin-api path was not rejected");
   assert(results.sessionQuery.status === 200, "session query did not map to exact upstream path");
   assert(results.adminSummaryQuery.status === 200, "admin operations query did not map to exact upstream path");
+  assert(results.adminDrilldownQuery.status === 200, "admin operations drilldown query did not map to exact upstream path");
 
   const records = authRecords();
   assert(records.length === 4, `expected 4 upstream auth records, received ${records.length}`);
@@ -95,10 +101,13 @@ try {
   }
 
   const adminRecords = adminApiRecords();
-  assert(adminRecords.length === 2, `expected 2 upstream admin-api records, received ${adminRecords.length}`);
+  assert(adminRecords.length === 4, `expected 4 upstream admin-api records, received ${adminRecords.length}`);
   for (const record of adminRecords) {
     assert(record.method === "GET", "admin-api upstream method mismatch");
-    assert(record.path === "/admin-api/operations/summary", "admin-api upstream path mismatch");
+    assert(
+      record.path === "/admin-api/operations/summary" || record.path === "/admin-api/operations/drilldown",
+      "admin-api upstream path mismatch"
+    );
     assert(record.search === "", "query string reached admin-api upstream");
     assert(record.bodyPresent === false, "admin-api request body reached upstream");
     assert(record.sensitiveHeaders.authorization === false, "authorization header reached admin-api upstream");
@@ -123,7 +132,13 @@ try {
         status: "auth-proxy-harness-ok",
         image,
         network,
-        exact_routes: ["/admin-auth/session", "/admin-auth/login", "/admin-auth/logout", "/admin-api/operations/summary"],
+        exact_routes: [
+          "/admin-auth/session",
+          "/admin-auth/login",
+          "/admin-auth/logout",
+          "/admin-api/operations/summary",
+          "/admin-api/operations/drilldown"
+        ],
         upstream_records: records.length + adminRecords.length,
         unavailable_status: unavailable.status
       },
@@ -194,10 +209,13 @@ function runFrontendRequests() {
       logout: await request("/admin-auth/logout", { method: "POST", headers: sensitiveHeaders }),
       adminSummary: await request("/admin-api/operations/summary", { headers: sensitiveHeaders }),
       adminSummaryQuery: await request("/admin-api/operations/summary?token=example", { headers: sensitiveHeaders }),
+      adminDrilldown: await request("/admin-api/operations/drilldown", { headers: sensitiveHeaders }),
+      adminDrilldownQuery: await request("/admin-api/operations/drilldown?token=example", { headers: sensitiveHeaders }),
       postSession: await request("/admin-auth/session", { method: "POST", body: "mutate=true", headers: sensitiveHeaders }),
       getLogin: await request("/admin-auth/login", { headers: sensitiveHeaders }),
       getLogout: await request("/admin-auth/logout", { headers: sensitiveHeaders }),
       postAdminSummary: await request("/admin-api/operations/summary", { method: "POST", body: "mutate=true", headers: sensitiveHeaders }),
+      postAdminDrilldown: await request("/admin-api/operations/drilldown", { method: "POST", body: "mutate=true", headers: sensitiveHeaders }),
       unknown: await request("/admin-auth/unknown", { headers: sensitiveHeaders }),
       unknownAdminApi: await request("/admin-api/operations/unknown", { headers: sensitiveHeaders })
     };
@@ -376,6 +394,50 @@ function sentinelProgram() {
             entries: { total: 2, createdLast24h: 1 },
             ingestion: { checksLast24h: 3, successLast24h: 2, failedLast24h: 1, latestCheckAt: "2026-06-30T05:00:00.000Z" },
             notes: [{ code: "summary_is_aggregate_only", message: "Aggregate counts only." }]
+          }));
+          return;
+        }
+
+        if (parsed.pathname === "/admin-api/operations/drilldown") {
+          response.setHeader("Set-Cookie", "should_not_relay=1; HttpOnly; Path=/; SameSite=Lax");
+          response.end(JSON.stringify({
+            status: "ok",
+            generatedAt: "2026-06-30T06:00:00.000Z",
+            window: { recentHours: 24, maxRows: 20 },
+            feeds: {
+              status: "ok",
+              total: 1,
+              active: 1,
+              due: 0,
+              withRecentSuccess: 1,
+              withRecentFailure: 0,
+              rows: [{
+                displayId: "feed_123456abcd",
+                displayName: "Example News",
+                sourceHost: "news.example.org",
+                health: "healthy",
+                lastCheckedAt: "2026-06-30T05:00:00.000Z",
+                lastResult: "success",
+                recentEntryCount: 1,
+                notes: []
+              }]
+            },
+            ingestion: {
+              status: "ok",
+              recentEntryCount: 1,
+              recentBatchCount: 1,
+              latestEntryAt: "2026-06-30T05:55:00.000Z",
+              rows: [{
+                displayId: "check_abcdef1234",
+                feedDisplayId: "feed_123456abcd",
+                receivedAt: "2026-06-30T05:45:00.000Z",
+                entryCount: 1,
+                status: "accepted",
+                notes: []
+              }]
+            },
+            notes: ["Drilldown rows are bounded and safe."],
+            capabilities: { feedRows: true, ingestionRows: true, reason: null }
           }));
           return;
         }

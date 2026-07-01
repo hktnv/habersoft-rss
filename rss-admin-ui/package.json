@@ -33,6 +33,7 @@
     "verify:operator-ergonomics": "node scripts/operator-ergonomics-verify.mjs",
     "verify:production-overlay-canonicalization": "node scripts/production-overlay-canonicalization-harness.mjs",
     "verify:admin-operations-dashboard": "node scripts/admin-operations-dashboard-verify.mjs",
+    "verify:admin-operations-drilldown": "node scripts/admin-operations-drilldown-verify.mjs",
     "auth-smoke:redacted": "node scripts/admin-auth-smoke.mjs",
     "ops:compose:config": "node scripts/production-compose-ops.mjs config",
     "ops:compose:up": "node scripts/production-compose-ops.mjs up",

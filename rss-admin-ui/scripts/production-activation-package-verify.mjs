@@ -48,7 +48,8 @@ console.log(
   JSON.stringify(
     {
       status: "production-activation-package-verify-ok",
-      admin_ui_state: "MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
+      admin_ui_state: "MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED",
+      prior_operations_summary_state: "MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
       authenticated_admin_shell_state: "MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED",
       prior_status_dashboard_state: "MS-023D_STATUS_DASHBOARD_PRODUCTION_ACTIVE_AUTH_NOT_CONFIGURED",
       provisioning_helpers: "present",
@@ -173,8 +174,13 @@ function assertDocsBoundary() {
     "verify:production-operations-acceptance",
     "MS-025A_R1_ADMIN_API_PROXY_TEMPLATE_REMEDIATION_LANDED_OPERATOR_RETEST_REQUIRED",
     "MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPORTED",
+    "MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED",
     "read-only operations dashboard production acceptance is closed",
     "admin-api production proxy/template remediation is accepted",
+    "/admin-api/operations/drilldown",
+    "new drilldown production acceptance is pending operator deploy/retest",
+    "No production deployment was performed by Codex for MS-025B",
+    "verify:admin-operations-drilldown",
     "/tmp/nginx/conf.d/default.conf",
     "nginx -T",
     "source pull alone",

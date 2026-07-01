@@ -17,7 +17,9 @@ describe("frontend security boundary", () => {
       const text = readFileSync(file, "utf8");
       const relative = path.relative(root, file).replaceAll("\\", "/");
       const authClient = relative === "src/auth/adminSessionClient.ts";
-      const operationsClient = relative === "src/adminOperations/operationsSummaryClient.ts";
+      const operationsClient =
+        relative === "src/adminOperations/operationsSummaryClient.ts" ||
+        relative === "src/adminOperations/operationsDrilldownClient.ts";
       const forbidden = [
         /AGENT_KEY\s*=/u,
         /X-Agent-Key/iu,

@@ -4,15 +4,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultImage = "rss-admin-ui:ms025a-r1-local";
+const defaultImage = "rss-admin-ui:ms025b-local";
 const image = process.env.RSS_ADMIN_UI_ADMIN_API_TEMPLATE_IMAGE ?? process.env.RSS_ADMIN_UI_TEST_IMAGE ?? defaultImage;
 const skipBuild = process.env.RSS_ADMIN_UI_ADMIN_API_TEMPLATE_SKIP_BUILD === "true";
 const suffix = randomUUID().slice(0, 8);
-const network = `rss-admin-ui-ms025a-r1-admin-api-${suffix}`;
-const sentinelName = `rss-admin-ui-ms025a-r1-sentinel-${suffix}`;
-const frontendName = `rss-admin-ui-ms025a-r1-runtime-${suffix}`;
-const staticFrontendName = `rss-admin-ui-ms025a-r1-static-${suffix}`;
-const unreachableFrontendName = `rss-admin-ui-ms025a-r1-unreachable-${suffix}`;
+const network = `rss-admin-ui-ms025b-admin-api-${suffix}`;
+const sentinelName = `rss-admin-ui-ms025b-sentinel-${suffix}`;
+const frontendName = `rss-admin-ui-ms025b-runtime-${suffix}`;
+const staticFrontendName = `rss-admin-ui-ms025b-static-${suffix}`;
+const unreachableFrontendName = `rss-admin-ui-ms025b-unreachable-${suffix}`;
 
 try {
   if (!skipBuild || image === defaultImage) {
@@ -63,15 +63,25 @@ try {
   assert(results.authenticatedSummary.json?.status === "ok", "authenticated admin-api summary body mismatch");
   assert(results.authenticatedSummary.headers.setCookie === null, "admin-api summary relayed upstream Set-Cookie");
   assertAdminApiJson(results.authenticatedSummaryQuery, 200, "admin-api summary query");
+  assertAdminApiJson(results.unauthenticatedDrilldown, 401, "unauthenticated admin-api drilldown");
+  assert(results.unauthenticatedDrilldown.json?.authenticated === false, "unauthenticated admin-api drilldown body mismatch");
+  assertAdminApiJson(results.authenticatedDrilldown, 200, "authenticated admin-api drilldown");
+  assert(results.authenticatedDrilldown.json?.status === "ok", "authenticated admin-api drilldown body mismatch");
+  assert(results.authenticatedDrilldown.headers.setCookie === null, "admin-api drilldown relayed upstream Set-Cookie");
+  assertAdminApiJson(results.authenticatedDrilldownQuery, 200, "admin-api drilldown query");
   assertAdminApiJson(results.unknownAdminApiExact, 404, "exact unknown /admin-api");
   assertAdminApiJson(results.unknownAdminApiPrefix, 404, "unknown /admin-api path");
   assertAdminApiJson(results.postAdminSummary, 405, "POST admin-api summary");
+  assertAdminApiJson(results.postAdminDrilldown, 405, "POST admin-api drilldown");
 
   const adminRecords = adminApiRecords();
-  assert(adminRecords.length === 3, `expected 3 upstream admin-api records, received ${adminRecords.length}`);
+  assert(adminRecords.length === 6, `expected 6 upstream admin-api records, received ${adminRecords.length}`);
   for (const record of adminRecords) {
     assert(record.method === "GET", "admin-api upstream method mismatch");
-    assert(record.path === "/admin-api/operations/summary", "admin-api upstream path mismatch");
+    assert(
+      record.path === "/admin-api/operations/summary" || record.path === "/admin-api/operations/drilldown",
+      "admin-api upstream path mismatch"
+    );
     assert(record.search === "", "admin-api query string reached upstream");
     assert(record.bodyPresent === false, "admin-api request body reached upstream");
     assert(record.sensitiveHeaders.authorization === false, "authorization header reached admin-api upstream");
@@ -85,12 +95,16 @@ try {
   startFrontend(staticFrontendName, "frontend-static", "");
   await waitForFrontend("frontend-static");
   const staticSummary = runSingleRequest("frontend-static", "/admin-api/operations/summary");
+  const staticDrilldown = runSingleRequest("frontend-static", "/admin-api/operations/drilldown");
   assertAdminApiJson(staticSummary, 501, "static no-auth-upstream admin-api summary");
+  assertAdminApiJson(staticDrilldown, 501, "static no-auth-upstream admin-api drilldown");
 
   startFrontend(unreachableFrontendName, "frontend-unreachable", "http://missing-admin-api-r1:3100");
   await waitForFrontend("frontend-unreachable");
   const unreachableSummary = runSingleRequest("frontend-unreachable", "/admin-api/operations/summary");
+  const unreachableDrilldown = runSingleRequest("frontend-unreachable", "/admin-api/operations/drilldown");
   assertAdminApiJson(unreachableSummary, 502, "unreachable admin-api upstream summary");
+  assertAdminApiJson(unreachableDrilldown, 502, "unreachable admin-api upstream drilldown");
 
   console.log(
     JSON.stringify(
@@ -98,11 +112,13 @@ try {
         status: "admin-api-proxy-template-harness-ok",
         image,
         generated_config: "/tmp/nginx/conf.d/default.conf",
-        exact_route: "/admin-api/operations/summary",
+        exact_routes: ["/admin-api/operations/summary", "/admin-api/operations/drilldown"],
         no_spa_fallback_for_admin_api: true,
         upstream_records: adminRecords.length,
         static_no_auth_status: staticSummary.status,
-        unreachable_status: unreachableSummary.status
+        static_no_auth_drilldown_status: staticDrilldown.status,
+        unreachable_status: unreachableSummary.status,
+        unreachable_drilldown_status: unreachableDrilldown.status
       },
       null,
       2
@@ -141,16 +157,26 @@ function assertGeneratedConfig(generatedConfig, nginxDump) {
   for (const text of [generatedConfig, nginxDump]) {
     assert(!/__ADMIN_UI_[A-Z0-9_]+__/u.test(text), "generated Nginx config contains unresolved admin UI markers");
     assert(text.includes("location = /admin-api/operations/summary"), "generated Nginx config lacks exact admin-api summary route");
+    assert(text.includes("location = /admin-api/operations/drilldown"), "generated Nginx config lacks exact admin-api drilldown route");
     assert(/location\s*=\s*\/admin-api\s*\{/u.test(text), "generated Nginx config lacks exact /admin-api JSON 404 route");
     assert(/location\s*\^~\s*\/admin-api\/\s*\{/u.test(text), "generated Nginx config lacks /admin-api/ JSON 404 route");
   }
 
   const summaryIndex = generatedConfig.indexOf("location = /admin-api/operations/summary");
+  const drilldownIndex = generatedConfig.indexOf("location = /admin-api/operations/drilldown");
   const exactFallbackIndex = indexOfRegex(generatedConfig, /location\s*=\s*\/admin-api\s*\{/u);
   const prefixFallbackIndex = indexOfRegex(generatedConfig, /location\s*\^~\s*\/admin-api\/\s*\{/u);
   const spaFallbackIndex = indexOfRegex(generatedConfig, /location\s+\/\s*\{/u);
-  assert(summaryIndex !== -1 && exactFallbackIndex !== -1 && prefixFallbackIndex !== -1 && spaFallbackIndex !== -1, "route order proof could not locate all routes");
+  assert(
+    summaryIndex !== -1 &&
+      drilldownIndex !== -1 &&
+      exactFallbackIndex !== -1 &&
+      prefixFallbackIndex !== -1 &&
+      spaFallbackIndex !== -1,
+    "route order proof could not locate all routes"
+  );
   assert(summaryIndex < spaFallbackIndex, "admin-api summary route appears after SPA fallback");
+  assert(drilldownIndex < spaFallbackIndex, "admin-api drilldown route appears after SPA fallback");
   assert(exactFallbackIndex < spaFallbackIndex, "exact /admin-api fallback appears after SPA fallback");
   assert(prefixFallbackIndex < spaFallbackIndex, "/admin-api/ fallback appears after SPA fallback");
 }
@@ -205,9 +231,17 @@ function runFrontendRequests(host) {
       unauthenticatedSummary: await request("/admin-api/operations/summary", { headers: sensitiveHeaders }),
       authenticatedSummary: await request("/admin-api/operations/summary", { headers: authedHeaders }),
       authenticatedSummaryQuery: await request("/admin-api/operations/summary?token=example", { headers: authedHeaders }),
+      unauthenticatedDrilldown: await request("/admin-api/operations/drilldown", { headers: sensitiveHeaders }),
+      authenticatedDrilldown: await request("/admin-api/operations/drilldown", { headers: authedHeaders }),
+      authenticatedDrilldownQuery: await request("/admin-api/operations/drilldown?token=example", { headers: authedHeaders }),
       unknownAdminApiExact: await request("/admin-api", { headers: authedHeaders }),
       unknownAdminApiPrefix: await request("/admin-api/unknown", { headers: authedHeaders }),
       postAdminSummary: await request("/admin-api/operations/summary", {
+        method: "POST",
+        headers: authedHeaders,
+        body: "mutate=true"
+      }),
+      postAdminDrilldown: await request("/admin-api/operations/drilldown", {
         method: "POST",
         headers: authedHeaders,
         body: "mutate=true"
@@ -412,6 +446,55 @@ function sentinelProgram() {
             entries: { total: 2, createdLast24h: 1 },
             ingestion: { checksLast24h: 3, successLast24h: 2, failedLast24h: 1, latestCheckAt: "2026-06-30T05:00:00.000Z" },
             notes: [{ code: "summary_is_aggregate_only", message: "Aggregate counts only." }]
+          }));
+          return;
+        }
+
+        if (parsed.pathname === "/admin-api/operations/drilldown") {
+          response.setHeader("Set-Cookie", "should_not_relay=1; HttpOnly; Path=/; SameSite=Lax");
+          if (!isAuthenticated(request)) {
+            response.statusCode = 401;
+            response.end(JSON.stringify({ authenticated: false, reason: "unauthenticated" }));
+            return;
+          }
+          response.end(JSON.stringify({
+            status: "ok",
+            generatedAt: "2026-06-30T06:00:00.000Z",
+            window: { recentHours: 24, maxRows: 20 },
+            feeds: {
+              status: "ok",
+              total: 1,
+              active: 1,
+              due: 0,
+              withRecentSuccess: 1,
+              withRecentFailure: 0,
+              rows: [{
+                displayId: "feed_123456abcd",
+                displayName: "Example News",
+                sourceHost: "news.example.org",
+                health: "healthy",
+                lastCheckedAt: "2026-06-30T05:00:00.000Z",
+                lastResult: "success",
+                recentEntryCount: 1,
+                notes: []
+              }]
+            },
+            ingestion: {
+              status: "ok",
+              recentEntryCount: 1,
+              recentBatchCount: 1,
+              latestEntryAt: "2026-06-30T05:55:00.000Z",
+              rows: [{
+                displayId: "check_abcdef1234",
+                feedDisplayId: "feed_123456abcd",
+                receivedAt: "2026-06-30T05:45:00.000Z",
+                entryCount: 1,
+                status: "accepted",
+                notes: []
+              }]
+            },
+            notes: ["Drilldown rows are bounded and safe."],
+            capabilities: { feedRows: true, ingestionRows: true, reason: null }
           }));
           return;
         }

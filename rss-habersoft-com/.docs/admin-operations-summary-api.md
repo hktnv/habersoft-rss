@@ -4,6 +4,13 @@ Status: `MS-025A-R2_ADMIN_OPERATIONS_DASHBOARD_PRODUCTION_ACCEPTED_OPERATOR_REPO
 
 MS-025A adds the backend route for the first authenticated read-only admin operations dashboard slice. It is protected by the existing admin-auth session and is locally validated with synthetic credentials. MS-025A-R2 records later operator-reported production acceptance for this read-only route through the admin UI and proxy.
 
+MS-025B adds a separate protected read-only bounded drilldown route at
+`GET /admin-api/operations/drilldown`. Its status is
+`MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`;
+MS-025A-R2 remains accepted for this summary route, while new drilldown
+production acceptance is pending operator deploy/retest. See
+[admin-operations-drilldown-api.md](admin-operations-drilldown-api.md).
+
 ## Route
 
 ```text

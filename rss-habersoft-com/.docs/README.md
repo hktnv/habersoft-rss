@@ -30,6 +30,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 | [local-development.md](local-development.md) | Gercek yerel container gelistirme, calistirma, local JWKS fixture ve dogrulama komutlari. |
 | [admin-auth-production-activation.md](admin-auth-production-activation.md) | MS-024D admin auth secretless provisioning helpers, backend API runtime env wiring, local RC boundary and future operator activation checklist. |
 | [admin-operations-summary-api.md](admin-operations-summary-api.md) | MS-025A protected read-only `GET /admin-api/operations/summary` aggregate route, safe response shape and operator retest boundary. |
+| [admin-operations-drilldown-api.md](admin-operations-drilldown-api.md) | MS-025B protected read-only `GET /admin-api/operations/drilldown` bounded drilldown route, safe response shape, and pending operator deploy/retest boundary. |
 | [database-schema.md](database-schema.md) | MS-002 canonical PostgreSQL business schema, migration ve DB test gercegi. |
 | [tenant-authentication.md](tenant-authentication.md) | MS-003 tenant RS256 JWT/JWKS dogrulama altyapisi, readiness ve sinirlar. |
 | [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md) | MS-004 tenant feed abonelik endpoint'leri, tenant izolasyonu, transaction ve sinirlar. |
@@ -84,6 +85,7 @@ Bu repository, merkezi `.md/` DEV dokuman agacindan ayri bir application reposit
 9. [local-development.md](local-development.md)
 10. [admin-auth-production-activation.md](admin-auth-production-activation.md)
 11. [admin-operations-summary-api.md](admin-operations-summary-api.md)
+12. [admin-operations-drilldown-api.md](admin-operations-drilldown-api.md)
 12. [tenant-authentication.md](tenant-authentication.md)
 13. [tenant-feed-subscriptions.md](tenant-feed-subscriptions.md)
 14. [tenant-rate-limiting.md](tenant-rate-limiting.md)

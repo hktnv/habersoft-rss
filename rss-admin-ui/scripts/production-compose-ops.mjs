@@ -87,9 +87,9 @@ function diagnose() {
     backend_network_overlay: args.includes(backendNetworkFile),
     upstream_topology: upstreamTopologySummary(),
     admin_api_proxy_template: {
-      required_route: "/admin-api/operations/summary",
+      required_routes: ["/admin-api/operations/summary", "/admin-api/operations/drilldown"],
       effective_config: "/tmp/nginx/conf.d/default.conf",
-      verify_after_image_rebuild: "docker compose exec rss-admin-ui sh -lc 'nginx -T 2>&1 | grep -F \"/admin-api/operations/summary\" && ! grep -F \"__ADMIN_UI_\" /tmp/nginx/conf.d/default.conf'"
+      verify_after_image_rebuild: "docker compose exec rss-admin-ui sh -lc 'nginx -T 2>&1 | grep -F \"/admin-api/operations/summary\" && grep -F \"/admin-api/operations/drilldown\" /tmp/nginx/conf.d/default.conf && ! grep -F \"__ADMIN_UI_\" /tmp/nginx/conf.d/default.conf'"
     },
     config_status: config.status,
     ps_status: ps.status,
@@ -97,7 +97,7 @@ function diagnose() {
       "if nginx.conf or docker-entrypoint.sh changed, rebuild/update the frontend image before recreate",
       "npm run ops:compose:config",
       "npm run ops:compose:recreate",
-      "verify the running generated Nginx config contains /admin-api/operations/summary and no unresolved __ADMIN_UI_*__ markers",
+      "verify the running generated Nginx config contains /admin-api/operations/summary, /admin-api/operations/drilldown, and no unresolved __ADMIN_UI_*__ markers",
       "after backend API/image/network/admin-auth env recreate, run npm run ops:compose:recreate so frontend Nginx refreshes backend upstream/network references",
       "npm run ops:compose:ps",
       "npm run ops:compose:logs -- rss-admin-ui",

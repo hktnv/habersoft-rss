@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { OperationsOverview } from "../src/adminOperations/OperationsOverview";
+import type { OperationsDrilldownResult } from "../src/adminOperations/operationsDrilldownClient";
 import type { OperationsSummary, OperationsSummaryResult } from "../src/adminOperations/operationsSummaryClient";
 
 describe("OperationsOverview", () => {
@@ -10,7 +11,7 @@ describe("OperationsOverview", () => {
       .mockResolvedValueOnce(successResult({ feeds: { total: 10, active: 8, disabled: 2, dueNow: 1 } }))
       .mockResolvedValueOnce(successResult({ feeds: { total: 11, active: 9, disabled: 2, dueNow: 0 } }));
 
-    render(<OperationsOverview loadSummary={loadSummary} />);
+    render(<OperationsOverview loadSummary={loadSummary} loadDrilldown={mockDrilldown} />);
 
     expect(await screen.findByRole("heading", { name: "Operations Overview" })).toBeInTheDocument();
     expect(await screen.findByText("10")).toBeInTheDocument();
@@ -26,7 +27,7 @@ describe("OperationsOverview", () => {
       message: "Admin operations API is unavailable."
     } satisfies OperationsSummaryResult);
 
-    render(<OperationsOverview loadSummary={loadSummary} />);
+    render(<OperationsOverview loadSummary={loadSummary} loadDrilldown={mockDrilldown} />);
 
     expect(await screen.findByText("unavailable")).toBeInTheDocument();
     expect(screen.getByText(/frontend canonical helper recreate/iu)).toBeInTheDocument();
@@ -53,3 +54,35 @@ function successResult(overrides: Partial<OperationsSummary> = {}): OperationsSu
   };
   return { kind: "success", httpStatus: 200, summary };
 }
+
+const mockDrilldown = vi.fn<(options?: { readonly signal?: AbortSignal }) => Promise<OperationsDrilldownResult>>().mockResolvedValue({
+  kind: "success",
+  httpStatus: 200,
+  drilldown: {
+    status: "ok",
+    generatedAt: "2026-06-30T06:00:00.000Z",
+    window: { recentHours: 24, maxRows: 20 },
+    feeds: {
+      status: "ok",
+      total: 0,
+      active: 0,
+      due: 0,
+      withRecentSuccess: 0,
+      withRecentFailure: 0,
+      rows: []
+    },
+    ingestion: {
+      status: "ok",
+      recentEntryCount: 0,
+      recentBatchCount: 0,
+      latestEntryAt: null,
+      rows: []
+    },
+    notes: ["Drilldown rows are bounded and safe."],
+    capabilities: {
+      feedRows: true,
+      ingestionRows: true,
+      reason: null
+    }
+  }
+});

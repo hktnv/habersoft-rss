@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { OperationsDrilldown } from "./OperationsDrilldown";
+import type { OperationsDrilldownResult } from "./operationsDrilldownClient";
 import { fetchOperationsSummary, type OperationsSummary, type OperationsSummaryResult } from "./operationsSummaryClient";
 
 type OverviewPhase = "loading" | "refreshing" | "complete";
@@ -15,9 +17,11 @@ const dependencyLabels: Record<keyof OperationsSummary["dependencies"], string> 
 };
 
 export function OperationsOverview({
-  loadSummary = fetchOperationsSummary
+  loadSummary = fetchOperationsSummary,
+  loadDrilldown
 }: {
   readonly loadSummary?: (options?: { readonly signal?: AbortSignal }) => Promise<OperationsSummaryResult>;
+  readonly loadDrilldown?: (options?: { readonly signal?: AbortSignal }) => Promise<OperationsDrilldownResult>;
 }) {
   const [state, setState] = useState<OverviewState>({ phase: "loading" });
   const requestIdRef = useRef(0);
@@ -95,6 +99,8 @@ export function OperationsOverview({
       ) : (
         <UnavailableView result={state.result} />
       )}
+
+      <OperationsDrilldown loadDrilldown={loadDrilldown} />
     </section>
   );
 }

@@ -2,7 +2,7 @@
 
 Status: `MS-024F_ADMIN_UI_PRODUCTION_ACTIVE_STATUS_AND_AUTH_SHELL_ACCEPTED_OPERATOR_REPORTED`.
 
-This handoff records the accepted current admin auth shell boundary and keeps the operator guardrails for future changes. MS-023D accepts the read-only status-dashboard production transport, and MS-023D status-dashboard production transport remains accepted. MS-024B is repository remediation for the operator-reported latest recreate/auth-smoke blocker. MS-024C removes overlay trial-and-error by making the helper path canonical for service-DNS upstreams and by keeping `/healthz` available if service DNS is unresolved at runtime. MS-024D lands backend production Compose env wiring for `main-service-api` and redacted/synthetic verification helpers. MS-024E records operator-reported evidence that backend admin auth is configured and the frontend edge returns `AUTH_CONFIGURED_UNAUTHENTICATED` after `npm run ops:compose:recreate`. MS-024F records the operator-reported production retest statement that authenticated admin shell production acceptance is closed for the current implemented scope. MS-025A-R2 records operator-reported production acceptance for the read-only operations dashboard and R1 admin-api proxy-template remediation. Codex did not independently perform a credentialed login, did not publish a registry image, did no production deployment, created no Git tag, created no GitHub Release, created no PR, did not capture rollback baseline, and did not collect real production credentials.
+This handoff records the accepted current admin auth shell boundary and keeps the operator guardrails for future changes. MS-023D accepts the read-only status-dashboard production transport, and MS-023D status-dashboard production transport remains accepted. MS-024B is repository remediation for the operator-reported latest recreate/auth-smoke blocker. MS-024C removes overlay trial-and-error by making the helper path canonical for service-DNS upstreams and by keeping `/healthz` available if service DNS is unresolved at runtime. MS-024D lands backend production Compose env wiring for `main-service-api` and redacted/synthetic verification helpers. MS-024E records operator-reported evidence that backend admin auth is configured and the frontend edge returns `AUTH_CONFIGURED_UNAUTHENTICATED` after `npm run ops:compose:recreate`. MS-024F records the operator-reported production retest statement that authenticated admin shell production acceptance is closed for the current implemented scope. MS-025A-R2 records operator-reported production acceptance for the read-only operations summary dashboard and R1 admin-api proxy-template remediation. MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED adds local read-only Operations Drilldown at `GET /admin-api/operations/drilldown`; new drilldown production acceptance is pending operator deploy/retest. Codex did not independently perform a credentialed login, did not publish a registry image, did no production deployment, created no Git tag, created no GitHub Release, created no PR, did not capture rollback baseline, and did not collect real production credentials. No production deployment was performed by Codex for MS-025B.
 
 ## Future Change Authority Checklist
 
@@ -17,7 +17,7 @@ Before future production auth/runtime changes, the operator must explicitly auth
 - rollback target and rollback authority.
 - operator-managed rollback baseline capture before mutation.
 
-MS-024F closes the current implemented authenticated admin-shell acceptance residual by operator report. Without fresh authority, do not expand that acceptance to future business/admin write features, feed editing, tenant management, role/permission expansion, or new production mutation.
+MS-024F closes the current implemented authenticated admin-shell acceptance residual by operator report. MS-025A-R2 remains accepted for the existing read-only operations summary dashboard. MS-025B drilldown production acceptance is pending operator deploy/retest. Without fresh authority, do not expand any acceptance to future business/admin write features, feed editing, tenant management, role/permission expansion, or new production mutation.
 
 ## Secret Handling Checklist
 
@@ -49,7 +49,7 @@ MS-023D evidence already accepts `/healthz`, `/status-api/health/live`, and `/st
 
 MS-024E clarification: `/admin-auth/session -> 501 not_configured` means backend auth is not active at the proxied upstream. `/admin-auth/session -> configured=true, authenticated=false, reason=unauthenticated` means backend auth is configured before login. MS-024F records that a later operator production retest accepted the authenticated admin shell for the current implemented scope. Placing values only in `rss-admin-ui/.env.production` is insufficient; backend-only auth variables must be applied to the backend API service runtime. Production Compose maps those variables into `main-service-api` and intentionally omits them from `main-service-worker`. Validate the backend env file with `npm run admin-auth:verify-config -- --env-file <path> --require-enabled` before backend API restart/recreate.
 
-After backend API/image/network/admin-auth env recreate, run the frontend helper before edge auth evidence:
+After backend API/image/network/admin-auth env recreate, run the frontend helper before edge auth evidence and before testing `/admin-api/operations/drilldown`:
 
 ```bash
 cd /opt/habersoft-rss/rss-admin-ui
@@ -136,6 +136,14 @@ MS-025A-R2 operations-dashboard closeout:
 - accepted scope: read-only operations dashboard production acceptance is closed, admin-api production proxy/template remediation is accepted, status dashboard production scope remains accepted, and authenticated admin shell production scope remains accepted;
 - safety boundary: Codex did not independently perform a credentialed production login, did not mutate production, and did not accept write/business features;
 - residual boundary: No current MS-025A/R1 operator retest residual remains.
+
+MS-025B drilldown retest residual:
+
+- bounded status: `MS-025B_AUTHENTICATED_READ_ONLY_OPERATIONS_DRILLDOWN_READY_NOT_DEPLOYED`;
+- route: `GET /admin-api/operations/drilldown`;
+- safe fields: opaque `displayId`, safe `displayName`, public `sourceHost`, statuses, counts, timestamps, safe notes, `capabilities`, and `maxRows=20`;
+- forbidden fields: raw feed URL paths or queries, entry content, raw logs, raw request/response bodies, private hostnames, cookies, password hashes, session secrets, database/Redis URLs, Agent key values, Tenant bearer tokens, JWT claims, `localStorage`, `sessionStorage`, `IndexedDB`, `cookieStore`, `document.cookie`, and write controls;
+- next operator action: after pulling main and rebuilding/updating backend/frontend images as required, recreate the backend API if changed, recreate the frontend with `npm run ops:compose:recreate`, then test `/healthz`, `/status-api/health/live`, `/status-api/health/ready`, unauthenticated drilldown JSON `401`, authenticated Operations Drilldown JSON/UI data, and logout returning to locked state.
 
 ## Rollback Boundary
 

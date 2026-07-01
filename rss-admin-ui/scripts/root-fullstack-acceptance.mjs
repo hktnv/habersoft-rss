@@ -6,18 +6,18 @@ import { fileURLToPath } from "node:url";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(frontendRoot, "..");
-const projectName = `habersoft-rss-ms023d-${Date.now()}`;
+const projectName = `habersoft-rss-ms025b-${Date.now()}`;
 const uiPort = await freePort();
 const apiPort = await freePort();
 const adminUsername = "admin";
-const adminPassword = "test-only-ms023d-admin-password";
-const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms023d-local-salt-00", "utf8"));
-const adminSessionSecret = "test_only_ms023d_admin_session_secret_at_least_32_bytes";
+const adminPassword = "test-only-ms025b-admin-password";
+const adminPasswordHash = hashAdminPassword(adminPassword, Buffer.from("ms025b-local-salt-00", "utf8"));
+const adminSessionSecret = "test_only_ms025b_admin_session_secret_at_least_32_bytes";
 
 const composeEnv = {
   ...process.env,
-  RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms023d-fullstack-local",
-  RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms023d-local",
+  RSS_HABERSOFT_COM_IMAGE: "main-service-app:ms025b-fullstack-local",
+  RSS_ADMIN_UI_IMAGE: "rss-admin-ui:ms025b-local",
   POSTGRES_USER: "main_service",
   POSTGRES_PASSWORD: "main_service_local_password",
   POSTGRES_DB: "main_service",
@@ -31,7 +31,7 @@ const composeEnv = {
   ADMIN_UI_SESSION_TTL_SECONDS: "900",
   ADMIN_UI_SESSION_COOKIE_NAME: "habersoft_admin_session",
   ADMIN_UI_SESSION_COOKIE_SECURE: "false",
-  ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms023d",
+  ADMIN_UI_SESSION_REDIS_PREFIX: "admin_auth:ms025b",
   ADMIN_UI_ENVIRONMENT_NAME: "local-fullstack-auth-rehearsal",
   ADMIN_UI_HOST_PORT: String(uiPort),
   API_HOST_PORT: String(apiPort)
@@ -63,6 +63,10 @@ try {
   const unauthenticatedSummary = await requestJson(`${base}/admin-api/operations/summary`);
   assert(unauthenticatedSummary.status === 401, "admin operations summary did not require an admin session");
   assert(!JSON.stringify(unauthenticatedSummary.body).includes("feeds"), "unauthenticated summary leaked operations data");
+
+  const unauthenticatedDrilldown = await requestJson(`${base}/admin-api/operations/drilldown`);
+  assert(unauthenticatedDrilldown.status === 401, "admin operations drilldown did not require an admin session");
+  assert(!JSON.stringify(unauthenticatedDrilldown.body).includes("rows"), "unauthenticated drilldown leaked operations rows");
 
   const invalidLogin = await requestJson(`${base}/admin-auth/login`, {
     method: "POST",
@@ -110,6 +114,22 @@ try {
   assert(!JSON.stringify(adminSummary.body).includes(adminPassword), "admin operations summary leaked password");
   assert(!JSON.stringify(adminSummary.body).includes(adminPasswordHash), "admin operations summary leaked password hash");
 
+  const adminDrilldown = await requestJson(`${base}/admin-api/operations/drilldown`, {
+    headers: {
+      Authorization: "Bearer redacted",
+      Cookie: sessionCookie,
+      "X-Agent-Key": "redacted"
+    }
+  });
+  assert(adminDrilldown.status === 200, "admin operations drilldown failed after login");
+  assert(adminDrilldown.body?.status === "ok" || adminDrilldown.body?.status === "partial", "admin operations drilldown status mismatch");
+  assert(adminDrilldown.body?.window?.maxRows === 20, "admin operations drilldown did not include bounded row window");
+  assert(Array.isArray(adminDrilldown.body?.feeds?.rows), "admin operations drilldown did not include feed rows array");
+  assert(adminDrilldown.headers.setCookie === null, "admin operations drilldown relayed Set-Cookie");
+  assert(!JSON.stringify(adminDrilldown.body).includes(adminPassword), "admin operations drilldown leaked password");
+  assert(!JSON.stringify(adminDrilldown.body).includes(adminPasswordHash), "admin operations drilldown leaked password hash");
+  assert(!/https?:\/\/[^"]+\/[^"]+/iu.test(JSON.stringify(adminDrilldown.body)), "admin operations drilldown leaked a raw URL path");
+
   const live = await requestJson(`${base}/status-api/health/live`, {
     headers: {
       Authorization: "Bearer redacted",
@@ -155,6 +175,12 @@ try {
   assert(summaryAfterLogout.status === 401, "admin operations summary remained available after logout");
   assert(!JSON.stringify(summaryAfterLogout.body).includes("feeds"), "post-logout summary leaked operations data");
 
+  const drilldownAfterLogout = await requestJson(`${base}/admin-api/operations/drilldown`, {
+    headers: { Cookie: sessionCookie }
+  });
+  assert(drilldownAfterLogout.status === 401, "admin operations drilldown remained available after logout");
+  assert(!JSON.stringify(drilldownAfterLogout.body).includes("rows"), "post-logout drilldown leaked operations data");
+
   const staticSurface = [index.body, envConfig.body, ...(await staticAssets(base, index.body))].join("\n");
   assert(!staticSurface.includes(adminPassword), "admin password leaked to static surface");
   assert(!staticSurface.includes(adminPasswordHash), "admin password hash leaked to static surface");
@@ -175,9 +201,11 @@ try {
           valid_login_status: validLogin.status,
           authenticated_session: authenticated.body.authenticated,
           operations_summary_status: adminSummary.status,
+          operations_drilldown_status: adminDrilldown.status,
           logout_status: logout.status,
           after_logout_authenticated: afterLogout.body.authenticated,
-          operations_summary_after_logout_status: summaryAfterLogout.status
+          operations_summary_after_logout_status: summaryAfterLogout.status,
+          operations_drilldown_after_logout_status: drilldownAfterLogout.status
         },
         readiness: ready.body.dependencies
       },
